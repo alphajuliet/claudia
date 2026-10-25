@@ -79,9 +79,14 @@ const RESOURCE = "https://claudia.alphajuliet.com/mcp";
 const known = (value: unknown, allowed: readonly string[]): Scope[] =>
   Array.isArray(value) ? ([...new Set(value)].filter((s): s is Scope => typeof s === "string" && allowed.includes(s))) : [];
 
-const oauthScopes = (value: unknown): Scope[] => {
+const OAUTH_TO_SCOPE: Record<string, Scope> = { "tasks:read": "read", "tasks:write": "write" };
+
+/** The grant's static scopes, narrowed to what this particular token carries (a refresh can downscope). */
+const oauthScopes = (value: unknown, tokenScope: unknown): Scope[] => {
   const granted = known(value, ["read", "write"]);
-  return granted.length ? granted : ["read"];
+  const carried = new Set(Array.isArray(tokenScope) ? tokenScope.map((s) => OAUTH_TO_SCOPE[String(s)]).filter(Boolean) : []);
+  const effective = granted.filter((s) => carried.has(s));
+  return effective.length ? effective : ["read"];
 };
 
 /**
@@ -93,11 +98,11 @@ export const provider = new OAuthProvider<Cloudflare.Env>({
   apiHandler: {
     fetch: (req, env, ctx) => {
       const props = ((ctx as { props?: unknown }).props ?? {}) as { kind?: unknown; scopes?: unknown };
-      const auth = (ctx as { auth?: { token?: string } }).auth;
+      const auth = (ctx as { auth?: { token?: string; scope?: unknown } }).auth;
       const identity: McpIdentity =
         props.kind === "apitoken" && typeof auth?.token === "string"
           ? { kind: "apitoken", secret: auth.token, scopes: known(props.scopes, SCOPES) }
-          : { kind: "oauth", scopes: oauthScopes(props.scopes) };
+          : { kind: "oauth", scopes: oauthScopes(props.scopes, auth?.scope) };
       return handleMcp(req, env, ctx, app, identity);
     },
   },

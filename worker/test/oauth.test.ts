@@ -75,6 +75,20 @@ describe("the OAuth flow", () => {
     expect(await tools(next.access_token)).toHaveLength(22);
   });
 
+  it("honours a downscoped refresh: a write grant refreshed with tasks:read sees only the 7 read tools", async () => {
+    const { client, body } = await authorise();
+    const res = await send("/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "refresh_token", refresh_token: body.refresh_token, client_id: client.client_id, scope: "tasks:read" }),
+    });
+    const next = await res.json<any>();
+    expect(res.status).toBe(200);
+    expect(await tools(next.access_token)).toHaveLength(7);
+    const denied = await call(next.access_token, "create_list", { name: "Sneaky" });
+    expect(denied.error).toEqual({ code: -32602, message: "Tool create_list not found" });
+  });
+
   it("does not let the code be exchanged with the wrong PKCE verifier", async () => {
     const { body: client } = await register();
     const { challenge } = await pkce();
