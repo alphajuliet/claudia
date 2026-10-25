@@ -24,7 +24,7 @@ export async function hashToken(token: string): Promise<string> {
 const RANK: Record<Scope, number> = { read: 1, write: 2, admin: 3 };
 
 const requiredScope = (method: string, path: string): Scope =>
-  path.startsWith("/api/tokens") ? "admin" : method === "GET" || method === "HEAD" ? "read" : "write";
+  path.startsWith("/api/tokens") || path.startsWith("/api/import") ? "admin" : method === "GET" || method === "HEAD" ? "read" : "write";
 
 const allows = (held: readonly Scope[], needed: Scope) =>
   Math.max(0, ...held.map((s) => RANK[s])) >= RANK[needed];

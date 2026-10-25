@@ -6,6 +6,8 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc -p .",
+    "godspeed:fetch": "tsx scripts/godspeed/fetch.ts",
+    "godspeed:import": "tsx scripts/godspeed/import.ts",
     "token:create": "tsx scripts/create-token.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply claudia --local",

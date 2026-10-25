@@ -5,6 +5,7 @@ import { createDb } from "./lib/db";
 import { ApiError } from "./lib/errors";
 import { jsonResponse, newRouter } from "./lib/router";
 import { folderRoutes } from "./routes/folders";
+import { importRoutes } from "./routes/import";
 import { filterRoutes } from "./routes/filters";
 import { labelRoutes } from "./routes/labels";
 import { listRoutes } from "./routes/lists";
@@ -52,6 +53,7 @@ app.route("/", taskRoutes);
 app.route("/", labelRoutes);
 app.route("/", filterRoutes);
 app.route("/", settingRoutes);
+app.route("/", importRoutes);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
   type: "http",

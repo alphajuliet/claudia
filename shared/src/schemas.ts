@@ -240,3 +240,45 @@ export const SettingSchema = z
 
 export type Filter = z.infer<typeof FilterSchema>;
 export type Setting = z.infer<typeof SettingSchema>;
+
+// Import: bulk insert with caller-supplied IDs and timestamps, for migrating
+// from another task manager. Existing IDs are skipped, so it is safe to re-run.
+export const IMPORT_MAX_ITEMS = 100;
+
+const ImportFolder = z.object({
+  id: IdSchema, name: z.string().min(1), parentId: IdSchema.nullable(), context: z.enum(CONTEXTS),
+  position: z.string().min(1), createdAt: Timestamp, updatedAt: Timestamp,
+});
+const ImportList = z.object({
+  id: IdSchema, name: z.string().min(1), folderId: IdSchema.nullable(), position: z.string().min(1),
+  archivedAt: Timestamp.nullable(), createdAt: Timestamp, updatedAt: Timestamp,
+});
+const ImportLabel = z.object({ id: IdSchema, name: LabelNameSchema, createdAt: Timestamp });
+const ImportTask = z.object({
+  id: IdSchema, listId: IdSchema, parentId: IdSchema.nullable(), kind: z.enum(TASK_KINDS),
+  position: z.string().min(1), title: z.string().min(1), notes: z.string().nullable(),
+  dueDate: DateOnly.nullable(), dueAt: Timestamp.nullable(), startDate: DateOnly.nullable(),
+  snoozedUntil: Timestamp.nullable(), recurRule: z.string().min(1).nullable(),
+  recurFrom: z.enum(RECUR_FROM).nullable(), completedAt: Timestamp.nullable(),
+  metadata: z.record(z.unknown()).nullable(), labelIds: z.array(IdSchema),
+  createdAt: Timestamp, updatedAt: Timestamp,
+}).refine((t) => (t.recurRule === null) === (t.recurFrom === null), "recurRule and recurFrom must be set together");
+
+export const ImportSchema = z
+  .object({
+    folders: z.array(ImportFolder).default([]),
+    lists: z.array(ImportList).default([]),
+    labels: z.array(ImportLabel).default([]),
+    tasks: z.array(ImportTask).default([]),
+  })
+  .refine(
+    (b) => b.folders.length + b.lists.length + b.labels.length + b.tasks.length <= IMPORT_MAX_ITEMS,
+    `At most ${IMPORT_MAX_ITEMS} items per request`,
+  )
+  .openapi("Import");
+
+const Counts = z.object({ folders: z.number(), lists: z.number(), labels: z.number(), tasks: z.number() });
+export const ImportResultSchema = z
+  .object({ inserted: Counts, skipped: Counts })
+  .openapi("ImportResult");
+export type ImportBatch = z.infer<typeof ImportSchema>;
