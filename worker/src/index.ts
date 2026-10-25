@@ -7,7 +7,7 @@ import { createDb } from "./lib/db";
 import { ApiError } from "./lib/errors";
 import { jsonResponse, newRouter, type Scope } from "./lib/router";
 import { handleMcp, type McpIdentity } from "./mcp/handler";
-const OAUTH_SCOPES = ["tasks:read", "tasks:write"];
+import { consentRoutes, OAUTH_SCOPES } from "./oauth/consent";
 import { redirectAllowed } from "./oauth/policy";
 import { folderRoutes } from "./routes/folders";
 import { importRoutes } from "./routes/import";
@@ -59,6 +59,7 @@ app.route("/", labelRoutes);
 app.route("/", filterRoutes);
 app.route("/", settingRoutes);
 app.route("/", importRoutes);
+app.route("/", consentRoutes);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
   type: "http",
