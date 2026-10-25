@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
 
+env:
+  # Not a secret: it identifies the account and appears in dashboard URLs.
+  CLOUDFLARE_ACCOUNT_ID: 2c10ea8ac27c6a4de3dfb99aab9a727a
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -21,9 +25,7 @@ jobs:
         working-directory: worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: npx wrangler deploy
         working-directory: worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

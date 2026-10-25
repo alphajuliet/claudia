@@ -59,7 +59,7 @@ npm workspaces monorepo: `shared` (Zod schemas), `worker` (Hono API, wrangler co
 - `npm install`
 - `npm run dev`: build the web app, then `wrangler dev` on http://localhost:8787 (`npm run dev:web` for Vite with HMR, proxying `/api` to the Worker)
 - `npm run typecheck`, `npm test`, `npm run build`
-- `npm run deploy`: build and `wrangler deploy` (CI does this on push to `main`; it needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets)
+- `npm run deploy`: build and `wrangler deploy` (CI does this on push to `main`; it needs the `CLOUDFLARE_API_TOKEN` repo secret; the account ID is in the workflow file)
 
 - `npm run db:generate -w @claudia/worker`: generate a migration from `worker/src/db/schema.ts` (add `--custom` for hand-written SQL such as triggers)
 - `npm run db:migrate:local -w @claudia/worker`: apply migrations to the local D1 (`db:migrate:remote` for production)
