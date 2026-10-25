@@ -26,7 +26,11 @@ describe("internal identity", () => {
   it("ignores a guessed key", async () => {
     const res = await get("/api/folders", { "X-Claudia-Internal": "guess", "X-Claudia-Scopes": "write" });
     expect(res.status).toBe(401);
-    expect(INTERNAL_KEY.length).toBeGreaterThanOrEqual(32);
+    const write = await post("/api/folders", { "X-Claudia-Internal": "guess", "X-Claudia-Scopes": "write" }, { name: "F", context: "home" });
+    expect(write.status).toBe(401);
+    // The real key is neither a short nor a guessable value.
+    expect(internalHeaders(["write"])["X-Claudia-Internal"]).toBe(INTERNAL_KEY);
+    expect("guess").not.toBe(INTERNAL_KEY);
   });
 
   it("never grants admin through the internal identity", async () => {

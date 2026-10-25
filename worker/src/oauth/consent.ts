@@ -54,7 +54,7 @@ ${message ? `<p class="error" role="alert">${escape(message)}</p>` : ""}
 }
 
 const text = (message: string, status: number) =>
-  new Response(escape(message), { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
+  new Response(escape(message), { status, headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY" } });
 
 /** Reduce what the client asked for to scopes we issue; asking for nothing means everything. */
 const grantable = (requested: string[]) => {
@@ -91,6 +91,7 @@ consentRoutes.post("/authorize", async (c) => {
 
     if (form.get("decision") !== "approve") {
       const denied = await oauth.denyConsent(c.req.raw, handle);
+      denied.headers.set("Cache-Control", "no-store");
       return new Response(null, { status: 302, headers: denied.headers });
     }
 

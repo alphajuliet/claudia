@@ -42,6 +42,8 @@ describe("GET /authorize", () => {
     const res = await openConsent("/authorize?response_type=code&client_id=nope&redirect_uri=https%3A%2F%2Fclaude.ai%2Fapi%2Fmcp%2Fauth_callback");
     expect(res.res.status).toBe(400);
     expect(res.res.headers.get("Location")).toBeNull();
+    expect(res.res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(res.res.headers.get("X-Frame-Options")).toBe("DENY");
   });
 });
 
@@ -54,6 +56,7 @@ describe("POST /authorize", () => {
     expect(loc.origin + loc.pathname).toBe("https://claude.ai/api/mcp/auth_callback");
     expect(loc.searchParams.get("code")).toBeTruthy();
     expect(loc.searchParams.get("state")).toBe("st8");
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
   it("re-renders with a message and does not redirect on a wrong passphrase, and the right one then still works", async () => {
@@ -101,6 +104,7 @@ describe("POST /authorize", () => {
     const loc = new URL(res.headers.get("Location")!);
     expect(loc.searchParams.get("error")).toBe("access_denied");
     expect(loc.searchParams.get("code")).toBeNull();
+    expect(res.headers.get("Cache-Control")).toBe("no-store");
   });
 
   it("refuses a POST without the consent cookie or with a bad handle", async () => {

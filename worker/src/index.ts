@@ -73,6 +73,7 @@ app.doc("/api/openapi.json", {
   security: [{ bearerAuth: [] }],
 });
 
+// Hard-coded to production: local `wrangler dev` needs an OAuth or tokenless test, not a real MCP client flow.
 const RESOURCE = "https://claudia.alphajuliet.com/mcp";
 
 /** Keep only scope names we know. OAuth grants get read or write at most, never admin. */
