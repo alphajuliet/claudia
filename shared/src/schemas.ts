@@ -35,9 +35,10 @@ const Timestamp = z.string().datetime();
 const DateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Expected YYYY-MM-DD");
 
 // Where to place an item among its siblings. Omit both to append.
-export const PlacementSchema = z
-  .object({ afterId: IdSchema.optional(), beforeId: IdSchema.optional() })
-  .refine((p) => !(p.afterId && p.beforeId), "Give afterId or beforeId, not both");
+export const placementShape = { afterId: IdSchema.optional(), beforeId: IdSchema.optional() };
+const notBoth = (p: { afterId?: string | undefined; beforeId?: string | undefined }) => !(p.afterId && p.beforeId);
+const NOT_BOTH = "Give afterId or beforeId, not both";
+export const PlacementSchema = z.object(placementShape).refine(notBoth, NOT_BOTH);
 
 // Folders
 export const FolderSchema = z
@@ -60,8 +61,8 @@ export const FolderCreateSchema = z
   .openapi("FolderCreate");
 export const FolderUpdateSchema = FolderCreateSchema.partial().openapi("FolderUpdate");
 export const FolderMoveSchema = z
-  .object({ parentId: IdSchema.nullable().optional() })
-  .and(PlacementSchema)
+  .object({ parentId: IdSchema.nullable().optional(), ...placementShape })
+  .refine(notBoth, NOT_BOTH)
   .openapi("FolderMove");
 
 // Lists
@@ -86,8 +87,8 @@ export const ListUpdateSchema = z
   })
   .openapi("ListUpdate");
 export const ListMoveSchema = z
-  .object({ folderId: IdSchema.nullable().optional() })
-  .and(PlacementSchema)
+  .object({ folderId: IdSchema.nullable().optional(), ...placementShape })
+  .refine(notBoth, NOT_BOTH)
   .openapi("ListMove");
 
 // Tokens
@@ -149,7 +150,7 @@ export const TaskSchema = z
   })
   .openapi("Task");
 
-const TaskFields = {
+export const taskFieldShapes = {
   title: z.string().min(1),
   notes: z.string().nullable(),
   dueDate: DateOnly.nullable(),
@@ -162,32 +163,32 @@ const TaskFields = {
   metadata: z.record(z.unknown()).nullable(),
 };
 
+export const taskCreateShape = {
+  listId: IdSchema,
+  parentId: IdSchema.nullable().optional(),
+  kind: z.enum(TASK_KINDS).optional(),
+  title: taskFieldShapes.title,
+  notes: taskFieldShapes.notes.optional(),
+  dueDate: taskFieldShapes.dueDate.optional(),
+  dueAt: taskFieldShapes.dueAt.optional(),
+  startDate: taskFieldShapes.startDate.optional(),
+  snoozedUntil: taskFieldShapes.snoozedUntil.optional(),
+  recurRule: taskFieldShapes.recurRule.optional(),
+  recurFrom: taskFieldShapes.recurFrom.optional(),
+  labels: taskFieldShapes.labels.optional(),
+  metadata: taskFieldShapes.metadata.optional(),
+};
+
 export const TaskCreateSchema = z
-  .object({
-    listId: IdSchema,
-    parentId: IdSchema.nullable().optional(),
-    kind: z.enum(TASK_KINDS).optional(),
-    title: TaskFields.title,
-  })
-  .extend({
-    notes: TaskFields.notes.optional(),
-    dueDate: TaskFields.dueDate.optional(),
-    dueAt: TaskFields.dueAt.optional(),
-    startDate: TaskFields.startDate.optional(),
-    snoozedUntil: TaskFields.snoozedUntil.optional(),
-    recurRule: TaskFields.recurRule.optional(),
-    recurFrom: TaskFields.recurFrom.optional(),
-    labels: TaskFields.labels.optional(),
-    metadata: TaskFields.metadata.optional(),
-  })
-  .and(PlacementSchema)
+  .object({ ...taskCreateShape, ...placementShape })
+  .refine(notBoth, NOT_BOTH)
   .openapi("TaskCreate");
 
-export const TaskUpdateSchema = z.object(TaskFields).partial().openapi("TaskUpdate");
+export const TaskUpdateSchema = z.object(taskFieldShapes).partial().openapi("TaskUpdate");
 
 export const TaskMoveSchema = z
-  .object({ listId: IdSchema.optional(), parentId: IdSchema.nullable().optional() })
-  .and(PlacementSchema)
+  .object({ listId: IdSchema.optional(), parentId: IdSchema.nullable().optional(), ...placementShape })
+  .refine(notBoth, NOT_BOTH)
   .openapi("TaskMove");
 
 export const TaskQuerySchema = z.object({
