@@ -54,4 +54,11 @@ Work is tracked on the Workflowy **Claudia** board (`🔅 My projects › Produc
 
 ## Commands
 
-Not scaffolded yet. Add the dev, test, migrate and deploy commands here when the repo is set up.
+npm workspaces monorepo: `shared` (Zod schemas), `worker` (Hono API, wrangler config) and `web` (Vite + React). Run from the repo root:
+
+- `npm install`
+- `npm run dev`: build the web app, then `wrangler dev` on http://localhost:8787 (`npm run dev:web` for Vite with HMR, proxying `/api` to the Worker)
+- `npm run typecheck`, `npm test`, `npm run build`
+- `npm run deploy`: build and `wrangler deploy` (CI does this on push to `main`; it needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets)
+
+Migrate commands will be added with the D1 schema.

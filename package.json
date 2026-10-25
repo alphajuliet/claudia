@@ -1,0 +1,14 @@
+{
+  "name": "claudia",
+  "private": true,
+  "type": "module",
+  "workspaces": ["shared", "worker", "web"],
+  "scripts": {
+    "dev": "npm run build -w web && npm run dev -w worker",
+    "dev:web": "npm run dev -w web",
+    "build": "npm run build -w web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "deploy": "npm run build && npm run deploy -w worker"
+  }
+}

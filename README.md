@@ -34,7 +34,14 @@ Data lives in D1 (SQLite), accessed through Drizzle ORM. Cron Triggers handle re
 
 ## Development
 
-Setup instructions will follow once the project is scaffolded. It will use Node.js, `pnpm` and `wrangler`, with a local D1 database for development.
+Requires Node.js 22 or later. This is an npm workspaces monorepo (`shared`, `worker`, `web`).
+
+```sh
+npm install
+npm run dev    # builds the web app and serves everything at http://localhost:8787
+```
+
+See `CLAUDE.md` for the full list of commands.
 
 ## Licence
 
