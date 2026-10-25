@@ -49,6 +49,6 @@ export async function handleMcp(
 
   return createMcpHandler(() => buildServer(row.scopes as Scope[], callApi), {
     route: "/mcp",
-    allowedHostnames: ["claudia.alphajuliet.com", "localhost"],
+    allowedHostnames: ["claudia.alphajuliet.com", "localhost", "127.0.0.1"],
   })(request, env, ctx);
 }

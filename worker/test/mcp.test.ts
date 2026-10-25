@@ -11,7 +11,7 @@ const URL_ = "https://claudia.alphajuliet.com/mcp";
 const ctx = { waitUntil() {}, passThroughOnException() {}, props: {} } as unknown as ExecutionContext;
 let rpcId = 0;
 
-async function rpc(token: string | null, method: string, params?: unknown) {
+async function rpc(token: string | null, method: string, params?: unknown, host = "claudia.alphajuliet.com") {
   const res = await app.request(
     URL_,
     {
@@ -19,7 +19,7 @@ async function rpc(token: string | null, method: string, params?: unknown) {
       headers: {
         "Content-Type": "application/json",
         // Real requests carry Host; app.request does not, and the SDK checks it.
-        Host: "claudia.alphajuliet.com",
+        Host: host,
         Accept: "application/json, text/event-stream",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
@@ -167,7 +167,21 @@ describe("audit trail and scope", () => {
   it("enforces the token's scope even if a write tool is called by name", async () => {
     const read = await makeToken(["read"]);
     const res = await rpc(read, "tools/call", { name: "create_list", arguments: { name: "Sneaky" } });
-    expect(JSON.stringify(res.json)).toMatch(/not found|unknown|error/i);
+    expect(res.json.error).toEqual({ code: -32602, message: "Tool create_list not found" });
+    expect(res.json.result).toBeUndefined();
     expect((await db.query.lists.findMany()).length).toBe(0);
+  });
+});
+
+describe("host checks", () => {
+  it("rejects a request for another host", async () => {
+    const res = await rpc(write, "tools/list", undefined, "evil.example");
+    expect(res.status).toBe(403);
+  });
+
+  it("accepts the allowed hosts, with or without a port", async () => {
+    for (const host of ["claudia.alphajuliet.com", "localhost:8787", "127.0.0.1:8787"]) {
+      expect((await rpc(write, "tools/list", undefined, host)).status).toBe(200);
+    }
   });
 });
