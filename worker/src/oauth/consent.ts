@@ -8,11 +8,13 @@ export const OAUTH_SCOPES = ["tasks:read", "tasks:write"];
 
 const escape = (value: string) => value.replace(/[&<>"']/g, (char) => `&#${char.charCodeAt(0)};`);
 
+// No form-action: browsers apply it to the redirect after the POST too, which would block the
+// hop back to claude.ai. The form has no action and the redirect target is allowlisted server-side.
 const PAGE_HEADERS = {
   "Content-Type": "text/html; charset=utf-8",
   "Cache-Control": "no-store",
   "X-Frame-Options": "DENY",
-  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'",
+  "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'",
 };
 
 function applyPageHeaders(headers: Headers) {

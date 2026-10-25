@@ -29,7 +29,7 @@ describe("GET /authorize", () => {
     expect(res.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
     expect(res.headers.get("Cache-Control")).toBe("no-store");
     expect(res.headers.get("X-Frame-Options")).toBe("DENY");
-    expect(res.headers.get("Content-Security-Policy")).toBe("default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'");
+    expect(res.headers.get("Content-Security-Policy")).toBe("default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
   });
 
   it("escapes a hostile client name", async () => {
