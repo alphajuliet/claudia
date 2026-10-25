@@ -1,32 +1,26 @@
 // worker/src/mcp/handler.ts
 import { createMcpHandler } from "agents/mcp/server";
-import { lookupToken } from "../lib/auth";
-import { createDb } from "../lib/db";
+import { internalHeaders } from "../lib/internal";
 import type { Scope } from "../lib/router";
 import { parseApiResponse } from "./response";
 import { buildServer, type CallApi } from "./server";
 
-const unauthorized = () =>
-  new Response(JSON.stringify({ error: { code: "unauthorized", message: "Missing or invalid token" } }), {
-    status: 401,
-    headers: { "Content-Type": "application/json", "WWW-Authenticate": 'Bearer realm="claudia"' },
-  });
+export type McpIdentity =
+  | { kind: "apitoken"; secret: string; scopes: Scope[] } // forward the caller's own token
+  | { kind: "oauth"; scopes: Scope[] }; // call in-process with the internal key
 
 /**
- * Serve MCP for a caller holding a Claudia API token. Tools call the app
- * itself with that same token, so the API's rules and scopes apply unchanged.
+ * Serve MCP for an authenticated caller (the OAuth provider has already checked
+ * the bearer). Tools call the app itself: with the caller's own API token, or
+ * in-process for an OAuth grant, so the API's rules and scopes apply unchanged.
  */
 export async function handleMcp(
   request: Request,
   env: Cloudflare.Env,
   ctx: ExecutionContext,
   app: { fetch: (req: Request, env: Cloudflare.Env, ctx: ExecutionContext) => Response | Promise<Response> },
+  identity: McpIdentity,
 ): Promise<Response> {
-  const header = request.headers.get("Authorization") ?? "";
-  const secret = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  const row = await lookupToken(createDb(env.DB), secret);
-  if (!row) return unauthorized();
-
   const origin = new URL(request.url).origin;
   const callApi: CallApi = async ({ method, path, query, body }) => {
     const url = new URL(path, origin);
@@ -34,9 +28,9 @@ export async function handleMcp(
     const res = await app.fetch(
       new Request(url, {
         method,
+        // Never forward the incoming request's headers: X-Claudia-* from a client must not reach the app.
         headers: {
-          Authorization: `Bearer ${secret}`,
-          "X-Claudia-Client": "mcp",
+          ...(identity.kind === "apitoken" ? { Authorization: `Bearer ${identity.secret}`, "X-Claudia-Client": "mcp" } : internalHeaders(identity.scopes)),
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
         },
         body: body === undefined ? undefined : JSON.stringify(body),
@@ -47,7 +41,7 @@ export async function handleMcp(
     return parseApiResponse(res);
   };
 
-  return createMcpHandler(() => buildServer(row.scopes as Scope[], callApi), {
+  return createMcpHandler(() => buildServer(identity.scopes, callApi), {
     route: "/mcp",
     allowedHostnames: ["claudia.alphajuliet.com", "localhost", "127.0.0.1"],
   })(request, env, ctx);

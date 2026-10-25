@@ -1,10 +1,14 @@
 import { HealthSchema } from "@claudia/shared";
 import { createRoute } from "@hono/zod-openapi";
-import { authenticate } from "./lib/auth";
+import OAuthProvider from "@cloudflare/workers-oauth-provider";
+import { SCOPES } from "@claudia/shared";
+import { authenticate, lookupToken } from "./lib/auth";
 import { createDb } from "./lib/db";
 import { ApiError } from "./lib/errors";
-import { jsonResponse, newRouter } from "./lib/router";
-import { handleMcp } from "./mcp/handler";
+import { jsonResponse, newRouter, type Scope } from "./lib/router";
+import { handleMcp, type McpIdentity } from "./mcp/handler";
+const OAUTH_SCOPES = ["tasks:read", "tasks:write"];
+import { redirectAllowed } from "./oauth/policy";
 import { folderRoutes } from "./routes/folders";
 import { importRoutes } from "./routes/import";
 import { filterRoutes } from "./routes/filters";
@@ -47,9 +51,6 @@ app.openapi(
   (c) => c.json({ ok: true as const, service: "claudia" as const }, 200),
 );
 
-// MCP has its own token check (it needs the token's scopes to build the tool list).
-app.all("/mcp", (c) => handleMcp(c.req.raw, c.env, c.executionCtx as ExecutionContext, app));
-
 app.route("/", tokenRoutes);
 app.route("/", folderRoutes);
 app.route("/", listRoutes);
@@ -71,4 +72,50 @@ app.doc("/api/openapi.json", {
   security: [{ bearerAuth: [] }],
 });
 
-export default app;
+const RESOURCE = "https://claudia.alphajuliet.com/mcp";
+
+/** Keep only scope names we know. OAuth grants get read or write at most, never admin. */
+const known = (value: unknown, allowed: readonly string[]): Scope[] =>
+  Array.isArray(value) ? ([...new Set(value)].filter((s): s is Scope => typeof s === "string" && allowed.includes(s))) : [];
+
+const oauthScopes = (value: unknown): Scope[] => {
+  const granted = known(value, ["read", "write"]);
+  return granted.length ? granted : ["read"];
+};
+
+/**
+ * The Worker's entry point. The provider owns /mcp, /token, /register and the
+ * discovery documents; everything else (the API, the consent page) goes to the app.
+ */
+export const provider = new OAuthProvider<Cloudflare.Env>({
+  apiRoute: "/mcp",
+  apiHandler: {
+    fetch: (req, env, ctx) => {
+      const props = ((ctx as { props?: unknown }).props ?? {}) as { kind?: unknown; scopes?: unknown };
+      const auth = (ctx as { auth?: { token?: string } }).auth;
+      const identity: McpIdentity =
+        props.kind === "apitoken" && typeof auth?.token === "string"
+          ? { kind: "apitoken", secret: auth.token, scopes: known(props.scopes, SCOPES) }
+          : { kind: "oauth", scopes: oauthScopes(props.scopes) };
+      return handleMcp(req, env, ctx, app, identity);
+    },
+  },
+  defaultHandler: { fetch: (req, env, ctx) => app.fetch(req, env, ctx) },
+  authorizeEndpoint: "/authorize",
+  tokenEndpoint: "/token",
+  clientRegistrationEndpoint: "/register",
+  clientIdMetadataDocumentEnabled: true,
+  scopesSupported: OAUTH_SCOPES,
+  resourceMetadata: { resource: RESOURCE, authorization_servers: ["https://claudia.alphajuliet.com"] },
+  clientRegistrationCallback: ({ clientMetadata }) => {
+    const uris = clientMetadata.redirect_uris;
+    const ok = Array.isArray(uris) && uris.length > 0 && uris.every((u) => typeof u === "string" && redirectAllowed(u));
+    return ok ? undefined : { code: "invalid_redirect_uri", description: "Redirect URI not allowed" };
+  },
+  resolveExternalToken: async ({ token, env }) => {
+    const row = await lookupToken(createDb(env.DB), token);
+    return row ? { props: { kind: "apitoken", scopes: row.scopes }, audience: RESOURCE } : null;
+  },
+});
+
+export default provider;

@@ -2,7 +2,7 @@
 import { env } from "cloudflare:workers";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { app } from "../src";
+import { provider } from "../src";
 import { events } from "../src/db/schema";
 import { db, makeToken, reset } from "./helpers";
 
@@ -12,9 +12,8 @@ const ctx = { waitUntil() {}, passThroughOnException() {}, props: {} } as unknow
 let rpcId = 0;
 
 async function rpc(token: string | null, method: string, params?: unknown, host = "claudia.alphajuliet.com") {
-  const res = await app.request(
-    URL_,
-    {
+  const res = await provider.fetch(
+    new Request(URL_, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -24,7 +23,7 @@ async function rpc(token: string | null, method: string, params?: unknown, host 
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method, params }),
-    },
+    }),
     env,
     ctx,
   );
@@ -48,11 +47,12 @@ beforeEach(async () => {
 });
 
 describe("authentication", () => {
-  it("refuses a missing, malformed or unknown token with a Bearer challenge", async () => {
+  it("refuses a missing, malformed or unknown token with the provider's Bearer challenge", async () => {
     for (const t of [null, "nope", "cl_unknown"]) {
       const res = await rpc(t, "tools/list");
       expect(res.status).toBe(401);
       expect(res.headers.get("WWW-Authenticate")).toContain("Bearer");
+      expect(res.headers.get("WWW-Authenticate")).toContain("resource_metadata=");
     }
   });
 
