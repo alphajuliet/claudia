@@ -1,6 +1,7 @@
 import { AuthorizationError, CimdFetchError, type ConsentDescription } from "@cloudflare/workers-oauth-provider";
 import { Hono } from "hono";
 import { checkPassphrase } from "./passphrase";
+import { redirectAllowed } from "./policy";
 
 /** Scopes this server issues. `tasks:write` gives the `write` scope, `tasks:read` gives `read`; never admin. */
 export const OAUTH_SCOPES = ["tasks:read", "tasks:write"];
@@ -63,10 +64,13 @@ const grantable = (requested: string[]) => {
 
 export const consentRoutes = new Hono<{ Bindings: Cloudflare.Env }>();
 
+const NOT_ALLOWED = "This app's return address is not allowed.";
+
 consentRoutes.get("/authorize", async (c) => {
   const oauth = c.env.OAUTH_PROVIDER;
   try {
     const request = await oauth.parseAuthRequest(c.req.raw);
+    if (!redirectAllowed(request.redirectUri)) return text(NOT_ALLOWED, 400);
     const details = await oauth.describeConsent(request);
     const consent = await oauth.beginConsent(request);
     return new Response(page(details, consent.handle), { headers: applyPageHeaders(consent.headers) });
@@ -78,6 +82,10 @@ consentRoutes.get("/authorize", async (c) => {
 consentRoutes.post("/authorize", async (c) => {
   const oauth = c.env.OAUTH_PROVIDER;
   try {
+    // Client metadata documents skip /register, so the allowlist is enforced here too,
+    // before the form is read or the passphrase is checked.
+    const request = await oauth.parseAuthRequest(c.req.raw);
+    if (!redirectAllowed(request.redirectUri)) return text(NOT_ALLOWED, 400);
     const form = await c.req.raw.formData();
     const handle = String(form.get("handle") ?? "");
 
@@ -89,15 +97,14 @@ consentRoutes.post("/authorize", async (c) => {
     // The passphrase is checked before the consent handle is spent.
     const result = await checkPassphrase(c.env.OAUTH_KV, String(form.get("passphrase") ?? ""), c.env.OWNER_PASSPHRASE);
     if (result !== "ok") {
-      const request = await oauth.parseAuthRequest(c.req.raw);
       const details = await oauth.describeConsent(request);
       const message = result === "locked" ? "Too many attempts. Try again in 15 minutes." : "That passphrase is not right.";
       return new Response(page(details, handle, message), { status: result === "locked" ? 429 : 401, headers: applyPageHeaders(new Headers()) });
     }
 
-    const parsed = await oauth.parseAuthRequest(c.req.raw);
-    const scope = grantable(parsed.scope);
+    const scope = grantable(request.scope);
     const approved = await oauth.approveConsent(c.req.raw, handle, { scope });
+    if (!redirectAllowed(approved.request.redirectUri)) return text(NOT_ALLOWED, 400);
     const details = await oauth.describeConsent(approved.request);
     const { redirectTo } = await oauth.completeAuthorization({
       request: approved.request,
@@ -115,7 +122,9 @@ consentRoutes.post("/authorize", async (c) => {
 });
 
 function failure(error: unknown): Response {
-  if (error instanceof AuthorizationError && error.redirectTo) return Response.redirect(error.redirectTo, 302);
+  if (error instanceof AuthorizationError && error.redirectTo && redirectAllowed(error.redirectTo)) {
+    return new Response(null, { status: 302, headers: { Location: error.redirectTo, "Cache-Control": "no-store" } });
+  }
   if (error instanceof AuthorizationError) return text(error.description || "This request could not be completed. Start again from the app.", 400);
   if (error instanceof CimdFetchError) return text("This app could not be verified.", 400);
   throw error;

@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MAX_FAILURES } from "../src/oauth/passphrase";
-import { authorizePath, openConsent, pkce, register, submit } from "./oauth-helpers";
+import { authorizePath, BASE, openConsent, pkce, register, send, submit } from "./oauth-helpers";
 
 beforeEach(async () => {
   await env.OAUTH_KV.delete("passphrase:failures");
@@ -112,5 +112,58 @@ describe("POST /register", () => {
   it("rejects a mix that includes a disallowed URI, and accepts loopback", async () => {
     expect((await register("Mixed", ["https://claude.ai/api/mcp/auth_callback", "https://evil.example/cb"])).status).toBe(400);
     expect((await register("CLI", ["http://localhost:53682/callback"])).status).toBe(201);
+  });
+});
+
+describe("a client whose redirect URI is not allowed (client metadata document)", () => {
+  const CLIENT_ID = "https://evil-client.example/client.json";
+  const EVIL = "https://evil.example/cb";
+  const real = globalThis.fetch;
+
+  beforeEach(() => {
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url === CLIENT_ID) {
+        return Response.json({ client_id: CLIENT_ID, client_name: "Evil Client", redirect_uris: [EVIL], token_endpoint_auth_method: "none", grant_types: ["authorization_code"], response_types: ["code"] });
+      }
+      return real(input, init);
+    }) as typeof fetch;
+  });
+  afterEach(() => {
+    globalThis.fetch = real;
+  });
+
+  const path = async (extra: Record<string, string> = {}) => {
+    const { challenge } = await pkce();
+    const q = new URLSearchParams({ response_type: "code", client_id: CLIENT_ID, redirect_uri: EVIL, code_challenge: challenge, code_challenge_method: "S256", state: "s", scope: "tasks:read", resource: BASE + "/mcp", ...extra });
+    return "/authorize?" + q;
+  };
+
+  const expectPlain400 = async (res: Response) => {
+    expect(res.status).toBe(400);
+    expect(res.headers.get("Location")).toBeNull();
+    expect(res.headers.get("Content-Type")).toContain("text/plain");
+    expect(await res.text()).not.toContain("Evil Client");
+  };
+
+  it("shows a plain error on GET, not the consent page or a redirect", async () => {
+    await expectPlain400(await send(await path()));
+  });
+
+  it("does not redirect to the client on a PKCE or response_type error", async () => {
+    await expectPlain400(await send(await path({ response_type: "token" })));
+    await expectPlain400(await send(await path({ code_challenge_method: "plain" })));
+  });
+
+  it("refuses the POST without checking the passphrase or redirecting", async () => {
+    const res = await submit(await path(), "", { handle: "h", passphrase: "test-passphrase", decision: "approve" });
+    await expectPlain400(res);
+    const wrong = await submit(await path(), "", { handle: "h", passphrase: "wrong", decision: "approve" });
+    await expectPlain400(wrong);
+    expect(await env.OAUTH_KV.get("passphrase:failures")).toBeNull();
+  });
+
+  it("refuses a deny POST without redirecting to the client", async () => {
+    await expectPlain400(await submit(await path(), "", { handle: "h", decision: "deny" }));
   });
 });
