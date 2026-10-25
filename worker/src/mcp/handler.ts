@@ -3,6 +3,7 @@ import { createMcpHandler } from "agents/mcp/server";
 import { lookupToken } from "../lib/auth";
 import { createDb } from "../lib/db";
 import type { Scope } from "../lib/router";
+import { parseApiResponse } from "./response";
 import { buildServer, type CallApi } from "./server";
 
 const unauthorized = () =>
@@ -43,8 +44,7 @@ export async function handleMcp(
       env,
       ctx,
     );
-    const raw = await res.text();
-    return { ok: res.ok, status: res.status, json: raw ? JSON.parse(raw) : undefined };
+    return parseApiResponse(res);
   };
 
   return createMcpHandler(() => buildServer(row.scopes as Scope[], callApi), {
