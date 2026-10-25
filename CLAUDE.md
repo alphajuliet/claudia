@@ -64,4 +64,6 @@ npm workspaces monorepo: `shared` (Zod schemas), `worker` (Hono API, wrangler co
 - `npm run db:generate -w @claudia/worker`: generate a migration from `worker/src/db/schema.ts` (add `--custom` for hand-written SQL such as triggers)
 - `npm run db:migrate:local -w @claudia/worker`: apply migrations to the local D1 (`db:migrate:remote` for production)
 
-Worker tests run inside workerd with `@cloudflare/vitest-plugin` against a local D1. Test storage is shared across tests, so reset tables in `beforeEach`.
+- `npm run token:create -w @claudia/worker -- --remote --name laptop --scopes admin`: mint an API token straight into D1 (the first admin token; later ones come from `POST /api/tokens`). The secret is shown once.
+
+The OpenAPI spec is served at `/api/openapi.json`. Clients send `X-Claudia-Client` (`web`, `mcp`, `shortcut`, `cli`, `import`) so events record who made a change. Worker tests run inside workerd with `@cloudflare/vitest-plugin` against a local D1. Test storage is shared across tests, so reset tables in `beforeEach`.
