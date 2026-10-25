@@ -3,6 +3,7 @@
 	"name": "claudia",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["global_fetch_strictly_public"],
 	"workers_dev": false,
 	"preview_urls": false,
 	"routes": [
@@ -18,7 +19,11 @@
 		"run_worker_first": [
 			"/api/*",
 			"/mcp",
-			"/mcp/*"
+			"/mcp/*",
+			"/authorize",
+			"/token",
+			"/register",
+			"/.well-known/*"
 		]
 	},
 	"d1_databases": [
@@ -27,6 +32,12 @@
 			"database_name": "claudia",
 			"database_id": "30611b16-fa8f-44d7-8ade-5ad2bf09f499",
 			"migrations_dir": "migrations"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "OAUTH_KV",
+			"id": "c552af60bd2a4323b8bab3bf60628033"
 		}
 	],
 	"observability": {

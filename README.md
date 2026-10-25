@@ -41,6 +41,14 @@ npm install
 npm run dev    # builds the web app and serves everything at http://localhost:8787
 ```
 
+For local runs, create `worker/.dev.vars` (git-ignored) with the owner passphrase that gates the MCP OAuth consent page:
+
+```sh
+OWNER_PASSPHRASE=choose-a-local-passphrase
+```
+
+Production uses a Worker secret of the same name. Tests set their own value (`test-passphrase`) in `worker/vitest.config.ts`.
+
 See `CLAUDE.md` for the full list of commands.
 
 ## Licence
