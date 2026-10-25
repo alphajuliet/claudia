@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { createMiddleware } from "hono/factory";
 import { ACTORS, tokens } from "../db/schema";
+import type { Db } from "./db";
 import { ApiError } from "./errors";
 import { now } from "./ids";
 import type { Actor, AppEnv, Scope } from "./router";
@@ -29,32 +30,33 @@ const requiredScope = (method: string, path: string): Scope =>
 const allows = (held: readonly Scope[], needed: Scope) =>
   Math.max(0, ...held.map((s) => RANK[s])) >= RANK[needed];
 
+/** The live stored token for a bearer secret, or null. Notes use at most hourly. */
+export async function lookupToken(db: Db, secret: string) {
+  if (!secret.startsWith(PREFIX)) return null;
+  const [row] = await db
+    .select()
+    .from(tokens)
+    .where(and(eq(tokens.hash, await hashToken(secret)), isNull(tokens.revokedAt)));
+  if (!row || (row.expiresAt && row.expiresAt <= now())) return null;
+  if (!row.lastUsedAt || Date.parse(row.lastUsedAt) < Date.now() - LAST_USED_GRANULARITY_MS) {
+    await db.update(tokens).set({ lastUsedAt: now() }).where(eq(tokens.id, row.id));
+  }
+  return row;
+}
+
 /**
  * Bearer-token authentication. The web app's Cloudflare Access path is added
  * with the domain setup; until then every caller presents a token.
  */
 export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
   const header = c.req.header("Authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
-  if (!token.startsWith(PREFIX)) throw new ApiError(401, "unauthorized", "Missing or invalid token");
-
-  const db = c.var.db;
-  const [row] = await db
-    .select()
-    .from(tokens)
-    .where(and(eq(tokens.hash, await hashToken(token)), isNull(tokens.revokedAt)));
-  if (!row || (row.expiresAt && row.expiresAt <= now())) {
-    throw new ApiError(401, "unauthorized", "Missing or invalid token");
-  }
+  const secret = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  const row = await lookupToken(c.var.db, secret);
+  if (!row) throw new ApiError(401, "unauthorized", "Missing or invalid token");
 
   const needed = requiredScope(c.req.method, c.req.path);
   if (!allows(row.scopes as Scope[], needed)) {
     throw new ApiError(403, "forbidden", `This token needs the '${needed}' scope`);
-  }
-
-  // Record use at most hourly: this keeps reads from writing.
-  if (!row.lastUsedAt || Date.parse(row.lastUsedAt) < Date.now() - LAST_USED_GRANULARITY_MS) {
-    await db.update(tokens).set({ lastUsedAt: now() }).where(eq(tokens.id, row.id));
   }
 
   // The caller says which client it is; this is audit information, not authorisation.
