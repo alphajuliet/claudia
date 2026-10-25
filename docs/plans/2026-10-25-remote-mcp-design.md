@@ -49,7 +49,7 @@ The grant carries the user's identity and the scope `tasks:read tasks:write`. An
 
 ## Tools
 
-24 tools, named verb_noun, each a thin wrapper over one API route.
+22 tools, named verb_noun, each a thin wrapper over one API route.
 
 | Group | Tools |
 |---|---|
@@ -60,7 +60,7 @@ The grant carries the user's identity and the scope `tasks:read tasks:write`. An
 
 Not exposed: every delete, tokens, settings and import.
 
-- **Inputs** are the shared Zod schemas, so an API rule change reaches the tools. Descriptions teach conventions: dates are `YYYY-MM-DD`, labels are state, update and move are separate steps.
+- **Inputs** are built from the shared Zod schemas, so an API rule change reaches the tools. The MCP SDK cannot convert Zod 3 schemas to JSON Schema, so each is converted with `zod-to-json-schema` and wrapped with the SDK's `fromJsonSchema()` (checked in workerd on 2026-10-25). Descriptions teach conventions: dates are `YYYY-MM-DD`, labels are state, update and move are separate steps.
 - **Results** are compact JSON. `search_tasks` returns at most 50 by default, with `offset`.
 - **Errors** from the API become tool errors carrying the message, so Claude can correct its request.
 - **Annotations** mark read tools as read-only, so clients can auto-approve them.
@@ -82,6 +82,10 @@ Not exposed: every delete, tokens, settings and import.
 ## Out of scope
 
 Cloudflare Access and passkeys (the auth lives in one middleware, so Access can be added later), MCP prompts and resources, SSE, per-connection read-only mode, a screen to list and revoke connected clients (revoke by deleting the grant in KV until then), and any delete tool.
+
+## Packages (checked 2026-10-25)
+
+`agents@0.30.1` and `@modelcontextprotocol/server@2.3.1` (the exact version `agents` pins), plus `zod-to-json-schema@3`. `agents` asks for Zod 4 as a peer; the project stays on Zod 3 because `@hono/zod-openapi` needs it, so installs use `legacy-peer-deps=true` in a committed `.npmrc` (CI's `npm ci` needs it too).
 
 ## Open items to check while building
 
