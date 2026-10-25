@@ -4,6 +4,7 @@ import { authenticate } from "./lib/auth";
 import { createDb } from "./lib/db";
 import { ApiError } from "./lib/errors";
 import { jsonResponse, newRouter } from "./lib/router";
+import { handleMcp } from "./mcp/handler";
 import { folderRoutes } from "./routes/folders";
 import { importRoutes } from "./routes/import";
 import { filterRoutes } from "./routes/filters";
@@ -45,6 +46,9 @@ app.openapi(
   }),
   (c) => c.json({ ok: true as const, service: "claudia" as const }, 200),
 );
+
+// MCP has its own token check (it needs the token's scopes to build the tool list).
+app.all("/mcp", (c) => handleMcp(c.req.raw, c.env, c.executionCtx as ExecutionContext, app));
 
 app.route("/", tokenRoutes);
 app.route("/", folderRoutes);
