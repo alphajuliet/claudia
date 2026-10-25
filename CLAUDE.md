@@ -41,7 +41,7 @@ Work is tracked on the Workflowy **Claudia** board (`🔅 My projects › Produc
 - **Recurrence:** RRULE plus `recur_from` (`due` or `completion`). Completing a recurring task advances it in place and logs a `completed` event.
 - **Keyboard:** every UI action is a registered command. The keymap lives in user settings and is editable in the app. Defaults follow Godspeed.
 - **Front-end:** one responsive web app with phone, iPad and desktop layouts, installable to the home screen. Offline is limited to a capture queue and a cached Today view.
-- **Auth:** Cloudflare Access (passkey) for the web app. Hashed, scoped API tokens for the iOS Shortcut, the CLI and scripts. OAuth (`workers-oauth-provider`) for the remote MCP.
+- **Auth:** hashed, scoped API tokens for everything, including the web app (it keeps one in the browser). OAuth (`workers-oauth-provider`) for the remote MCP, with an owner passphrase on the consent page. No Cloudflare Access: one user and moderately sensitive data.
 - **Out of scope for day one:** timed or push notifications, full offline sync, sharing.
 - Never serve from `*.workers.dev`; corporate filters may block it.
 

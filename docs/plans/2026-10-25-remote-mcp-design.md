@@ -1,6 +1,6 @@
 # Remote MCP server: design
 
-Date: 2026-10-25. Status: approved, not yet built.
+Date: 2026-10-25. Status: approved, not yet built. Revised the same day: Cloudflare Access was dropped in favour of an owner passphrase, because the data is single-user and only moderately sensitive and Access added more machinery than the risk needs.
 
 ## Goal
 
@@ -11,7 +11,7 @@ Let Claude read and change tasks from every surface (claude.ai, Claude Desktop, 
 | Decision | Choice | Why |
 |---|---|---|
 | Server runtime | `createMcpHandler` (stateless Streamable HTTP) from the Agents SDK | Cloudflare now deprecates `McpAgent` for new servers. A stateless handler needs no Durable Object, and all state is already in D1. This supersedes the earlier "McpAgent" plan. |
-| Consent login | Cloudflare Access passkey in front of `/authorize` only | One identity story for the web app and MCP, with no passwords. |
+| Consent login | An owner passphrase on the consent page (`OWNER_PASSPHRASE`, a Worker secret) | One person, moderately sensitive data. A password manager can fill it in on a phone, and it stays separate from API tokens. No Cloudflare Access, so no dashboard setup, JWT checks or cookie handling. |
 | Claude's powers | Read and write; no delete tools | An assistant acting from chat should not be able to remove anything. Deletes happen in the app. |
 | Tool implementation | Tools call a private in-process copy of the Hono app | Reuses validation, event logging, ordering and soft deletes. No second code path to keep in step. |
 | Transport | Streamable HTTP only | SSE is deprecated. |
@@ -23,22 +23,29 @@ The Worker's entry point becomes `OAuthProvider` from `@cloudflare/workers-oauth
 | Path | Handled by | Who can call it |
 |---|---|---|
 | `/mcp` | `createMcpHandler` via the provider's `apiHandler` | OAuth access tokens issued to a Claude client |
-| `/authorize` | Our consent page (the provider's `defaultHandler`) | Behind Cloudflare Access; the Worker validates the Access JWT |
+| `/authorize` | Our consent page (the provider's `defaultHandler`) | Anyone can load it; approving needs the owner passphrase |
 | `/token`, `/register`, `/.well-known/*` | The provider | Public; they issue nothing without a valid code and PKCE |
-| `/api/*` | Existing Hono app | API tokens, and an Access login for the web app |
+| `/api/*` | Existing Hono app | API tokens only (the web app keeps one in the browser) |
 | everything else | Static web app | Public page; it shows no data |
 
-`wrangler.jsonc` needs `OAUTH_KV` (a KV namespace), the `global_fetch_strictly_public` compatibility flag (for client metadata documents), and `/authorize`, `/token`, `/register` and `/.well-known/*` added to `assets.run_worker_first`.
+`wrangler.jsonc` needs `OAUTH_KV` (a KV namespace, which also holds the passphrase throttle), the `global_fetch_strictly_public` compatibility flag (for client metadata documents), and `/authorize`, `/token`, `/register` and `/.well-known/*` added to `assets.run_worker_first`.
 
 ## Connecting a client
 
 1. Claude calls `/mcp` and receives a 401 pointing to the discovery documents.
 2. It registers itself (Dynamic Client Registration or a client metadata document).
-3. It opens `/authorize` in the browser. Access asks for the passkey.
-4. The consent page shows the client's name and the host it returns to. Allow completes the grant; Deny returns `access_denied`.
+3. It opens `/authorize` in the browser.
+4. The consent page shows the client's name and the host it returns to and asks for the owner passphrase. Allow completes the grant; Deny returns `access_denied`.
 5. Claude exchanges the code (with PKCE) for an access token and a rotating refresh token.
 
-The grant carries the user's identity and the scope `tasks:read tasks:write`. An expired access token returns 401 and the client refreshes silently. Anyone can register a client, but nobody can authorise one without the Access login. Claude's OAuth callback is `https://claude.ai/api/mcp/auth_callback` (it may become `claude.com`); Claude Code uses a loopback address.
+The grant carries the user's identity and the scope `tasks:read tasks:write`. An expired access token returns 401 and the client refreshes silently. Anyone can register a client, but nobody can authorise one without the passphrase. Claude's OAuth callback is `https://claude.ai/api/mcp/auth_callback` (it may become `claude.com`); Claude Code uses a loopback address.
+
+## Owner passphrase
+
+- Stored as a Worker secret (`wrangler secret put OWNER_PASSPHRASE`); never in the repo. Use a long generated value kept in a password manager.
+- Compared in constant time. The form posts to `/authorize` and carries a one-time value (a hidden field tied to the pending request) so another site cannot submit it for you.
+- Throttle: after 5 wrong attempts in 15 minutes, further attempts are refused for 15 minutes (a counter in `OAUTH_KV`). This makes guessing impractical without a login system.
+- The page sets no cookies. Each connection asks for the passphrase again, which is rare: refresh tokens keep a client connected.
 
 ## Tools
 
@@ -63,18 +70,18 @@ Not exposed: every delete, tokens, settings and import.
 
 - Unit tests: argument-to-request mapping for each tool; API errors become tool errors.
 - A test that the tool list contains no delete, token, settings or import tools.
-- An integration test in workerd with a fake Access JWT check: register, authorise, token, `tools/list`, `create_task`. It also checks that an unauthenticated call is refused and that the event actor is `mcp`.
+- An integration test in workerd: register, authorise with the passphrase, token, `tools/list`, `create_task`. It also checks that a wrong passphrase is refused and then throttled, that an unauthenticated call is refused, and that the event actor is `mcp`.
 - By hand (needs Andrew): connect Claude Code (`claude mcp add --transport http …`) and the claude.ai connector.
 
 ## Order of work
 
-1. **Cloudflare Access** (existing BACKLOG card): an Access application for the site, Access JWT validation in the Worker, and the web app's `/api` sign-in. This gives the consent page its login.
-2. **MCP tools and handler**, first behind the existing API tokens so Claude Code can use it straight away with a bearer header.
-3. **OAuth wrapper, consent page and KV**, so claude.ai and the phone can connect.
+1. **MCP tools and handler**, first behind the existing API tokens so Claude Code can use it straight away with a bearer header.
+2. **OAuth wrapper, passphrase consent page and KV**, so claude.ai and the phone can connect.
+3. **Web app sign-in** (separate, independent): the app asks for a token once and keeps it in the browser. The page itself is public and shows nothing without a token.
 
 ## Out of scope
 
-MCP prompts and resources, SSE, per-connection read-only mode, a screen to list and revoke connected clients (revoke by deleting the grant in KV until then), and any delete tool.
+Cloudflare Access and passkeys (the auth lives in one middleware, so Access can be added later), MCP prompts and resources, SSE, per-connection read-only mode, a screen to list and revoke connected clients (revoke by deleting the grant in KV until then), and any delete tool.
 
 ## Open items to check while building
 
