@@ -14,17 +14,30 @@ async function same(a: string, b: string): Promise<boolean> {
 /**
  * Check the owner passphrase, with a global throttle: after MAX_FAILURES wrong
  * attempts inside the window, everything is refused until the counter expires.
- * Refused attempts do not extend the lockout. The count is best effort (KV is
- * not atomic), which is enough to make guessing impractical for one owner.
+ * Refused attempts do not extend the lockout.
+ *
+ * The count is best effort. KV is not atomic, so parallel guesses can race and
+ * undercount, and the counter is global, so anyone can burn it and lock the
+ * owner out for a while (a nuisance, not a bypass). The passphrase is long and
+ * generated, so guessing stays impractical. A KV write that fails (an error or a
+ * rate limit) counts as a wrong attempt; this function never throws on it.
  */
 export async function checkPassphrase(kv: KVNamespace, supplied: string, expected: string | undefined): Promise<PassphraseResult> {
   const failures = Number((await kv.get(KEY)) ?? 0);
   if (failures >= MAX_FAILURES) return "locked";
 
   if (expected && supplied && (await same(supplied, expected))) {
-    await kv.delete(KEY);
+    try {
+      await kv.delete(KEY);
+    } catch {
+      // The right passphrase still works; the old count simply expires.
+    }
     return "ok";
   }
-  await kv.put(KEY, String(failures + 1), { expirationTtl: WINDOW_SECONDS });
+  try {
+    await kv.put(KEY, String(failures + 1), { expirationTtl: WINDOW_SECONDS });
+  } catch {
+    // Best effort: a failed write is still a wrong attempt.
+  }
   return "wrong";
 }

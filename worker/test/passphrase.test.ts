@@ -35,4 +35,10 @@ describe("checkPassphrase", () => {
     expect(await checkPassphrase(env.OAUTH_KV, "", "")).toBe("wrong");
     expect(await checkPassphrase(env.OAUTH_KV, "anything", undefined)).toBe("wrong");
   });
+
+  it("treats a rejected KV write as a wrong attempt, never throwing", async () => {
+    const kv = { get: async () => null, delete: async () => {}, put: async () => { throw new Error("KV put() limit exceeded"); } } as unknown as KVNamespace;
+    expect(await checkPassphrase(kv, "bad", SECRET)).toBe("wrong");
+    expect(await checkPassphrase(kv, SECRET, SECRET)).toBe("ok");
+  });
 });
