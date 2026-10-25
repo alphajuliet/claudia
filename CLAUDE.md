@@ -61,4 +61,7 @@ npm workspaces monorepo: `shared` (Zod schemas), `worker` (Hono API, wrangler co
 - `npm run typecheck`, `npm test`, `npm run build`
 - `npm run deploy`: build and `wrangler deploy` (CI does this on push to `main`; it needs `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` repo secrets)
 
-Migrate commands will be added with the D1 schema.
+- `npm run db:generate -w @claudia/worker`: generate a migration from `worker/src/db/schema.ts` (add `--custom` for hand-written SQL such as triggers)
+- `npm run db:migrate:local -w @claudia/worker`: apply migrations to the local D1 (`db:migrate:remote` for production)
+
+Worker tests run inside workerd with `@cloudflare/vitest-plugin` against a local D1. Test storage is shared across tests, so reset tables in `beforeEach`.

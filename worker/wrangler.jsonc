@@ -1,16 +1,34 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "claudia",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-10-01",
-  "workers_dev": false,
-  "preview_urls": false,
-  "routes": [{ "pattern": "claudia.alphajuliet.com", "custom_domain": true }],
-  "assets": {
-    "directory": "../web/dist",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api/*", "/mcp/*"]
-  },
-  "observability": { "enabled": true }
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "claudia",
+	"main": "src/index.ts",
+	"compatibility_date": "2026-10-01",
+	"workers_dev": false,
+	"preview_urls": false,
+	"routes": [
+		{
+			"pattern": "claudia.alphajuliet.com",
+			"custom_domain": true
+		}
+	],
+	"assets": {
+		"directory": "../web/dist",
+		"binding": "ASSETS",
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*",
+			"/mcp/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "claudia",
+			"database_id": "30611b16-fa8f-44d7-8ade-5ad2bf09f499",
+			"migrations_dir": "migrations"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
 }

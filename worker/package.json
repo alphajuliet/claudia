@@ -6,17 +6,24 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc -p .",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply claudia --local",
+    "db:migrate:remote": "wrangler d1 migrations apply claudia --remote",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
     "@claudia/shared": "*",
     "@hono/zod-openapi": "^0.19.0",
+    "drizzle-orm": "^0.45.4",
     "hono": "^4.6.0"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.7",
     "@cloudflare/workers-types": "^4.20250101.0",
+    "@types/node": "^26.6.5",
+    "drizzle-kit": "^0.31.11",
     "typescript": "^5.6.0",
-    "vitest": "^3.0.0",
+    "vitest": "^4.1.0",
     "wrangler": "^4.0.0"
   }
 }
