@@ -47,7 +47,7 @@ For local runs, create `worker/.dev.vars` (git-ignored) with the owner passphras
 OWNER_PASSPHRASE=choose-a-local-passphrase
 ```
 
-Production uses a Worker secret of the same name. Tests set their own value (`test-passphrase`) in `worker/vitest.config.ts`.
+Production uses a Worker secret of the same name, set with `wrangler secret put OWNER_PASSPHRASE`. Tests set their own value (`test-passphrase`) in `worker/vitest.config.ts`.
 
 See `CLAUDE.md` for the full list of commands.
 

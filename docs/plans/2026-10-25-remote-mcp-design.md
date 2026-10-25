@@ -1,6 +1,6 @@
 # Remote MCP server: design
 
-Date: 2026-10-25. Status: approved, not yet built. Revised the same day: Cloudflare Access was dropped in favour of an owner passphrase, because the data is single-user and only moderately sensitive and Access added more machinery than the risk needs.
+Date: 2026-10-25. Status: built (OAuth step). Revised the same day: Cloudflare Access was dropped in favour of an owner passphrase, because the data is single-user and only moderately sensitive and Access added more machinery than the risk needs.
 
 ## Goal
 
@@ -87,8 +87,8 @@ Cloudflare Access and passkeys (the auth lives in one middleware, so Access can 
 
 `agents@0.30.1` and `@modelcontextprotocol/server@2.3.1` (the exact version `agents` pins), plus `zod-to-json-schema@3`. `agents` asks for Zod 4 as a peer; the project stays on Zod 3 because `@hono/zod-openapi` needs it, so installs use `legacy-peer-deps=true` in a committed `.npmrc` (CI's `npm ci` needs it too).
 
-## Open items to check while building
+## Open items (answered)
 
-- The OAuth library's default token lifetimes and the exact option names (`parseAuthRequest`, `completeAuthorization`); the README did not give them.
-- Whether a client that reaches `/mcp` with a Claudia API token can be accepted alongside OAuth tokens, or whether static-token access should be a separate path.
-- claude.ai has been reported to need a `WWW-Authenticate` header on the 401; confirm it is sent.
+- OAuth library option names: confirmed against `@cloudflare/workers-oauth-provider` 1.2.3 (`parseAuthRequest`, `beginConsent`, `approveConsent`, `completeAuthorization`, `resolveExternalToken`, `clientRegistrationCallback`).
+- Claudia API tokens are accepted on `/mcp` alongside OAuth tokens through `resolveExternalToken`, so Claude Code keeps using a token and no separate static-token path is needed.
+- The 401 challenge on `/mcp` carries `resource_metadata`, which points clients at the protected resource document.

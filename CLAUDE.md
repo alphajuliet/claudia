@@ -69,7 +69,7 @@ npm workspaces monorepo: `shared` (Zod schemas), `worker` (Hono API, wrangler co
 - `npm run godspeed:fetch -w @claudia/worker`: download the whole Godspeed account (needs `GODSPEED_API_KEY`; open tasks only, so under a minute. Add `--include-completed` for history, which takes about 5 minutes because of the rate limit) into the git-ignored `worker/godspeed-export/`
 - `CLAUDIA_TOKEN=cl_... npm run godspeed:import -w @claudia/worker -- --url https://claudia.alphajuliet.com`: import that export through `POST /api/import` (admin token). `--dry-run` prints the report without sending. Open tasks only unless `--include-completed`. Safe to repeat: IDs are derived from Godspeed's and existing ones are skipped.
 
-- Remote MCP: `https://claudia.alphajuliet.com/mcp`, authenticated with a Claudia API token (a `read` token sees only the read tools). Add it to Claude Code with:
+- Remote MCP: `https://claudia.alphajuliet.com/mcp`. claude.ai and the phone connect with OAuth: Settings > Connectors > Add custom connector, URL `https://claudia.alphajuliet.com/mcp`, approved on the consent page with the owner passphrase (`OWNER_PASSPHRASE`, a Worker secret). Claude Code keeps using a Claudia API token (a `read` token sees only the read tools). Add it to Claude Code with:
   `claude mcp add --transport http claudia https://claudia.alphajuliet.com/mcp --header "Authorization: Bearer $(cat ~/.config/claudia/write-token)"`
 
 The OpenAPI spec is served at `/api/openapi.json`. Clients send `X-Claudia-Client` (`web`, `mcp`, `shortcut`, `cli`, `import`) so events record who made a change. Worker tests run inside workerd with `@cloudflare/vitest-plugin` against a local D1. Test storage is shared across tests, so reset tables in `beforeEach`.
