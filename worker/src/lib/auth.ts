@@ -4,6 +4,7 @@ import { ACTORS, tokens } from "../db/schema";
 import type { Db } from "./db";
 import { ApiError } from "./errors";
 import { now } from "./ids";
+import { INTERNAL_KEY } from "./internal";
 import type { Actor, AppEnv, Scope } from "./router";
 
 const PREFIX = "cl_";
@@ -30,6 +31,14 @@ const requiredScope = (method: string, path: string): Scope =>
 const allows = (held: readonly Scope[], needed: Scope) =>
   Math.max(0, ...held.map((s) => RANK[s])) >= RANK[needed];
 
+/** Constant-time comparison of two strings of equal length. */
+const timingSafeEqual = (a: string, b: string) => {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+};
+
 /** The live stored token for a bearer secret, or null. Notes use at most hourly. */
 export async function lookupToken(db: Db, secret: string) {
   if (!secret.startsWith(PREFIX)) return null;
@@ -49,6 +58,19 @@ export async function lookupToken(db: Db, secret: string) {
  * with the domain setup; until then every caller presents a token.
  */
 export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
+  // In-process calls from the MCP handler for an OAuth grant. The key is random per isolate.
+  // Admin is never granted; a wrong key falls through to the normal bearer check.
+  const internal = c.req.header("X-Claudia-Internal");
+  if (internal && timingSafeEqual(internal, INTERNAL_KEY)) {
+    const granted = (c.req.header("X-Claudia-Scopes") ?? "").split(",").filter((s): s is Scope => s === "read" || s === "write");
+    const needed = requiredScope(c.req.method, c.req.path);
+    if (!allows(granted, needed)) throw new ApiError(403, "forbidden", `This connection needs the '${needed}' scope`);
+    c.set("actor", "mcp");
+    c.set("scopes", granted);
+    await next();
+    return;
+  }
+
   const header = c.req.header("Authorization") ?? "";
   const secret = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
   const row = await lookupToken(c.var.db, secret);
