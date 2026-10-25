@@ -5,8 +5,10 @@ import { createDb } from "./lib/db";
 import { ApiError } from "./lib/errors";
 import { jsonResponse, newRouter } from "./lib/router";
 import { folderRoutes } from "./routes/folders";
+import { filterRoutes } from "./routes/filters";
 import { labelRoutes } from "./routes/labels";
 import { listRoutes } from "./routes/lists";
+import { settingRoutes } from "./routes/settings";
 import { taskRoutes } from "./routes/tasks";
 import { tokenRoutes } from "./routes/tokens";
 
@@ -48,6 +50,8 @@ app.route("/", folderRoutes);
 app.route("/", listRoutes);
 app.route("/", taskRoutes);
 app.route("/", labelRoutes);
+app.route("/", filterRoutes);
+app.route("/", settingRoutes);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
   type: "http",

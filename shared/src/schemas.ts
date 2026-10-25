@@ -204,3 +204,39 @@ export const TaskQuerySchema = z.object({
 
 export type Task = z.infer<typeof TaskSchema>;
 export type Label = z.infer<typeof LabelSchema>;
+
+// Saved filters (smart lists). `query` is a query string for GET /api/tasks,
+// e.g. "label=next&dueBefore=2026-11-01".
+export const FilterSchema = z
+  .object({
+    id: IdSchema,
+    name: z.string(),
+    query: z.string().openapi({ example: "label=next&status=open" }),
+    position: z.string(),
+    createdAt: Timestamp,
+    updatedAt: Timestamp,
+  })
+  .openapi("Filter");
+export const FilterCreateSchema = z
+  .object({ name: z.string().min(1), query: z.string() })
+  .openapi("FilterCreate");
+export const FilterUpdateSchema = FilterCreateSchema.partial().openapi("FilterUpdate");
+export const FilterMoveSchema = PlacementSchema.openapi("FilterMove");
+export const FilterRunQuerySchema = z.object({
+  limit: TaskQuerySchema.shape.limit.optional(),
+  offset: TaskQuerySchema.shape.offset.optional(),
+});
+
+// Settings: single-user key/value JSON (e.g. `keymap`, `timeZone`).
+export const SettingKeySchema = z.string().regex(/^[a-z][a-zA-Z0-9._-]{0,63}$/, "Letters, digits, . _ - ; start with a lowercase letter");
+export const SettingKeyParam = z.object({ key: SettingKeySchema });
+export const SettingValueSchema = z
+  .object({ value: z.any() })
+  .refine((o) => "value" in o, "value is required")
+  .openapi("SettingValue");
+export const SettingSchema = z
+  .object({ key: z.string(), value: z.any(), updatedAt: Timestamp })
+  .openapi("Setting");
+
+export type Filter = z.infer<typeof FilterSchema>;
+export type Setting = z.infer<typeof SettingSchema>;

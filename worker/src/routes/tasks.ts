@@ -121,6 +121,24 @@ const setLabels = (db: Db, taskId: string, ids: string[]): BatchItem<"sqlite">[]
 
 const snapshot = (r: Row, names: string[]) => toTask(r, names);
 
+/** Tasks matching a query, in list order. Shared by `GET /api/tasks` and saved filters. */
+export async function findTasks(db: Db, q: z.infer<typeof TaskQuerySchema>) {
+  const where = and(
+    live,
+    q.listId ? eq(tasks.listId, q.listId) : undefined,
+    q.parentId ? eq(tasks.parentId, q.parentId) : undefined,
+    q.status === "open" ? isNull(tasks.completedAt) : q.status === "completed" ? isNotNull(tasks.completedAt) : undefined,
+    q.dueBefore ? lte(tasks.dueDate, q.dueBefore) : undefined,
+    q.dueAfter ? gte(tasks.dueDate, q.dueAfter) : undefined,
+    q.q ? sql`(instr(lower(${tasks.title}), lower(${q.q})) > 0 OR instr(lower(coalesce(${tasks.notes}, '')), lower(${q.q})) > 0)` : undefined,
+    q.label
+      ? sql`EXISTS (SELECT 1 FROM ${taskLabels} tl JOIN ${labels} l ON l.id = tl.label_id WHERE tl.task_id = ${tasks.id} AND lower(l.name) = lower(${q.label}))`
+      : undefined,
+  );
+  const rows = await db.select().from(tasks).where(where).orderBy(asc(tasks.listId), asc(tasks.position)).limit(q.limit).offset(q.offset);
+  return present(db, rows);
+}
+
 export const taskRoutes = newRouter()
   .openapi(
     createRoute({
@@ -133,22 +151,7 @@ export const taskRoutes = newRouter()
       responses: { 200: jsonResponse(z.array(TaskSchema), "Tasks"), ...commonErrors },
     }),
     async (c) => {
-      const q = c.req.valid("query");
-      const db = c.var.db;
-      const where = and(
-        live,
-        q.listId ? eq(tasks.listId, q.listId) : undefined,
-        q.parentId ? eq(tasks.parentId, q.parentId) : undefined,
-        q.status === "open" ? isNull(tasks.completedAt) : q.status === "completed" ? isNotNull(tasks.completedAt) : undefined,
-        q.dueBefore ? lte(tasks.dueDate, q.dueBefore) : undefined,
-        q.dueAfter ? gte(tasks.dueDate, q.dueAfter) : undefined,
-        q.q ? sql`(instr(lower(${tasks.title}), lower(${q.q})) > 0 OR instr(lower(coalesce(${tasks.notes}, '')), lower(${q.q})) > 0)` : undefined,
-        q.label
-          ? sql`EXISTS (SELECT 1 FROM ${taskLabels} tl JOIN ${labels} l ON l.id = tl.label_id WHERE tl.task_id = ${tasks.id} AND lower(l.name) = lower(${q.label}))`
-          : undefined,
-      );
-      const rows = await db.select().from(tasks).where(where).orderBy(asc(tasks.listId), asc(tasks.position)).limit(q.limit).offset(q.offset);
-      return c.json(await present(db, rows), 200);
+      return c.json(await findTasks(c.var.db, c.req.valid("query")), 200);
     },
   )
   .openapi(
