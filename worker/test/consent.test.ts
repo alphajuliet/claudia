@@ -1,7 +1,8 @@
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { MAX_FAILURES } from "../src/oauth/passphrase";
-import { authorizePath, BASE, openConsent, pkce, register, send, submit } from "./oauth-helpers";
+import { provider } from "../src";
+import { authorizePath, BASE, ctx, openConsent, pkce, register, send, submit } from "./oauth-helpers";
 
 beforeEach(async () => {
   await env.OAUTH_KV.delete("passphrase:failures");
@@ -74,6 +75,23 @@ describe("POST /authorize", () => {
     expect(res.status).toBe(429);
     expect(res.headers.get("Location")).toBeNull();
     expect(await res.text()).toContain("Too many attempts. Try again in 15 minutes.");
+  });
+
+  it("says sign-in is not set up, with a 503 and no counter change, when no passphrase is configured", async () => {
+    const { path, handle, cookie } = await start();
+    for (const OWNER_PASSPHRASE of ["", undefined]) {
+      const res = await provider.fetch(
+        new Request(BASE + path, { method: "POST", redirect: "manual", headers: { "Content-Type": "application/x-www-form-urlencoded", Cookie: cookie }, body: new URLSearchParams({ handle, passphrase: "anything", decision: "approve" }) }),
+        { ...env, OWNER_PASSPHRASE } as typeof env,
+        ctx,
+      );
+      expect(res.status).toBe(503);
+      expect(res.headers.get("Location")).toBeNull();
+      const html = await res.text();
+      expect(html).toContain("Sign-in isn&#39;t set up on this server.");
+      expect(html).not.toContain("That passphrase is not right.");
+      expect(await env.OAUTH_KV.get("passphrase:failures")).toBeNull();
+    }
   });
 
   it("redirects with access_denied on Deny, without needing the passphrase", async () => {

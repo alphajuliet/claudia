@@ -94,6 +94,11 @@ consentRoutes.post("/authorize", async (c) => {
       return new Response(null, { status: 302, headers: denied.headers });
     }
 
+    if (!c.env.OWNER_PASSPHRASE) {
+      const details = await oauth.describeConsent(request);
+      return new Response(page(details, handle, "Sign-in isn't set up on this server."), { status: 503, headers: applyPageHeaders(new Headers()) });
+    }
+
     // The passphrase is checked before the consent handle is spent.
     const result = await checkPassphrase(c.env.OAUTH_KV, String(form.get("passphrase") ?? ""), c.env.OWNER_PASSPHRASE);
     if (result !== "ok") {
