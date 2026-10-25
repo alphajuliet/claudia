@@ -4,7 +4,7 @@ import { ACTORS, tokens } from "../db/schema";
 import type { Db } from "./db";
 import { ApiError } from "./errors";
 import { now } from "./ids";
-import { INTERNAL_KEY } from "./internal";
+import { internalKey } from "./internal";
 import type { Actor, AppEnv, Scope } from "./router";
 
 const PREFIX = "cl_";
@@ -61,7 +61,7 @@ export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
   // In-process calls from the MCP handler for an OAuth grant. The key is random per isolate.
   // Admin is never granted; a wrong key falls through to the normal bearer check.
   const internal = c.req.header("X-Claudia-Internal");
-  if (internal && timingSafeEqual(internal, INTERNAL_KEY)) {
+  if (internal && timingSafeEqual(internal, internalKey())) {
     const granted = (c.req.header("X-Claudia-Scopes") ?? "").split(",").filter((s): s is Scope => s === "read" || s === "write");
     const needed = requiredScope(c.req.method, c.req.path);
     if (!allows(granted, needed)) throw new ApiError(403, "forbidden", `This connection needs the '${needed}' scope`);

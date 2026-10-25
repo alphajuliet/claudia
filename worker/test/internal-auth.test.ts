@@ -2,7 +2,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { app } from "../src";
-import { INTERNAL_KEY, internalHeaders } from "../src/lib/internal";
+import { internalHeaders, internalKey } from "../src/lib/internal";
 import { reset } from "./helpers";
 
 // Hono's app.request has no execution context unless given one.
@@ -29,8 +29,8 @@ describe("internal identity", () => {
     const write = await post("/api/folders", { "X-Claudia-Internal": "guess", "X-Claudia-Scopes": "write" }, { name: "F", context: "home" });
     expect(write.status).toBe(401);
     // The real key is neither a short nor a guessable value.
-    expect(internalHeaders(["write"])["X-Claudia-Internal"]).toBe(INTERNAL_KEY);
-    expect("guess").not.toBe(INTERNAL_KEY);
+    expect(internalHeaders(["write"])["X-Claudia-Internal"]).toBe(internalKey());
+    expect("guess").not.toBe(internalKey());
   });
 
   it("never grants admin through the internal identity", async () => {
