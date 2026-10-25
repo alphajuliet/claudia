@@ -3,6 +3,8 @@
 //
 //   CLAUDIA_TOKEN=cl_... npm run godspeed:import -w @claudia/worker -- --url https://claudia.alphajuliet.com
 //   npm run godspeed:import -w @claudia/worker -- --dry-run     (no network; prints the report)
+//
+// Open tasks only, unless you pass --include-completed (the export must include them too).
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -14,6 +16,7 @@ const { values } = parseArgs({
     url: { type: "string", default: "http://localhost:8787" },
     dir: { type: "string", default: "godspeed-export" },
     "dry-run": { type: "boolean", default: false },
+    "include-completed": { type: "boolean", default: false },
   },
 });
 
@@ -22,7 +25,8 @@ const gs: GsExport = {
   lists: await read("lists.json"),
   labels: await read("labels.json"),
   open: await read("tasks-incomplete.json"),
-  completed: await read("tasks-complete.json"),
+  // Completed tasks are history; leave them behind unless asked.
+  completed: values["include-completed"] ? await read("tasks-complete.json") : [],
 };
 
 const result = await transform(gs);
@@ -32,7 +36,7 @@ await writeFile(join(values.dir!, "import-report.json"), JSON.stringify(report, 
 const open = result.tasks.filter((t) => !t.completedAt).length;
 console.log(
   `Prepared ${result.folders.length} folders, ${result.lists.length} lists, ${result.labels.length} labels, ` +
-    `${result.tasks.length} tasks (${open} open, ${result.tasks.length - open} completed)`,
+    `${result.tasks.length} tasks (${open} open${result.tasks.length > open ? `, ${result.tasks.length - open} completed` : ""})`,
 );
 console.log(
   `Not imported: ${report.skippedSmartLists.length} smart lists, ${report.skippedFolders.length} folders of smart lists only, ` +

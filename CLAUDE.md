@@ -66,7 +66,7 @@ npm workspaces monorepo: `shared` (Zod schemas), `worker` (Hono API, wrangler co
 
 - `npm run token:create -w @claudia/worker -- --remote --name laptop --scopes admin`: mint an API token straight into D1 (the first admin token; later ones come from `POST /api/tokens`). The secret is shown once.
 
-- `npm run godspeed:fetch -w @claudia/worker`: download the whole Godspeed account (needs `GODSPEED_API_KEY`; about 5 minutes because of its rate limit) into the git-ignored `worker/godspeed-export/`
-- `CLAUDIA_TOKEN=cl_... npm run godspeed:import -w @claudia/worker -- --url https://claudia.alphajuliet.com`: import that export through `POST /api/import` (admin token). `--dry-run` prints the report without sending. Safe to repeat: IDs are derived from Godspeed's and existing ones are skipped.
+- `npm run godspeed:fetch -w @claudia/worker`: download the whole Godspeed account (needs `GODSPEED_API_KEY`; open tasks only, so under a minute. Add `--include-completed` for history, which takes about 5 minutes because of the rate limit) into the git-ignored `worker/godspeed-export/`
+- `CLAUDIA_TOKEN=cl_... npm run godspeed:import -w @claudia/worker -- --url https://claudia.alphajuliet.com`: import that export through `POST /api/import` (admin token). `--dry-run` prints the report without sending. Open tasks only unless `--include-completed`. Safe to repeat: IDs are derived from Godspeed's and existing ones are skipped.
 
 The OpenAPI spec is served at `/api/openapi.json`. Clients send `X-Claudia-Client` (`web`, `mcp`, `shortcut`, `cli`, `import`) so events record who made a change. Worker tests run inside workerd with `@cloudflare/vitest-plugin` against a local D1. Test storage is shared across tests, so reset tables in `beforeEach`.

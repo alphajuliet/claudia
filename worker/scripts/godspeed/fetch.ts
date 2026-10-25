@@ -1,7 +1,7 @@
 // Download everything from Godspeed into a local folder (git-ignored), so the
 // import can be re-run without hitting Godspeed's rate limits.
 //
-//   GODSPEED_API_KEY=... npm run godspeed:fetch -w @claudia/worker [-- --out godspeed-export]
+//   GODSPEED_API_KEY=... npm run godspeed:fetch -w @claudia/worker [-- --out godspeed-export] [--include-completed]
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -9,7 +9,12 @@ import { parseArgs } from "node:util";
 const BASE = "https://api.godspeedapp.com";
 const GAP_MS = 7000; // listing is limited to 10 requests a minute
 
-const { values } = parseArgs({ options: { out: { type: "string", default: "godspeed-export" } } });
+const { values } = parseArgs({
+  options: {
+    out: { type: "string", default: "godspeed-export" },
+    "include-completed": { type: "boolean", default: false }, // adds minutes: there are thousands
+  },
+});
 const key = process.env.GODSPEED_API_KEY;
 if (!key) throw new Error("Set GODSPEED_API_KEY");
 
@@ -58,9 +63,9 @@ await sleep(GAP_MS);
 
 const incomplete = await allTasks("incomplete");
 await save("tasks-incomplete.json", incomplete.tasks);
-const complete = await allTasks("complete");
-await save("tasks-complete.json", complete.tasks);
+const complete = values["include-completed"] ? await allTasks("complete") : { tasks: [], labels: [] };
+if (values["include-completed"]) await save("tasks-complete.json", complete.tasks);
 
 const labels = new Map([...incomplete.labels, ...complete.labels].map((l) => [l.id, l]));
 await save("labels.json", [...labels.values()]);
-console.error(`Done: ${lists.lists.length} lists, ${incomplete.tasks.length} open, ${complete.tasks.length} completed, ${labels.size} labels`);
+console.error(`Done: ${lists.lists.length} lists, ${incomplete.tasks.length} open, ${complete.tasks.length} completed (skipped unless --include-completed), ${labels.size} labels`);
