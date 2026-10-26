@@ -369,7 +369,7 @@ async function setCompleted(db: Db, actor: Actor, id: string, done: boolean) {
   const names = (await labelNamesFor(db, [id])).get(id) ?? [];
 
   // A repeating task moves to its next due date and stays open (tasks with a due time aren't advanced yet).
-  if (done && before.kind === "task" && before.recurRule && before.recurFrom && !before.dueAt) {
+  if (done && before.kind === "task" && before.recurRule && before.recurFrom && !before.dueAt && isValidRule(before.recurRule)) {
     const next = nextDueDate(before.recurRule, before.recurFrom, before.dueDate, todayIn(await userTimeZone(db)));
     if (next) {
       const startDate = before.startDate && before.dueDate ? addDays(before.startDate, daysBetween(before.dueDate, next)) : before.startDate;

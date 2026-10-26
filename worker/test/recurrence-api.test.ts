@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { events } from "../src/db/schema";
+import { events, tasks } from "../src/db/schema";
 import { DEFAULT_TIME_ZONE, addDays, daysBetween, todayIn } from "../src/lib/recurrence";
 import { client, db, makeToken, reset } from "./helpers";
 
@@ -98,6 +98,14 @@ describe("completing a recurring task", () => {
   it("completes normally when the rule has run out", async () => {
     const t = await task("Once", { dueDate: today(), recurRule: "FREQ=DAILY;COUNT=1", recurFrom: "due" });
     expect((await complete(t.id)).completedAt).not.toBeNull();
+  });
+
+  it("completes normally when a stored rule cannot be read (for example from an import)", async () => {
+    const t = await task("Odd", { dueDate: today(), recurRule: "FREQ=DAILY", recurFrom: "due" });
+    await db.update(tasks).set({ recurRule: "nonsense" }).where(eq(tasks.id, t.id));
+    const res = await api("POST", `/api/tasks/${t.id}/complete`);
+    expect(res.status).toBe(200);
+    expect(res.body.completedAt).not.toBeNull();
   });
 
   it("completes normally when the task has a due time", async () => {
