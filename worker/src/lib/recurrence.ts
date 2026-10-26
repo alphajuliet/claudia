@@ -1,4 +1,7 @@
+import { eq } from "drizzle-orm";
 import { RRule } from "rrule";
+import { settings } from "../db/schema";
+import type { Db } from "./db";
 
 export const DEFAULT_TIME_ZONE = "Australia/Sydney";
 const DAY_MS = 86_400_000;
@@ -38,4 +41,10 @@ export function nextDueDate(rule: string, from: "due" | "completion", due: strin
   const after = anchor > today ? anchor : today;
   const next = new RRule({ ...RRule.parseString(rule), dtstart: toUtc(anchor) }).after(toUtc(after), false);
   return next ? toDate(next) : null;
+}
+
+/** The user's time zone from settings, or the default. */
+export async function userTimeZone(db: Db): Promise<string> {
+  const [row] = await db.select({ value: settings.value }).from(settings).where(eq(settings.key, "timeZone"));
+  return typeof row?.value === "string" && row.value ? row.value : DEFAULT_TIME_ZONE;
 }

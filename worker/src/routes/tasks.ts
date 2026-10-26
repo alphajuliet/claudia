@@ -16,6 +16,7 @@ import { eventQuery } from "../lib/events";
 import { newId, now } from "../lib/ids";
 import { chunk, resolveLabelIds } from "../lib/labels";
 import { positionFor } from "../lib/position";
+import { addDays, daysBetween, isValidRule, nextDueDate, todayIn, userTimeZone } from "../lib/recurrence";
 import {
   commonErrors,
   jsonBody,
@@ -108,9 +109,13 @@ async function checkParent(db: Db, task: { id?: string; kind: Row["kind"] }, lis
   }
 }
 
-function checkRecurrence(r: { recurRule: string | null; recurFrom: string | null }) {
+/** `checkRule` is false for patches that leave the rule alone, so an old stored rule never blocks unrelated edits. */
+function checkRecurrence(r: { recurRule: string | null; recurFrom: string | null }, checkRule = true) {
   if ((r.recurRule === null) !== (r.recurFrom === null)) {
     throw new ApiError(422, "invalid_recurrence", "recurRule and recurFrom must be set together");
+  }
+  if (checkRule && r.recurRule !== null && !isValidRule(r.recurRule)) {
+    throw new ApiError(422, "invalid_recurrence", "recurRule must be a daily or longer RRULE such as FREQ=WEEKLY;BYDAY=MO");
   }
 }
 
@@ -236,7 +241,7 @@ export const taskRoutes = newRouter()
 
       const defined = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
       const after: Row = { ...before, ...defined, updatedAt: now() };
-      checkRecurrence(after);
+      checkRecurrence(after, defined.recurRule !== undefined);
 
       const statements: BatchItem<"sqlite">[] = [];
       let afterNames = beforeNames;
@@ -306,7 +311,8 @@ export const taskRoutes = newRouter()
       path: "/api/tasks/{id}/complete",
       tags: tag,
       summary: "Complete a task",
-      description: "Idempotent. Recurring tasks are not yet advanced to their next occurrence.",
+      description:
+        "Completing a task that repeats advances it to its next due date and keeps it open; completing it twice advances it twice. Other tasks: idempotent.",
       request: { params: IdParam },
       responses: { 200: jsonResponse(TaskSchema, "Completed"), ...commonErrors, ...notFoundError },
     }),
@@ -360,8 +366,24 @@ async function setCompleted(db: Db, actor: Actor, id: string, done: boolean) {
   const before = await getTask(db, id);
   if (Boolean(before.completedAt) === done) return respond(db, before);
   const at = now();
-  const after: Row = { ...before, completedAt: done ? at : null, updatedAt: at };
   const names = (await labelNamesFor(db, [id])).get(id) ?? [];
+
+  // A repeating task moves to its next due date and stays open (tasks with a due time aren't advanced yet).
+  if (done && before.kind === "task" && before.recurRule && before.recurFrom && !before.dueAt) {
+    const next = nextDueDate(before.recurRule, before.recurFrom, before.dueDate, todayIn(await userTimeZone(db)));
+    if (next) {
+      const startDate = before.startDate && before.dueDate ? addDays(before.startDate, daysBetween(before.dueDate, next)) : before.startDate;
+      const advanced: Row = { ...before, dueDate: next, startDate, snoozedUntil: null, updatedAt: at };
+      const dates = (r: Row) => ({ dueDate: r.dueDate, startDate: r.startDate, snoozedUntil: r.snoozedUntil });
+      await runBatch(db, [
+        db.update(tasks).set({ ...dates(advanced), updatedAt: at }).where(eq(tasks.id, id)),
+        eventQuery(db, { entityType: "task", entityId: id, type: "completed", before: dates(before), after: dates(advanced), actor }),
+      ]);
+      return toTask(advanced, names);
+    }
+  }
+
+  const after: Row = { ...before, completedAt: done ? at : null, updatedAt: at };
   await runBatch(db, [
     db.update(tasks).set({ completedAt: after.completedAt, updatedAt: at }).where(eq(tasks.id, id)),
     eventQuery(db, {
