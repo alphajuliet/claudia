@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiNetworkError, ApiUnauthorized, apiFetch, fetchMe } from "./api";
 import { tokenStore } from "./store";
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("tokenStore", () => {
   it("round-trips and clears", () => {
@@ -16,7 +18,6 @@ describe("tokenStore", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
     expect(tokenStore.get()).toBeNull();
     expect(() => tokenStore.set("cl_abc")).not.toThrow();
-    vi.restoreAllMocks();
   });
 });
 
@@ -27,7 +28,18 @@ describe("apiFetch", () => {
     await apiFetch("cl_abc", "/api/me");
     const [path, init] = fetchMock.mock.calls[0]!;
     expect(path).toBe("/api/me");
-    expect(init.headers).toMatchObject({ Authorization: "Bearer cl_abc", "X-Claudia-Client": "web" });
+    const headers = new Headers(init.headers);
+    expect(headers.get("Authorization")).toBe("Bearer cl_abc");
+    expect(headers.get("X-Claudia-Client")).toBe("web");
+  });
+
+  it("keeps headers the caller passes as a Headers instance", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await apiFetch("cl_abc", "/api/tasks", { headers: new Headers({ "Content-Type": "application/json" }) });
+    const headers = new Headers(fetchMock.mock.calls[0]![1].headers);
+    expect(headers.get("Content-Type")).toBe("application/json");
+    expect(headers.get("Authorization")).toBe("Bearer cl_abc");
   });
 
   it("throws ApiUnauthorized on 401 and ApiNetworkError when fetch fails", async () => {

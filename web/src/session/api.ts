@@ -5,12 +5,12 @@ export class ApiNetworkError extends Error {}
 
 /** fetch with the token and client headers. 401 and network failures become typed errors. */
 export async function apiFetch(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  headers.set("X-Claudia-Client", "web");
   let res: Response;
   try {
-    res = await fetch(path, {
-      ...init,
-      headers: { ...init.headers, Authorization: `Bearer ${token}`, "X-Claudia-Client": "web" },
-    });
+    res = await fetch(path, { ...init, headers });
   } catch {
     throw new ApiNetworkError("Can't reach Claudia");
   }

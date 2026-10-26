@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Me } from "@claudia/shared";
 import { ApiNetworkError, ApiUnauthorized, apiFetch, fetchMe } from "./api";
 import { tokenStore } from "./store";
@@ -48,7 +48,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // Check a stored token on load, and again on retry.
   useEffect(() => {
     const token = tokenStore.get();
-    if (!token) return;
+    if (!token) {
+      setState({ status: "signedOut" });
+      return;
+    }
     let live = true;
     fetchMe(token)
       .then((me) => live && setState({ status: "signedIn", token, me }))
@@ -82,13 +85,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const token = state.status === "signedIn" ? state.token : null;
+  const currentToken = useRef(token);
+  useEffect(() => {
+    currentToken.current = token;
+  }, [token]);
   const api = useCallback(
     async (path: string, init?: RequestInit) => {
       if (!token) throw new Error("Not signed in");
       try {
         return await apiFetch(token, path, init);
       } catch (e) {
-        if (e instanceof ApiUnauthorized) signOut(INVALID_TOKEN);
+        // A late 401 for an earlier session must not sign out a newer one.
+        if (e instanceof ApiUnauthorized && currentToken.current === token) signOut(INVALID_TOKEN);
         throw e;
       }
     },

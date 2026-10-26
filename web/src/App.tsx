@@ -1,9 +1,8 @@
-import type { ReactNode } from "react";
 import { Shell } from "./Shell";
 import { SignIn } from "./SignIn";
 import { SessionProvider, useSession } from "./session/SessionProvider";
 
-function Gate() {
+export function Gate() {
   const { state, retry } = useSession();
   switch (state.status) {
     case "loading":
@@ -23,11 +22,10 @@ function Gate() {
   }
 }
 
-export function App({ children }: { children?: ReactNode }) {
+export function App() {
   return (
     <SessionProvider>
       <Gate />
-      {children}
     </SessionProvider>
   );
 }

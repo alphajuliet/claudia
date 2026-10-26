@@ -2,18 +2,31 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { describe, expect, it, vi } from "vitest";
-import { App } from "./App";
-import { useSession } from "./session/SessionProvider";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { App, Gate } from "./App";
+import { SessionProvider, useSession } from "./session/SessionProvider";
 import { tokenStore } from "./session/store";
 
 const me = { name: "laptop", scopes: ["write"], expiresAt: null };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 
-function renderApp(extra?: ReactNode) {
+afterEach(() => vi.restoreAllMocks());
+
+function renderApp() {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <App>{extra}</App>
+      <App />
+    </QueryClientProvider>,
+  );
+}
+
+function renderWithProbe(probe: ReactNode) {
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <SessionProvider>
+        <Gate />
+        {probe}
+      </SessionProvider>
     </QueryClientProvider>,
   );
 }
@@ -39,7 +52,7 @@ describe("sign-in", () => {
     expect(await screen.findByText(/Signed in as laptop/)).toBeTruthy();
     expect(screen.getByText(/write/)).toBeTruthy();
     expect(tokenStore.get()).toBe("cl_good");
-    expect(fetchMock.mock.calls[0]![1].headers.Authorization).toBe("Bearer cl_good");
+    expect(new Headers(fetchMock.mock.calls[0]![1].headers).get("Authorization")).toBe("Bearer cl_good");
   });
 
   it("does not store a rejected token", async () => {
@@ -85,9 +98,27 @@ describe("stored token", () => {
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText(/Signed in as laptop/)).toBeTruthy();
   });
+
+  it("shows the form on retry when the token was cleared meanwhile", async () => {
+    tokenStore.set("cl_stored");
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    renderApp();
+    expect(await screen.findByText(/Can't reach Claudia/)).toBeTruthy();
+    localStorage.clear();
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(await screen.findByLabelText("API token")).toBeTruthy();
+  });
 });
 
 describe("signed in", () => {
+  it("keeps the signed-in token in memory when storage is blocked", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(me)));
+    renderApp();
+    await signInWith("cl_good");
+    expect(await screen.findByText(/Signed in as laptop/)).toBeTruthy();
+  });
+
   it("signs out and forgets the token", async () => {
     tokenStore.set("cl_stored");
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(me)));
@@ -105,9 +136,31 @@ describe("signed in", () => {
       const { api } = useSession();
       return <button onClick={() => api("/api/folders").catch(() => {})}>probe</button>;
     }
-    renderApp(<Probe />);
+    renderWithProbe(<Probe />);
     await userEvent.click(await screen.findByRole("button", { name: "probe" }));
     await waitFor(() => expect(screen.getByText("That token isn't valid or has expired.")).toBeTruthy());
     expect(tokenStore.get()).toBeNull();
+  });
+
+  it("ignores a late 401 from a previous session", async () => {
+    let finishOld!: (res: Response) => void;
+    const fetchMock = vi.fn((path: string) =>
+      path === "/api/slow" ? new Promise<Response>((resolve) => { finishOld = resolve; }) : Promise.resolve(json(me)),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    function Probe() {
+      const { api } = useSession();
+      return <button onClick={() => api("/api/slow").catch(() => {})}>probe</button>;
+    }
+    renderWithProbe(<Probe />);
+    await signInWith("cl_a");
+    await userEvent.click(await screen.findByRole("button", { name: "probe" }));
+    await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await signInWith("cl_b");
+    expect(await screen.findByText(/Signed in as laptop/)).toBeTruthy();
+    finishOld(json({ error: {} }, 401));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.getByText(/Signed in as laptop/)).toBeTruthy();
+    expect(tokenStore.get()).toBe("cl_b");
   });
 });
