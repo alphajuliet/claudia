@@ -114,9 +114,18 @@ export const TokenCreatedSchema = TokenSchema.extend({
   token: z.string().openapi({ description: "The secret. Shown once; only its hash is stored." }),
 }).openapi("TokenCreated");
 
+export const MeSchema = z
+  .object({
+    name: z.string(),
+    scopes: z.array(z.enum(SCOPES)),
+    expiresAt: Timestamp.nullable(),
+  })
+  .openapi("Me");
+
 export type Folder = z.infer<typeof FolderSchema>;
 export type List = z.infer<typeof ListSchema>;
 export type Token = z.infer<typeof TokenSchema>;
+export type Me = z.infer<typeof MeSchema>;
 
 // Labels
 export const LabelNameSchema = z.string().trim().min(1).max(64);

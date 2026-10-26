@@ -67,6 +67,7 @@ export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
     if (!allows(granted, needed)) throw new ApiError(403, "forbidden", `This connection needs the '${needed}' scope`);
     c.set("actor", "mcp");
     c.set("scopes", granted);
+    c.set("identity", { name: "MCP connection", expiresAt: null });
     await next();
     return;
   }
@@ -85,5 +86,6 @@ export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
   const claimed = c.req.header("X-Claudia-Client") as Actor | undefined;
   c.set("actor", claimed && ACTORS.includes(claimed) && claimed !== "system" ? claimed : "cli");
   c.set("scopes", row.scopes as Scope[]);
+  c.set("identity", { name: row.name, expiresAt: row.expiresAt });
   await next();
 });

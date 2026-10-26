@@ -14,6 +14,7 @@ import { importRoutes } from "./routes/import";
 import { filterRoutes } from "./routes/filters";
 import { labelRoutes } from "./routes/labels";
 import { listRoutes } from "./routes/lists";
+import { meRoutes } from "./routes/me";
 import { settingRoutes } from "./routes/settings";
 import { taskRoutes } from "./routes/tasks";
 import { tokenRoutes } from "./routes/tokens";
@@ -51,6 +52,7 @@ app.openapi(
   (c) => c.json({ ok: true as const, service: "claudia" as const }, 200),
 );
 
+app.route("/", meRoutes);
 app.route("/", tokenRoutes);
 app.route("/", folderRoutes);
 app.route("/", listRoutes);

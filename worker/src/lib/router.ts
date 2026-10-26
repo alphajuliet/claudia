@@ -8,7 +8,7 @@ export type Scope = (typeof SCOPES)[number];
 
 export interface AppEnv {
   Bindings: Cloudflare.Env;
-  Variables: { db: Db; actor: Actor; scopes: Scope[] };
+  Variables: { db: Db; actor: Actor; scopes: Scope[]; identity: { name: string; expiresAt: string | null } };
 }
 
 /** A router whose request-validation failures use the API's error shape. */
