@@ -72,4 +72,6 @@ npm workspaces monorepo: `shared` (Zod schemas), `worker` (Hono API, wrangler co
 - Remote MCP: `https://claudia.alphajuliet.com/mcp`. claude.ai and the phone connect with OAuth: Settings > Connectors > Add custom connector, URL `https://claudia.alphajuliet.com/mcp`, approved on the consent page with the owner passphrase (`OWNER_PASSPHRASE`, a Worker secret). Claude Code keeps using a Claudia API token (a `read` token sees only the read tools). Add it to Claude Code with:
   `claude mcp add --transport http claudia https://claudia.alphajuliet.com/mcp --header "Authorization: Bearer $(cat ~/.config/claudia/write-token)"`
 
+- Web app sign-in: the app asks for an API token on first use, checks it with `GET /api/me` and keeps it in the browser's `localStorage` (`claudia.token`) until Sign out. Mint one with `npm run token:create -w @claudia/worker -- --remote --name browser --scopes write`.
+
 The OpenAPI spec is served at `/api/openapi.json`. Clients send `X-Claudia-Client` (`web`, `mcp`, `shortcut`, `cli`, `import`) so events record who made a change. Worker tests run inside workerd with `@cloudflare/vitest-plugin` against a local D1. Test storage is shared across tests, so reset tables in `beforeEach`.

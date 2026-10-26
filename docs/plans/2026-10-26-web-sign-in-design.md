@@ -1,6 +1,6 @@
 # Web app sign-in: design
 
-Date: 2026-10-26. Status: approved, not yet built.
+Date: 2026-10-26. Status: built.
 
 Cloudflare Access was dropped (see the 2026-10-25 `#Decision` in the Obsidian note). The web app signs in with an API token instead: it asks for one, checks it, and keeps it in the browser. The page itself is public and shows nothing without a token.
 
