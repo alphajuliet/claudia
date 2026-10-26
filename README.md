@@ -30,7 +30,7 @@ One Cloudflare Worker serves everything:
 | `/mcp` | Remote MCP server (Cloudflare Agents SDK, OAuth) |
 | `/` | Web app (Vite + React, served as static assets) |
 
-Data lives in D1 (SQLite), accessed through Drizzle ORM. Cron Triggers handle recurrence and nightly backups to R2. The API is protected by scoped API tokens, which the web app, scripts and the iOS Shortcut all use. The remote MCP uses OAuth with an owner passphrase.
+Data lives in D1 (SQLite), accessed through Drizzle ORM. Cron Triggers handle nightly backups to R2; recurrence advances when a task is completed, not on a schedule. The API is protected by scoped API tokens, which the web app, scripts and the iOS Shortcut all use. The remote MCP uses OAuth with an owner passphrase.
 
 The web app asks for an API token the first time you open it, checks it with `GET /api/me`, and keeps it in the browser's local storage until you sign out. Mint one for the browser with `npm run token:create -w @claudia/worker -- --remote --name browser --scopes write` (the secret is shown once).
 

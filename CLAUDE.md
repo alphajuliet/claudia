@@ -33,7 +33,7 @@ Work is tracked on the Workflowy **Claudia** board (`🔅 My projects › Produc
 
 ## Decisions that constrain the code
 
-- **Platform:** one Cloudflare Worker serves the REST API (`/api`), the remote MCP server (`/mcp`) and the web app (static assets). Storage is D1. Cron Triggers handle recurrence and nightly backups to R2.
+- **Platform:** one Cloudflare Worker serves the REST API (`/api`), the remote MCP server (`/mcp`) and the web app (static assets). Storage is D1. Cron Triggers handle nightly backups to R2; recurrence advances when a task is completed, not on a schedule.
 - **Language:** TypeScript end to end.
 - **API first:** Hono with `@hono/zod-openapi`. Zod schemas are the single source for the OpenAPI spec, the typed web client and the MCP tool definitions. Every capability the UI has must exist in the API.
 - **Data:** Drizzle ORM over D1, with migrations via `wrangler d1 migrations`. IDs are ULIDs. Ordering uses fractional indexes. Deletes are soft (`deleted_at`). Every change writes a row to the append-only `events` table.

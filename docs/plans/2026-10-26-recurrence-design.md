@@ -1,6 +1,6 @@
 # Recurrence: design
 
-Date: 2026-10-26. Status: approved, not yet built.
+Date: 2026-10-26. Status: built.
 
 Completing a recurring task advances it in place to its next due date instead of closing it. The columns (`recur_rule`, `recur_from`) and the API fields already exist; what is missing is the engine.
 
