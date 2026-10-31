@@ -1,8 +1,9 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Filter } from "@claudia/shared";
-import { at, errands, garden, inbox, main, projects, renderAt, sentBodies, stubApi, task, today } from "./testApi";
+import { todayIn, zonedToUtc } from "../lib/dates";
+import { addDays, at, errands, garden, inbox, main, projects, renderAt, sentBodies, stubApi, task, today } from "./testApi";
 
 const quickAdd = () => main().findByRole("textbox", { name: "Add a task" }) as Promise<HTMLInputElement>;
 
@@ -110,6 +111,111 @@ describe("quick add", () => {
     await userEvent.type(field, "Plant tomatoes #spring{Enter}");
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Boom"));
     expect(field.value).toBe("Plant tomatoes #spring");
+  });
+});
+
+describe("dates in quick add", () => {
+  const tz = "Australia/Sydney";
+  // 11 am on Monday 2 November in Sydney.
+  const fixClock = () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-02T00:00:00.000Z"));
+    return todayIn(tz);
+  };
+  afterEach(() => vi.useRealTimers());
+
+  it("a date at the end sets the due date", async () => {
+    const day = fixClock();
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Call Sam tomorrow");
+    expect(main().getByText("Due Tomorrow")).toBeTruthy();
+    await userEvent.type(field, "{Enter}");
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Call Sam", dueDate: addDays(day, 1) }]);
+    expect(main().queryByText(/^Due /)).toBeNull();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Added, due Tomorrow"));
+  });
+
+  it("a time sets dueAt", async () => {
+    const day = fixClock();
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    await userEvent.type(await quickAdd(), "Call Sam tomorrow 3pm{Enter}");
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([
+      { listId: garden.id, title: "Call Sam", dueAt: zonedToUtc(addDays(day, 1), "15:00", tz) },
+    ]);
+  });
+
+  it("updates the preview as you type", async () => {
+    fixClock();
+    stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Call Sam tomorrow");
+    expect(main().getByText("Due Tomorrow")).toBeTruthy();
+    await userEvent.type(field, " 3pm");
+    expect(main().getByText("Due Tomorrow, 3:00 pm")).toBeTruthy();
+    expect(main().queryByText("Due Tomorrow")).toBeNull();
+  });
+
+  it("the preview's × keeps the words", async () => {
+    fixClock();
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Read chapter 3/4");
+    expect(main().getByText(/^Due /)).toBeTruthy();
+    await userEvent.click(main().getByRole("button", { name: "Keep “3/4” in the title" }));
+    expect(main().queryByText(/^Due /)).toBeNull();
+    expect(document.activeElement).toBe(field);
+    await userEvent.type(field, "{Enter}");
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Read chapter 3/4" }]);
+    // The dismissal was for that entry only.
+    await userEvent.type(field, "Read chapter 3/4");
+    expect(main().getByText(/^Due /)).toBeTruthy();
+  });
+
+  it("clears the dismissal with the field on Escape", async () => {
+    fixClock();
+    stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Read chapter 3/4");
+    await userEvent.click(main().getByRole("button", { name: "Keep “3/4” in the title" }));
+    await userEvent.type(field, "{Escape}");
+    await userEvent.type(field, "Read chapter 3/4");
+    expect(main().getByText(/^Due /)).toBeTruthy();
+  });
+
+  it("labels and a date together", async () => {
+    fixClock();
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    await userEvent.type(await quickAdd(), "Pay rent #home 1 Dec{Enter}");
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([
+      { listId: garden.id, title: "Pay rent", labels: ["home"], dueDate: "2026-12-01" },
+    ]);
+  });
+
+  it("on Today a parsed date wins over today", async () => {
+    const day = fixClock();
+    const fetchMock = stubApi([]);
+    renderAt("/today");
+    await userEvent.type(await quickAdd(), "Call Sam tomorrow{Enter}");
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: inbox.id, title: "Call Sam", dueDate: addDays(day, 1) }]);
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Added to Inbox, due Tomorrow"));
+  });
+
+  it("text that is only a date is the title", async () => {
+    fixClock();
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Tomorrow");
+    expect(main().queryByText(/^Due /)).toBeNull();
+    await userEvent.type(field, "{Enter}");
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Tomorrow" }]);
   });
 });
 

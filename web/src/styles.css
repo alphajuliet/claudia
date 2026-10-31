@@ -348,6 +348,22 @@ input.nav-rename { height: var(--row-height); padding: 0 0.5rem; font-size: inhe
 }
 .quick-add-input::placeholder { color: var(--muted); }
 .quick-add-input:focus-visible { outline: none; }
+/* The date quick add will set, under the field, its text on the input's left edge. Wraps on a narrow screen. */
+.quick-add-wrap { margin-bottom: 0.75rem; }
+.quick-add-wrap > .quick-add { margin-bottom: 0; }
+.quick-add-when {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  max-width: calc(100% - 1.65rem);
+  margin: 0.15rem 0 0 1.65rem;
+  padding: 0.1rem 0.25rem 0.1rem 0.55rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+}
+.quick-add-when .chip-remove { flex: none; }
 
 .task-sections { display: grid; gap: 1.5rem; }
 
