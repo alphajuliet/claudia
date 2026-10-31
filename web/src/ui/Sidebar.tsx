@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { useFilters, useFolders, useLists } from "../data/queries";
 import { sidebarTree, type FolderNode } from "../lib/sidebar";
@@ -32,7 +32,40 @@ function FolderItem({ node, onNavigate }: { node: FolderNode; onNavigate: () => 
   );
 }
 
-export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
+const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
+
+/**
+ * Views, filters and lists. As a drawer (`drawerOpen`, on narrow screens) it takes focus when it opens and keeps
+ * Tab inside it, and Escape calls `onCloseDrawer`.
+ */
+export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onNavigate: () => void; drawerOpen?: boolean; onCloseDrawer?: () => void }) {
+  const ref = useRef<HTMLElement>(null);
+  const focusables = () => [...(ref.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])];
+  useEffect(() => {
+    if (drawerOpen) focusables()[0]?.focus();
+  }, [drawerOpen]);
+
+  const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
+    if (!drawerOpen) return;
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      onCloseDrawer?.();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const items = focusables();
+    const first = items[0];
+    const last = items.at(-1);
+    if (!first || !last) return;
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
   const { state, signOut } = useSession();
   const { context, setContext } = useContextFilter();
   const folders = useFolders().data ?? [];
@@ -43,7 +76,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
   const tree = sidebarTree(folders, lists.filter((l) => l.id !== inboxId), context);
 
   return (
-    <nav className="sidebar" aria-label="Sidebar" id="sidebar">
+    <nav ref={ref} className="sidebar" aria-label="Sidebar" id="sidebar" onKeyDown={onKeyDown}>
       <div className="segmented" role="group" aria-label="Context">
         {CONTEXT_CHOICES.map((c) => (
           <button key={c.id} type="button" aria-pressed={context === c.id} onClick={() => setContext(c.id)}>

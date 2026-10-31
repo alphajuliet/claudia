@@ -160,4 +160,23 @@ describe("AppShell", () => {
     act(() => onChange({ matches: true }));
     expect(shell.classList.contains("drawer-open")).toBe(false);
   });
+
+  it("keeps focus in the open drawer and gives it back to Menu on Escape", async () => {
+    stubApi();
+    const { container } = renderShell();
+    const shell = container.querySelector(".shell")!;
+    await sidebar().findByRole("link", { name: "Projects" });
+    const menu = screen.getByRole("button", { name: "Menu" });
+    await userEvent.click(menu);
+    const first = sidebar().getByRole("button", { name: "All" });
+    const last = sidebar().getByRole("button", { name: "Sign out" });
+    expect(document.activeElement).toBe(first);
+    await userEvent.tab({ shift: true });
+    expect(document.activeElement).toBe(last);
+    await userEvent.tab();
+    expect(document.activeElement).toBe(first);
+    await userEvent.keyboard("{Escape}");
+    expect(shell.classList.contains("drawer-open")).toBe(false);
+    expect(document.activeElement).toBe(menu);
+  });
 });
