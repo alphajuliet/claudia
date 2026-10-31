@@ -122,6 +122,19 @@ export const MeSchema = z
   })
   .openapi("Me");
 
+// Open-task counts for the sidebar, per list, so a client can add up whichever lists it shows.
+export const ListCountsSchema = z
+  .object({
+    open: z.number().int().openapi({ description: "Open, unsnoozed tasks (not headings), subtasks included" }),
+    today: z.number().int().openapi({ description: "Of those, due today or earlier (a due date, or a due time by its day in the user's time zone)" }),
+    labels: z.record(z.string(), z.number().int()).openapi({ description: "Of those, how many carry each label, keyed by lower-case label name" }),
+  })
+  .openapi("ListCounts");
+export const CountsSchema = z
+  .object({ lists: z.record(z.string(), ListCountsSchema).openapi({ description: "Keyed by list ID; lists with no open tasks are left out" }) })
+  .openapi("Counts");
+export type Counts = z.infer<typeof CountsSchema>;
+
 export type Folder = z.infer<typeof FolderSchema>;
 export type List = z.infer<typeof ListSchema>;
 export type Token = z.infer<typeof TokenSchema>;
