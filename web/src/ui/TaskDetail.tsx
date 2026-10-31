@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 import type { Task } from "@claudia/shared";
 import { useCreateTask, usePendingCompletions, useTask, useTasks, useTimeZone } from "../data/queries";
 import { useComplete, useDelete } from "./TaskList";
@@ -6,6 +6,7 @@ import { DateFields } from "./DateFields";
 import { FieldStatus, LabelsField, ListField, NotesField, RepeatField, TitleField, useSave } from "./TaskFields";
 import { wasFollowed } from "./selection";
 import { InlineMarkdown, plainText } from "./Markdown";
+import { useNarrow, useVisualViewport } from "./useVisualViewport";
 
 /** The task's open subtasks, each with a checkbox, and a field that adds one to the end. */
 function Subtasks({ task }: { task: Task }) {
@@ -151,8 +152,19 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
     onClose();
   };
 
+  // On a phone the sheet fits the part of the screen the keyboard leaves, and a field taking focus scrolls into
+  // that part once the keyboard has moved things.
+  const vv = useVisualViewport();
+  const narrow = useNarrow();
+  const style = narrow && vv ? { height: vv.height, top: vv.offsetTop } : undefined;
+  const onFocus = (e: FocusEvent<HTMLElement>) => {
+    const target = e.target;
+    if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) return;
+    requestAnimationFrame(() => target.scrollIntoView?.({ block: "nearest" }));
+  };
+
   return (
-    <aside ref={ref} className="detail" aria-label="Task details" tabIndex={-1} onKeyDown={onKeyDown}>
+    <aside ref={ref} className="detail" aria-label="Task details" tabIndex={-1} style={style} onKeyDown={onKeyDown} onFocus={onFocus}>
       <header className="detail-header">
         <button type="button" className="quiet small detail-done" onClick={onClose}>Done</button>
       </header>

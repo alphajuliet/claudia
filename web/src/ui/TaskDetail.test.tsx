@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Task } from "@claudia/shared";
@@ -625,5 +625,65 @@ describe("the detail panel", () => {
     const p = await inPanel();
     expect(await p.findByDisplayValue("Spring")).toBeTruthy();
     expect(p.getByRole("button", { name: "Delete heading" })).toBeTruthy();
+  });
+});
+
+describe("the sheet and the keyboard", () => {
+  /** A stand-in for `window.visualViewport`: an event target whose size the test sets. */
+  function stubViewport(height: number) {
+    const vv = Object.assign(new EventTarget(), { height, offsetTop: 0 });
+    vi.stubGlobal("visualViewport", vv);
+    return vv;
+  }
+  function stubNarrow(matches = true) {
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      media: query,
+      matches,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+  }
+
+  it("sizes the sheet to the visible viewport on narrow screens, following its resizes", async () => {
+    const vv = stubViewport(500);
+    stubNarrow();
+    await openOn(task({ title: "Weed the beds", listId: garden.id }));
+    const aside = await panel();
+    expect(aside.style.height).toBe("500px");
+    expect(aside.style.top).toBe("0px");
+    act(() => {
+      Object.assign(vv, { height: 300, offsetTop: 40 });
+      vv.dispatchEvent(new Event("resize"));
+    });
+    expect(aside.style.height).toBe("300px");
+    expect(aside.style.top).toBe("40px");
+  });
+
+  it("leaves the panel's size alone on wide screens", async () => {
+    stubViewport(500);
+    stubNarrow(false);
+    await openOn(task({ title: "Weed the beds", listId: garden.id }));
+    expect((await panel()).style.height).toBe("");
+  });
+
+  it("sets no height where there's no visualViewport", async () => {
+    vi.stubGlobal("visualViewport", undefined);
+    stubNarrow();
+    await openOn(task({ title: "Weed the beds", listId: garden.id }));
+    expect((await panel()).style.height).toBe("");
+  });
+
+  it("scrolls a field that takes focus into view", async () => {
+    stubNarrow();
+    const scroll = vi.fn();
+    const original = HTMLElement.prototype.scrollIntoView;
+    HTMLElement.prototype.scrollIntoView = scroll;
+    try {
+      const { p } = await openOn(task({ title: "Weed the beds", listId: garden.id }));
+      fireEvent.focusIn(p.getByRole("textbox", { name: "Add a subtask" }));
+      await waitFor(() => expect(scroll).toHaveBeenCalledWith({ block: "nearest" }));
+    } finally {
+      HTMLElement.prototype.scrollIntoView = original;
+    }
   });
 });
