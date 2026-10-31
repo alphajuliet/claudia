@@ -46,6 +46,8 @@ export interface StubOptions {
   gate?: (method: string, path: string, body: unknown) => Promise<void> | undefined;
   filters?: Filter[];
   lists?: List[];
+  /** Label names served by GET /api/labels. */
+  labels?: string[];
 }
 
 /**
@@ -63,7 +65,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     "/api/lists": opts.lists ?? [inbox, errands, projects, garden],
     "/api/filters": opts.filters ?? [],
     "/api/settings": {},
-    "/api/labels": [],
+    "/api/labels": (opts.labels ?? []).map((name, i) => ({ id: `01JD${String(i).padStart(22, "0")}`, name, createdAt: at })),
   };
   const descendants = (id: string): Task[] =>
     [...store.values()].filter((t) => t.parentId === id).flatMap((t) => [t, ...descendants(t.id)]);

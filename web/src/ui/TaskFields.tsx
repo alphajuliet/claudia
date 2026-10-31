@@ -6,6 +6,7 @@ import { useFolders, useLabels, useLists, useMoveTask, useUpdateTask, type TaskP
 import { PRESETS, presetFor, ruleFor, type Preset } from "../lib/repeat";
 import { sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox } from "../lib/views";
+import { LabelPicker } from "./LabelPicker";
 import { BlockMarkdown } from "./Markdown";
 import { useToast, type ToastMessage } from "./Toast";
 
@@ -206,18 +207,17 @@ export function NotesField({ task }: { task: Task }) {
 export function LabelsField({ task }: { task: Task }) {
   const { state, patch } = usePatch(task);
   const queryClient = useQueryClient();
-  const [text, setText] = useState("");
-  const listId = useId();
-  const has = (labels: string[], name: string) => labels.some((l) => l.toLowerCase() === name.toLowerCase());
-  const suggestions = (useLabels().data ?? []).filter((l) => !has(task.labels, l.name));
+  const all = (useLabels().data ?? []).map((l) => l.name);
   const current = () => queryClient.getQueryData<Task[]>(["tasks", "one", task.id])?.[0]?.labels ?? task.labels;
-  const add = () => {
-    const name = text.trim().replace(/^#/, "");
-    if (!name) return;
-    setText("");
+  const add = (name: string) => {
     const labels = current();
-    if (has(labels, name)) return;
-    void patch({ labels: [...labels, name] }).then((ok) => { if (!ok) setText((now) => now || name); });
+    if (labels.some((l) => l.toLowerCase() === name.toLowerCase())) return Promise.resolve(true);
+    const isNew = !all.some((l) => l.toLowerCase() === name.toLowerCase());
+    return patch({ labels: [...labels, name] }).then((ok) => {
+      // The server creates a new name as a label: offer it on other tasks too.
+      if (ok && isNew) void queryClient.invalidateQueries({ queryKey: ["labels"] });
+      return ok;
+    });
   };
   return (
     <Field label="Labels" group>
@@ -238,27 +238,7 @@ export function LabelsField({ task }: { task: Task }) {
           ))}
         </ul>
       )}
-      <input
-        type="text"
-        className="detail-inline-input"
-        aria-label="Add a label"
-        placeholder="Add a label"
-        list={listId}
-        autoComplete="off"
-        enterKeyHint="done"
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (enterPressed(e)) {
-            e.preventDefault();
-            add();
-          }
-        }}
-        onBlur={add}
-      />
-      <datalist id={listId}>
-        {suggestions.map((l) => <option key={l.id} value={l.name} />)}
-      </datalist>
+      <LabelPicker all={all} taken={task.labels} onAdd={add} />
       <FieldStatus state={state} />
     </Field>
   );

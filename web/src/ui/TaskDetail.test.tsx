@@ -582,8 +582,85 @@ describe("the detail panel", () => {
     await userEvent.tab();
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ labels: ["outside"] }]);
     await userEvent.type(p.getByRole("combobox", { name: "Add a label" }), "quick");
+    // The first Escape closes the list of labels, the second the panel, saving the typed one.
+    await userEvent.keyboard("{Escape}");
+    expect(p.getByRole("combobox", { name: "Add a label" }).getAttribute("aria-expanded")).toBe("false");
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toHaveLength(1);
     await userEvent.keyboard("{Escape}");
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ labels: ["outside", "quick"] });
+    await waitFor(() => expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull());
+  });
+
+  describe("label list", () => {
+    const labels = ["outside", "Quick", "errand", "next", "readReview"];
+    const field = (p: Awaited<ReturnType<typeof inPanel>>) => p.getByRole("combobox", { name: "Add a label" });
+    const optionNames = (p: Awaited<ReturnType<typeof inPanel>>) => (p.queryByRole("listbox", { name: "Labels" }) ? within(p.getByRole("listbox", { name: "Labels" })).queryAllByRole("option") : []).map((o) => o.textContent);
+
+    it("lists the labels not on the task, alphabetically, when the field is tapped", async () => {
+      const weed = task({ title: "Weed the beds", listId: garden.id, labels: ["next"] });
+      const { p } = await openOn(weed, [weed], { labels });
+      expect(field(p).getAttribute("aria-expanded")).toBe("false");
+      await userEvent.click(field(p));
+      await waitFor(() => expect(optionNames(p)).toEqual(["errand", "outside", "Quick", "readReview"]));
+      expect(field(p).getAttribute("aria-expanded")).toBe("true");
+    });
+
+    it("filters as you type and offers to create a new name", async () => {
+      const weed = task({ title: "Weed the beds", listId: garden.id });
+      const { p } = await openOn(weed, [weed], { labels });
+      await userEvent.type(field(p), "RE");
+      await waitFor(() => expect(optionNames(p)).toEqual(["readReview", "Create “RE”"]));
+      await userEvent.type(field(p), "adreview");
+      expect(optionNames(p)).toEqual(["readReview"]);
+    });
+
+    it("adds a label tapped in the list and stays open for another", async () => {
+      const weed = task({ title: "Weed the beds", listId: garden.id });
+      const { fetchMock, p } = await openOn(weed, [weed], { labels });
+      await userEvent.click(field(p));
+      await userEvent.click(await p.findByRole("option", { name: "outside" }));
+      expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ labels: ["outside"] }]);
+      expect(document.activeElement).toBe(field(p));
+      await waitFor(() => expect(optionNames(p)).toEqual(["errand", "next", "Quick", "readReview"]));
+      await userEvent.click(p.getByRole("option", { name: "Quick" }));
+      expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ labels: ["outside", "Quick"] });
+    });
+
+    it("moves through the list with the arrow keys and adds the highlighted label with Enter", async () => {
+      const weed = task({ title: "Weed the beds", listId: garden.id });
+      const { fetchMock, p } = await openOn(weed, [weed], { labels });
+      await userEvent.type(field(p), "e");
+      await userEvent.keyboard("{ArrowDown}{ArrowDown}");
+      const active = field(p).getAttribute("aria-activedescendant");
+      expect(document.getElementById(active!)?.textContent).toBe("next");
+      expect(p.getByRole("option", { name: "next" }).getAttribute("aria-selected")).toBe("true");
+      await userEvent.keyboard("{Enter}");
+      expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ labels: ["next"] }]);
+      expect(field(p)).toHaveProperty("value", "");
+    });
+
+    it("adds a typed name in the label's own case", async () => {
+      const weed = task({ title: "Weed the beds", listId: garden.id });
+      const { fetchMock, p } = await openOn(weed, [weed], { labels });
+      await userEvent.type(field(p), "quick{Enter}");
+      expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ labels: ["Quick"] }]);
+    });
+
+    it("creates a new label from its option", async () => {
+      const weed = task({ title: "Weed the beds", listId: garden.id });
+      const { fetchMock, p } = await openOn(weed, [weed], { labels });
+      await userEvent.type(field(p), "#shed");
+      await userEvent.click(await p.findByRole("option", { name: "Create “shed”" }));
+      expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ labels: ["shed"] }]);
+    });
+
+    it("puts the name back in the field when the save fails", async () => {
+      const weed = task({ title: "Weed the beds", listId: garden.id });
+      const { p } = await openOn(weed, [weed], { labels, failUpdate: true });
+      await userEvent.click(field(p));
+      await userEvent.click(await p.findByRole("option", { name: "errand" }));
+      await waitFor(() => expect(field(p)).toHaveProperty("value", "errand"));
+    });
   });
 
   it("shows the latest list chosen while earlier moves finish", async () => {
