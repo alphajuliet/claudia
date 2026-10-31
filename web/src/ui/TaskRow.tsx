@@ -133,14 +133,21 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
   };
   return (
     <li
-      className={["task-row", pending && "pending", selected && "selected", highlighted && "highlighted"].filter(Boolean).join(" ")}
+      className={["task-row", pending && "pending", selected && "selected", highlighted && "highlighted", task.completedAt && "completed"].filter(Boolean).join(" ")}
       aria-current={selected ? "true" : undefined}
       tabIndex={-1}
       data-task-id={task.id}
       onFocus={() => onHighlight?.(task)}
       data-depth={depth} style={{ "--depth": depth } as CSSProperties} onClick={onRowClick}>
       {expandable && <Disclosure title={task.title} collapsed={collapsed} onToggle={(c) => onToggle?.(task, c)} />}
-      <input type="checkbox" className="task-check" aria-label={`Complete ${task.title}`} checked={false} disabled={pending} onChange={() => onComplete(task)} />
+      <input
+        type="checkbox"
+        className="task-check"
+        aria-label={`${task.completedAt ? "Reopen" : "Complete"} ${task.title}`}
+        checked={task.completedAt !== null}
+        disabled={pending}
+        onChange={() => onComplete(task)}
+      />
       <TaskTitle task={task} onRename={onRename} />
       <span className="task-meta">
         {task.labels.map((l) => <span key={l} className="chip">{l}</span>)}

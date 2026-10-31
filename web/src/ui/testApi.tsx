@@ -29,7 +29,7 @@ export const garden = list("01JA0000000000000000000003", "Garden", personal.id);
 let seq = 0;
 /** A task with a fresh ULID (`01JB…` plus a counter in valid Crockford digits). */
 export const task = (fields: Partial<Task> & Pick<Task, "title" | "listId">): Task => ({
-  id: `01JB00000000000000000${String(++seq).padStart(5, "0")}`, parentId: null, kind: "task", position: `a${seq}`,
+  id: `01JB00000000000000000${String(++seq).padStart(5, "0")}`, parentId: null, kind: "task", position: `a${String(seq).padStart(5, "0")}`,
   notes: null, dueDate: null, dueAt: null, startDate: null, snoozedUntil: null, recurRule: null, recurFrom: null,
   completedAt: null, labels: [], metadata: null, createdAt: at, updatedAt: at, ...fields,
 });

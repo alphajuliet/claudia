@@ -67,6 +67,7 @@ function Shell() {
   useCommand("previous", covered);
   useCommand("complete", covered);
   useCommand("rename", covered);
+  useCommand("toggleCompleted", covered);
   useCommand("capture", covered);
 
   // Going anywhere (a link, a g chord, search) closes the drawer.

@@ -20,12 +20,21 @@ export interface Section { key: string; title?: string; heading?: Task; rows: Ro
 
 interface QueryState { isPending: boolean; error: Error | null; refetch: () => unknown }
 
-/** Completes a task from its checkbox and reports the outcome in the toast. */
+/** Completes a task from its checkbox (or reopens a completed one) and reports the outcome in the toast. */
 export function useComplete() {
   const setCompleted = useSetCompleted();
   const toast = useToast();
   const timeZone = useTimeZone();
   return async (task: Task) => {
+    if (task.completedAt) {
+      try {
+        await setCompleted.mutateAsync({ task, done: false });
+        toast.show({ message: `Reopened “${task.title}”` });
+      } catch (e) {
+        toast.show({ message: (e as Error).message, error: true });
+      }
+      return;
+    }
     try {
       const saved = await setCompleted.mutateAsync({ task, done: true });
       const nextDue = saved.completedAt ? null : dueDateOf(saved, timeZone);

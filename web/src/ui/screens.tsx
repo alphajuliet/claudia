@@ -6,7 +6,9 @@ import { listOrder, sidebarTree } from "../lib/sidebar";
 import { groupByList, isSnoozed, treeRows, type Row } from "../lib/tasks";
 import { findInbox, viewLabel, viewQuery, VIEWS, type ViewId } from "../lib/views";
 import { useContextFilter } from "./contextFilter";
+import { useCommand } from "./keyboard";
 import { QuickAdd, type QuickAddTarget } from "./QuickAdd";
+import { useShowCompleted } from "./showCompleted";
 import { TaskList, type Section } from "./TaskList";
 
 export function NotFound() {
@@ -107,11 +109,18 @@ function listSections(rows: Row[]): Section[] {
 export function ListScreen({ id }: { id: string }) {
   const lists = useLists();
   const list: List | undefined = lists.data?.find((l) => l.id === id);
-  const tasks = useTasks(new URLSearchParams({ listId: id, status: "open", limit: "500" }).toString());
+  const [showCompleted, setShowCompleted] = useShowCompleted();
+  const tasks = useTasks(new URLSearchParams({ listId: id, status: showCompleted ? "all" : "open", limit: "500" }).toString());
+  useCommand("toggleCompleted", () => setShowCompleted(!showCompleted));
   if (lists.isSuccess && !list) return <NotFound />;
   return (
     <>
-      <h1>{list?.name ?? "List"}</h1>
+      <header className="screen-header">
+        <h1>{list?.name ?? "List"}</h1>
+        <button type="button" className="quiet small" aria-pressed={showCompleted} onClick={() => setShowCompleted(!showCompleted)}>
+          {showCompleted ? "Hide completed" : "Show completed"}
+        </button>
+      </header>
       <QuickAdd target={list && { listId: list.id, listName: list.name }} />
       <TaskList query={tasks} sections={listSections(visibleRows(tasks.data ?? []))} empty="Nothing here." />
     </>

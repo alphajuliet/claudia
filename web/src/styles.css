@@ -267,6 +267,8 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 }
 .content > * { max-width: 46rem; }
 .content > h1 { margin-bottom: 1rem; }
+.screen-header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.screen-header button[aria-pressed="true"] { color: var(--accent); }
 .content > p + p { margin-top: 0.5rem; }
 
 /* Task lists: calm rows with the checkbox, title, chips and due date on one line. */
@@ -393,6 +395,13 @@ button.section-title-button.highlighted { outline: 2px solid var(--focus); outli
 .task-check:hover { border-color: var(--accent); background: var(--accent-soft); }
 .task-check:focus-visible { outline-offset: 2px; border-radius: 50%; }
 .task-row.pending { opacity: 0.55; }
+.task-check:checked {
+  border-color: var(--muted);
+  background: var(--muted) center / 0.7rem no-repeat
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M2.5 6.2 5 8.6l4.5-5' fill='none' stroke='white' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+.task-row.completed .task-title { color: var(--muted); text-decoration: line-through; }
+.task-row.completed .task-meta { opacity: 0.6; }
 .task-row.pending .task-check { cursor: progress; }
 .task-row.pending .task-check:hover { border-color: var(--muted); background: transparent; }
 

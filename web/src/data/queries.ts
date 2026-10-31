@@ -92,14 +92,18 @@ type Changed = { key: QueryKey; before: { task: Task; index: number; removed: bo
 /** The detail panel's entry for one task (see `useTask`), as opposed to a list of tasks. */
 const isOne = (key: QueryKey) => key[1] === "one";
 
+/** Entries that show completed tasks too (the panel's, and lists fetched with `status=all`), so completing marks rather than removes. */
+const keepsCompleted = (key: QueryKey) =>
+  isOne(key) || (typeof key[1] === "string" && new URLSearchParams(key[1]).get("status") === "all");
+
 /**
- * In every cached task list, replaces the tasks picked by `pick` with `change(task, one)`, or removes them where it
- * gives null (`one` is true in the detail panel's entry). Returns what they were.
+ * In every cached task list, replaces the tasks picked by `pick` with `change(task, key)`, or removes them where it
+ * gives null. Returns what they were.
  */
 function changeCached(
   queryClient: QueryClient,
   pick: (tasks: Task[]) => Set<string>,
-  change: (task: Task, one: boolean) => Task | null,
+  change: (task: Task, key: QueryKey) => Task | null,
 ): Changed {
   const changed: Changed = [];
   for (const [key, tasks] of queryClient.getQueriesData<Task[]>(tasksKey)) {
@@ -108,7 +112,7 @@ function changeCached(
     const before: Changed[number]["before"] = [];
     const after = tasks.flatMap((task, index) => {
       if (!ids.has(task.id)) return [task];
-      const next = change(task, isOne(key));
+      const next = change(task, key);
       if (next === task) return [task];
       before.push({ task, index, removed: next === null });
       return next ? [next] : [];
@@ -177,11 +181,18 @@ export function useSetCompleted() {
     onMutate: async ({ task, done }) => {
       await queryClient.cancelQueries(tasksKey);
       // A repeating task stays: it comes back open with its next due date.
-      if (!done || task.recurRule) return { changed: [] };
-      // The detail panel's copy stays, marked completed, so the panel can tell it was completed rather than deleted.
+      if (task.recurRule) return { changed: [] };
+      // Reopening takes the subtasks completed with it (the same moment), as the server does.
+      if (!done) {
+        const at = task.completedAt;
+        if (!at) return { changed: [] };
+        const pick = (tasks: Task[]) => new Set([...withSubtasks(tasks, task.id)].filter((id) => tasks.find((t) => t.id === id)?.completedAt === at));
+        return { changed: changeCached(queryClient, pick, (t) => ({ ...t, completedAt: null })) };
+      }
+      // Lists showing completed tasks (and the detail panel, so it can tell completed from deleted) keep them, marked.
       const completedAt = new Date().toISOString();
       return {
-        changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), (t, one) => (one ? { ...t, completedAt } : null)),
+        changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), (t, key) => (keepsCompleted(key) ? { ...t, completedAt } : null)),
       };
     },
     onError: (_error, _vars, context) => restoreCached(queryClient, context?.changed),
@@ -189,7 +200,7 @@ export function useSetCompleted() {
       if (saved.completedAt)
         for (const [key, tasks] of queryClient.getQueriesData<Task[]>(tasksKey))
           if (tasks?.some((t) => t.id === saved.id))
-            queryClient.setQueryData<Task[]>(key, isOne(key) ? tasks.map((t) => (t.id === saved.id ? saved : t)) : tasks.filter((t) => t.id !== saved.id));
+            queryClient.setQueryData<Task[]>(key, keepsCompleted(key) ? tasks.map((t) => (t.id === saved.id ? saved : t)) : tasks.filter((t) => t.id !== saved.id));
       else writeCached(queryClient, saved);
     },
     onSettled: () => refetchWhenLast(queryClient),
@@ -295,7 +306,7 @@ export function useDeleteTask() {
     mutationFn: async ({ task }: { task: Task }) => json(await api(`/api/tasks/${task.id}`, { method: "DELETE" }), NoContent),
     onMutate: async ({ task }) => {
       await queryClient.cancelQueries(tasksKey);
-      return { changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), (t, one) => (one ? t : null)) };
+      return { changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), (t, key) => (isOne(key) ? t : null)) };
     },
     onError: (_error, _vars, context) => restoreCached(queryClient, context?.changed),
     onSettled: () => refetchWhenLast(queryClient),
