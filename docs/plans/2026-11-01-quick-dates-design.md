@@ -1,6 +1,6 @@
 # Quick dates and due times
 
-Date: 2026-11-01. Status: approved.
+Date: 2026-11-01. Status: approved; built.
 
 Board card: "Quick dates and due times" (#Desktop #Mobile). Today the detail panel has plain date inputs for Due and Start, a due time (`dueAt`) can only be shown, quick add knows only `#labels`, and nothing sets a snooze. This card adds one-tap dates, due times and snoozing in the panel, and dates typed at the end of quick add.
 
@@ -53,3 +53,15 @@ A parser in `web/src/lib/when.ts`, hand-written (the vocabulary is small and ful
 ## Not in scope
 
 Keyboard date shortcuts, snooze words in quick add, recurrence with due times (BACKLOG card), and timed notifications (out of scope for day one).
+
+## As built
+
+Changes from the design above, found in review:
+
+- On a repeating task, changing the day (quick button or date input) also drops a due time, so an imported `dueAt` can't keep the task from advancing.
+- Only a quick-choice snooze closes the panel. A snooze typed into the date or time input saves and toasts with Undo, but leaves the panel open so a time can still be added.
+- A snooze that works out to now or earlier saves nothing and says "That time has passed". Undo does nothing if the snooze has changed since.
+- Quick add rejects a tail of "week" or "weekend" straight after "next" or "this" ("Plan next weekend" stays text; `next weekend` is not supported). It also takes `tmrw`, ordinals ("3rd Nov") and an `on` prefix.
+- A number at the end of a title is never joined to a time ("Read chapter 1 2pm" is due at 2 pm with the 1 kept). "a"/"p" count only when attached ("3p").
+- The quick-add chip is worked out as you type and the date again on Enter, so across a minute or midnight boundary the saved date can differ from the chip; the toast always says what was saved.
+- Rows still show only the day for a task with a due time.
