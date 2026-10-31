@@ -1,13 +1,32 @@
-import { useRef, useState, type KeyboardEvent } from "react";
+import { useId, useRef, useState, type KeyboardEvent } from "react";
 import { useCreateTask, useTimeZone } from "../data/queries";
-import { formatWhen, splitIn, todayIn, type When } from "../lib/dates";
+import { formatWhen, nowIn, todayIn, zonedToUtc, type When } from "../lib/dates";
 import { parseQuickAdd } from "../lib/quickAdd";
-import { dueFields, parseWhen } from "../lib/when";
+import { parseWhen } from "../lib/when";
 import { useCommand } from "./keyboard";
 import { useToast } from "./Toast";
 
 /** Where quick add puts a task: a list, with labels the screen implies, and due today (the day it's added) if set. */
 export interface QuickAddTarget { listId: string; listName: string; labels?: string[]; dueToday?: boolean }
+
+interface Entry { text: string; dismissed: string | null }
+const EMPTY: Entry = { text: "", dismissed: null };
+
+/** The date at the end of the entry's title as of `at`, unless its words were kept in the title. */
+function readWhen({ text, dismissed }: Entry, at: Date, timeZone: string) {
+  const found = parseWhen(parseQuickAdd(text).title, at, timeZone);
+  return found && found.matched !== dismissed ? found : null;
+}
+
+/** Today's date and time for `formatWhen`, from one instant. */
+const today = (at: Date, timeZone: string): [string, string] => {
+  const now = nowIn(timeZone, at);
+  return [now.date, now.time];
+};
+
+/** The one due field a create body takes for a When: `dueAt` with a time, else `dueDate`. */
+const createDue = (when: When, timeZone: string): { dueDate: string } | { dueAt: string } =>
+  when.time ? { dueAt: zonedToUtc(when.date, when.time, timeZone) } : { dueDate: when.date };
 
 /** Labels in order, without repeats ignoring case (the first spelling wins). */
 const mergeLabels = (labels: string[]) =>
@@ -20,40 +39,37 @@ const mergeLabels = (labels: string[]) =>
  * screen), or a date was read, a toast says where it went. Nothing is shown without a target.
  */
 export function QuickAdd({ target, announce = false }: { target: QuickAddTarget | undefined; announce?: boolean }) {
-  const [text, setText] = useState("");
-  // The date words the user chose to keep in the title, for this entry only.
-  const [dismissed, setDismissed] = useState<string | null>(null);
+  // The text, and the date words the user chose to keep in its title (for as long as they are still the match).
+  const [entry, setEntry] = useState<Entry>(EMPTY);
   const create = useCreateTask();
   const toast = useToast();
   const timeZone = useTimeZone();
   const input = useRef<HTMLInputElement>(null);
+  const previewId = useId();
   useCommand("capture", target ? () => input.current?.focus() : undefined);
   if (!target) return null;
 
+  const { text, dismissed } = entry;
   const parsed = parseQuickAdd(text);
-  /** The date at the end of the title, unless its words were kept, read as of `at`. */
-  const readWhen = (at: Date) => {
-    const found = parseWhen(parsed.title, at, timeZone);
-    return found && found.matched !== dismissed ? found : null;
-  };
-  /** "Tomorrow, 3:00 pm", as of `at`. */
-  const describe = (when: When, at: Date) => formatWhen(when, todayIn(timeZone, at), splitIn(at.toISOString(), timeZone).time).text;
-  const shown = readWhen(new Date());
-  const clear = () => { setText(""); setDismissed(null); };
+  const shown = readWhen(entry, new Date(), timeZone);
+  const preview = shown && formatWhen(shown.when, ...today(new Date(), timeZone));
+
+  const onChange = (next: string) =>
+    setEntry((e) => ({
+      text: next,
+      dismissed: e.dismissed !== null && parseWhen(parseQuickAdd(next).title, new Date(), timeZone)?.matched === e.dismissed ? e.dismissed : null,
+    }));
 
   const submit = () => {
-    const sent = text;
-    if (!sent.trim()) return;
+    const sent = entry;
+    if (!text.trim()) return;
     // Read again: the day may have changed since the last keystroke.
     const at = new Date();
-    const when = readWhen(at);
+    const when = readWhen(entry, at, timeZone);
     const labels = mergeLabels([...(target.labels ?? []), ...parsed.labels]);
-    // Only the field that is set: the API takes no nulls on create.
-    const due = when
-      ? Object.fromEntries(Object.entries(dueFields(when.when, timeZone)).filter(([, v]) => v !== null))
-      : target.dueToday ? { dueDate: todayIn(timeZone, at) } : {};
-    const dueText = when && describe(when.when, at);
-    clear();
+    const due = when ? createDue(when.when, timeZone) : target.dueToday ? { dueDate: todayIn(timeZone, at) } : {};
+    const dueText = when && formatWhen(when.when, ...today(at, timeZone)).text;
+    setEntry(EMPTY);
     // mutateAsync, not mutate: each call's outcome is reported, even when several are running.
     create
       .mutateAsync({
@@ -70,8 +86,8 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
           else if (announce) toast.show({ message: where });
         },
         (e: Error) => {
-          // Put the text back unless something new has been typed since.
-          setText((now) => (now ? now : sent));
+          // Put the text (and any kept words) back unless something new has been typed since.
+          setEntry((now) => (now.text ? now : sent));
           toast.show({ message: e.message, error: true });
         },
       );
@@ -82,7 +98,7 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
       e.preventDefault();
       submit();
     } else if (e.key === "Escape") {
-      clear();
+      setEntry(EMPTY);
       e.currentTarget.blur();
     }
   };
@@ -96,22 +112,29 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
           type="text"
           className="quick-add-input"
           aria-label="Add a task"
+          aria-describedby={shown ? previewId : undefined}
           placeholder="Add a task"
           autoComplete="off"
           enterKeyHint="done"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
         />
       </div>
-      {shown && (
-        <div className="quick-add-when">
-          <span>Due {describe(shown.when, new Date())}</span>
+      {shown && preview && (
+        <div className={preview.overdue ? "quick-add-when overdue" : "quick-add-when"}>
+          <span id={previewId}>
+            Due {preview.text}
+            {preview.overdue && <span className="sr-only"> (overdue)</span>}
+          </span>
           <button
             type="button"
             className="chip-remove"
             aria-label={`Keep “${shown.matched}” in the title`}
-            onClick={() => { setDismissed(shown.matched); input.current?.focus(); }}
+            onClick={() => {
+              setEntry((e) => ({ ...e, dismissed: shown.matched }));
+              input.current?.focus();
+            }}
           >
             <span aria-hidden="true">×</span>
           </button>

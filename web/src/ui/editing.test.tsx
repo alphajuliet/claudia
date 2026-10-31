@@ -188,6 +188,58 @@ describe("dates in quick add", () => {
     expect(main().getByText(/^Due /)).toBeTruthy();
   });
 
+  it("forgets the dismissal once its words are gone", async () => {
+    const day = fixClock();
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Buy tomorrow");
+    await userEvent.click(main().getByRole("button", { name: "Keep “tomorrow” in the title" }));
+    await userEvent.type(field, "{Control>}a{/Control}{Backspace}");
+    expect(field.value).toBe("");
+    await userEvent.type(field, "Call Sam tomorrow");
+    expect(main().getByText("Due Tomorrow")).toBeTruthy();
+    await userEvent.type(field, "{Enter}");
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Call Sam", dueDate: addDays(day, 1) }]);
+  });
+
+  it("describes the field with the preview while it shows", async () => {
+    fixClock();
+    stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    expect(field.getAttribute("aria-describedby")).toBeNull();
+    await userEvent.type(field, "Call Sam tomorrow");
+    const id = field.getAttribute("aria-describedby");
+    expect(id && document.getElementById(id)?.textContent).toBe("Due Tomorrow");
+    expect(document.getElementById(id!)?.closest("[aria-live]")).toBeNull();
+    await userEvent.type(field, "{Enter}");
+    expect(field.getAttribute("aria-describedby")).toBeNull();
+  });
+
+  it("marks a preview that has already passed as overdue", async () => {
+    fixClock();
+    stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    await userEvent.type(await quickAdd(), "Call Sam today 9am");
+    const preview = main().getByText("Due Today, 9:00 am");
+    expect(preview.closest(".quick-add-when")?.classList.contains("overdue")).toBe(true);
+    expect(preview.textContent).toBe("Due Today, 9:00 am (overdue)");
+  });
+
+  it("keeps the dismissal when adding fails", async () => {
+    fixClock();
+    stubApi([], { failCreate: true });
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Read chapter 3/4");
+    await userEvent.click(main().getByRole("button", { name: "Keep “3/4” in the title" }));
+    await userEvent.type(field, "{Enter}");
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Boom"));
+    expect(field.value).toBe("Read chapter 3/4");
+    expect(main().queryByText(/^Due /)).toBeNull();
+  });
+
   it("labels and a date together", async () => {
     fixClock();
     const fetchMock = stubApi([]);

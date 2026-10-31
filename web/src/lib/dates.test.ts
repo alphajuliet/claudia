@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, formatDue, formatTime, formatWhen, splitIn, todayIn, weekdayOf, zonedToUtc } from "./dates";
+import { addDays, formatDue, formatTime, formatWhen, nowIn, splitIn, todayIn, weekdayOf, zonedToUtc } from "./dates";
 
 // 2026-10-31 is a Saturday.
 const today = "2026-10-31";
@@ -60,6 +60,12 @@ describe("zonedToUtc and splitIn", () => {
   it("splits a timestamp into the local date and time", () => {
     expect(splitIn("2026-11-02T13:00:00.000Z", "Australia/Sydney")).toEqual({ date: "2026-11-03", time: "00:00" });
     expect(splitIn("2026-11-03T08:00:00.000Z", "Australia/Sydney")).toEqual({ date: "2026-11-03", time: "19:00" });
+  });
+
+  it("gives the date and time now in a zone from one instant", () => {
+    // Just before midnight, then just after, in Sydney.
+    expect(nowIn("Australia/Sydney", new Date("2026-11-02T12:59:00.000Z"))).toEqual({ date: "2026-11-02", time: "23:59" });
+    expect(nowIn("Australia/Sydney", new Date("2026-11-02T13:00:30.000Z"))).toEqual({ date: "2026-11-03", time: "00:00" });
   });
 });
 

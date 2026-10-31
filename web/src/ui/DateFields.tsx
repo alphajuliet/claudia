@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { Task } from "@claudia/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { cachedTask, useUpdateTask } from "../data/queries";
-import { formatDue, formatWhen, splitIn, todayIn, zonedToUtc, type When } from "../lib/dates";
+import { formatDue, formatWhen, nowIn, splitIn, todayIn, zonedToUtc, type When } from "../lib/dates";
 import { isSnoozed } from "../lib/tasks";
 import { dueFields, quickDates } from "../lib/when";
 import { Field, FieldStatus, usePatch, type SaveState } from "./TaskFields";
@@ -169,8 +169,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
  */
 function DueField({ task, timeZone }: { task: Task; timeZone: string }) {
   const { state, patch } = usePatch(task);
-  const today = todayIn(timeZone);
-  const nowTime = splitIn(new Date().toISOString(), timeZone).time;
+  const { date: today, time: nowTime } = nowIn(timeZone);
   const quick = quickDates(today);
   const value: When | null = task.dueAt ? splitIn(task.dueAt, timeZone) : task.dueDate ? { date: task.dueDate, time: null } : null;
   return (
@@ -211,8 +210,7 @@ function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone: string
   const update = useUpdateTask();
   const queryClient = useQueryClient();
   const toast = useToast();
-  const today = todayIn(timeZone);
-  const nowTime = splitIn(new Date().toISOString(), timeZone).time;
+  const { date: today, time: nowTime } = nowIn(timeZone);
   const quick = quickDates(today);
   const choices: WhenChoice[] = [
     ...(nowTime < "18:00" ? [{ label: "This evening", date: today, time: "18:00" }] : []),
@@ -237,8 +235,9 @@ function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone: string
     if (quick) onClose();
     void patch({ snoozedUntil }).then((saved) => {
       if (!saved) return;
+      const current = nowIn(timeZone);
       toast.show({
-        message: `Snoozed until ${formatWhen(when, todayIn(timeZone), nowTime).text}`,
+        message: `Snoozed until ${formatWhen(when, current.date, current.time).text}`,
         action: {
           label: "Undo",
           run: () => {

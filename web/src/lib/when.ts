@@ -1,4 +1,4 @@
-import { addDays, splitIn, todayIn, weekdayOf, zonedToUtc, type When } from "./dates";
+import { addDays, nowIn, weekdayOf, zonedToUtc, type When } from "./dates";
 
 export type { When };
 
@@ -113,11 +113,11 @@ const word = (w: string) => w.toLowerCase().replace(/[,.]+$/, "");
  */
 export function parseWhen(text: string, now: Date, timeZone: string): { title: string; matched: string; when: When } | null {
   const words = text.trim().split(/\s+/).filter(Boolean);
-  const today = todayIn(timeZone, now);
+  const { date: today, time: nowTime } = nowIn(timeZone, now);
   for (let i = Math.max(1, words.length - MAX_TAIL); i < words.length; i++) {
     const tail = parseTail(words.slice(i).map(word), today);
     if (!tail || (/^(next|this)$/.test(word(words[i - 1]!)) && /^(week|weekend)$/.test(word(words[i]!)))) continue;
-    const date = tail.date ?? (tail.time! > splitIn(now.toISOString(), timeZone).time ? today : addDays(today, 1));
+    const date = tail.date ?? (tail.time! > nowTime ? today : addDays(today, 1));
     return { title: words.slice(0, i).join(" "), matched: words.slice(i).join(" "), when: { date, time: tail.time } };
   }
   return null;

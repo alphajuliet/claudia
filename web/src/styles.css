@@ -363,7 +363,12 @@ input.nav-rename { height: var(--row-height); padding: 0 0.5rem; font-size: inhe
   background: var(--accent-soft);
   border-radius: 999px;
 }
-.quick-add-when .chip-remove { flex: none; }
+.quick-add-when .chip-remove { position: relative; flex: none; }
+.quick-add-when.overdue { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+/* A 2rem hit area for the × on touch screens, without making the chip taller. */
+@media (pointer: coarse) {
+  .quick-add-when .chip-remove::after { content: ""; position: absolute; inset: -0.45rem; }
+}
 
 .task-sections { display: grid; gap: 1.5rem; }
 

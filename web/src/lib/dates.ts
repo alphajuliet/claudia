@@ -80,6 +80,9 @@ export function splitIn(iso: string, timeZone: string): { date: string; time: st
   return { date: `${p.year}-${p.month}-${p.day}`, time: `${String(hourOf(p)).padStart(2, "0")}:${p.minute}` };
 }
 
+/** The date and "HH:MM" now in a zone, from one instant so the two always agree. */
+export const nowIn = (timeZone: string, at = new Date()) => splitIn(at.toISOString(), timeZone);
+
 /** "15:05" as "3:05 pm". */
 export function formatTime(time: string): string {
   const [h, m] = time.split(":").map(Number);
