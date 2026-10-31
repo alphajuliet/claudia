@@ -96,11 +96,28 @@ describe("swiping a task right on a touch screen", () => {
 
     fireEvent.pointerDown(title, { ...base, pointerId: 2, clientX: 100, clientY: 100 });
     fireEvent.pointerMove(title, { ...base, pointerId: 2, clientX: 300, clientY: 100 });
-    fireEvent.lostPointerCapture(title, { ...base, pointerId: 2 });
+    fireEvent.lostPointerCapture(li, { ...base, pointerId: 2 });
     expect(li.dataset.swipe).toBe("spring");
     fireEvent.pointerUp(title, { ...base, pointerId: 2, clientX: 300, clientY: 100 });
     await waitFor(() => expect(li.dataset.swipe).toBeUndefined());
     expect(posts(fetchMock)).toEqual([]);
+  });
+
+  it("carries on when the title loses its implicit capture to the row", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    const fetchMock = stubApi([weed]);
+    renderAt(`/list/${garden.id}`);
+    const title = await main().findByText("Weed the beds");
+    const li = row("Weed the beds");
+    const base = { pointerType: "touch", pointerId: 1, isPrimary: true };
+    fireEvent.pointerDown(title, { ...base, clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(title, { ...base, clientX: 150, clientY: 100 });
+    fireEvent.lostPointerCapture(title, base);
+    expect(li.dataset.swipe).toBe("drag");
+    fireEvent.pointerMove(li, { ...base, clientX: 300, clientY: 100 });
+    expect(li.style.getPropertyValue("--swipe-x")).toBe("200px");
+    fireEvent.pointerUp(li, { ...base, clientX: 300, clientY: 100 });
+    await waitFor(() => expect(posts(fetchMock)).toEqual([`/api/tasks/${weed.id}/complete`]));
   });
 
   it("does nothing when a press is cancelled before it moves", async () => {

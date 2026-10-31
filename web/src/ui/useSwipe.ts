@@ -31,6 +31,8 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
   const ref = useRef<T>(null);
   const state = useRef<SwipeState | null>(null);
   const pointer = useRef<number | null>(null);
+  // The row holds the pointer's capture (taken once a swipe starts).
+  const captured = useRef(false);
   // Until when the click after a swipe is swallowed (0 for none).
   const swallow = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -69,6 +71,7 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
     const s = state.current;
     state.current = null;
     pointer.current = null;
+    captured.current = false;
     if (!s) return;
     const el = e.currentTarget;
     if (isOpen.current) {
@@ -124,6 +127,7 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
       if (s.phase !== "swiping") {
         clearTimeout(timer.current);
         e.currentTarget.setPointerCapture?.(e.pointerId);
+        captured.current = true;
       }
       // An open row moves from where it sits, between open and closed.
       // Never further left than the buttons, so the Complete strip doesn't show behind them.
@@ -132,7 +136,11 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
     },
     onPointerUp: (e: PointerEvent<T>) => finish(e, false),
     onPointerCancel: (e: PointerEvent<T>) => finish(e, true),
-    onLostPointerCapture: (e: PointerEvent<T>) => finish(e, true),
+    // Only the row's own capture, lost while the finger is still down, cancels. Taking it fires this on the child
+    // that held the touch's implicit capture (it bubbles here), and our own release comes after `finish`.
+    onLostPointerCapture: (e: PointerEvent<T>) => {
+      if (e.target === e.currentTarget && captured.current) finish(e, true);
+    },
     onClickCapture: (e: MouseEvent<T>) => {
       const until = swallow.current;
       swallow.current = 0;
