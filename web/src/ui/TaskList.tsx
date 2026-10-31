@@ -4,7 +4,7 @@ import type { Task } from "@claudia/shared";
 import { useDeleteTask, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
-import { displayItems, stepMove } from "../lib/reorder";
+import { displayItems, moveFor, stepMove, withoutDragged, type Item } from "../lib/reorder";
 import { collapseRows, parentsIn, rowsUnder, type Row } from "../lib/tasks";
 import { setCollapsed, useCollapsed } from "./collapsed";
 import { BottomSheet } from "./BottomSheet";
@@ -14,6 +14,7 @@ import { InlineMarkdown, plainText } from "./Markdown";
 import { Disclosure, dueDateOf, TaskRow } from "./TaskRow";
 import { useSelectedTask } from "./selection";
 import { useToast } from "./Toast";
+import { useDrag, type DragTarget } from "./useDrag";
 
 /**
  * A run of rows, under a title (a list name in a view, a heading in a list) or none. A heading's title selects it,
@@ -312,9 +313,19 @@ function useStepMove(sections: ShownSection[], current: Task | undefined, order:
   useCommand("moveDown", step(1));
 }
 
+/** Moves a dragged task to where it was dropped. A drop where it already was sends nothing. */
+function useDropMove() {
+  const move = useMoveTask();
+  const toast = useToast();
+  return (task: Task, target: DragTarget, items: Item[]) => {
+    const request = moveFor(withoutDragged(items, task), task, target, items);
+    if (request) move.mutateAsync({ id: task.id, ...request }).catch((e: Error) => toast.show({ message: e.message, error: true }));
+  };
+}
+
 /**
- * Task rows in sections, with loading, error and empty states. With `reorder` (a list screen), Alt+↑ and Alt+↓
- * move the highlighted task.
+ * Task rows in sections, with loading, error and empty states. With `reorder` (a list screen), rows and headings
+ * drag with the mouse, and Alt+↑ and Alt+↓ move the highlighted task.
  */
 export function TaskList({ query, sections, empty, reorder }: { query: QueryState; sections: Section[]; empty: string; reorder?: { listId: string } }) {
   const timeZone = useTimeZone();
@@ -391,6 +402,7 @@ export function TaskList({ query, sections, empty, reorder }: { query: QueryStat
   useCommand("next", (e) => arrowsHere(e) && move(1));
   useCommand("previous", (e) => arrowsHere(e) && move(-1));
   useStepMove(shownSections, current, order, reorder !== undefined, arrowsHere);
+  const drag = useDrag({ listId: shown ? reorder?.listId : undefined, items: displayItems(shownSections), onDrop: useDropMove() });
   useCommand("open", (e) => {
     if (!current) return false;
     // Enter on a button or link keeps its own meaning: it opens only from the row itself (or nothing focused).
@@ -424,7 +436,7 @@ export function TaskList({ query, sections, empty, reorder }: { query: QueryStat
   if (query.isPending) return <p className="list-state muted">Loading…</p>;
   if (sections.every((s) => s.rows.length === 0 && !s.title)) return <p className="list-state muted">{empty}</p>;
   return (
-    <div className="task-sections">
+    <div className="task-sections" ref={drag.ref} onPointerDown={drag.onPointerDown}>
       {sheet && <RowSheet sheet={sheet} timeZone={timeZone} onClose={closeSheet} />}
       {shownSections.map((s) => (
         <TaskSection
