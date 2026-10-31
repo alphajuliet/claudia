@@ -253,7 +253,13 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 }
 .folder[open] > summary::before { transform: rotate(45deg); }
 .folder > summary:hover { background: var(--row-hover); color: var(--fg); }
-.folder > .nav-list { padding-left: 0.85rem; }
+/* A folder's contents sit inside it: indented past the folder's name (which starts after the caret, about 1.35rem
+   in), with a faint guide line, so every level of nesting reads clearly. */
+.folder > .nav-list {
+  margin: 0.05rem 0 0.2rem 0.8rem;
+  padding-left: 0.55rem;
+  border-left: 1px solid var(--border);
+}
 
 .sidebar-footer {
   display: flex;
