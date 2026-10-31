@@ -1,5 +1,5 @@
 export type CommandId =
-  | "next" | "previous" | "open" | "close" | "complete" | "rename" | "capture" | "search" | "help"
+  | "next" | "previous" | "collapse" | "expand" | "open" | "close" | "complete" | "rename" | "capture" | "search" | "help"
   | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
 export interface Command { id: CommandId; label: string; keys: string[] }
@@ -11,6 +11,8 @@ export interface Command { id: CommandId; label: string; keys: string[] }
 export const COMMANDS: Command[] = [
   { id: "next", label: "Next task", keys: ["j", "ArrowDown"] },
   { id: "previous", label: "Previous task", keys: ["k", "ArrowUp"] },
+  { id: "collapse", label: "Collapse, or go to the parent", keys: ["h"] },
+  { id: "expand", label: "Expand", keys: ["l"] },
   { id: "open", label: "Open task details", keys: ["Enter", "o"] },
   { id: "close", label: "Close task details", keys: ["Escape"] },
   { id: "complete", label: "Complete task", keys: ["x"] },

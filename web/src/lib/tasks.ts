@@ -40,3 +40,31 @@ export function groupByList(tasks: Task[], lists: List[], listOrder: string[]): 
     .sort(([a], [b]) => (rank.get(a) ?? Infinity) - (rank.get(b) ?? Infinity))
     .map(([listId, ts]) => ({ listId, list: byId.get(listId), rows: treeRows(ts) }));
 }
+
+/** The tasks that have at least one subtask among the rows (a row followed by a deeper one). */
+export function parentsIn(rows: Row[]): Set<string> {
+  const out = new Set<string>();
+  rows.forEach((r, i) => { if ((rows[i + 1]?.depth ?? -1) > r.depth) out.add(r.task.id); });
+  return out;
+}
+
+/** The rows without anything under a collapsed task (the collapsed task itself stays). */
+export function collapseRows(rows: Row[], collapsed: Set<string>): Row[] {
+  const out: Row[] = [];
+  let hiddenDepth = Infinity;
+  for (const row of rows) {
+    if (row.depth > hiddenDepth) continue;
+    hiddenDepth = collapsed.has(row.task.id) ? row.depth : Infinity;
+    out.push(row);
+  }
+  return out;
+}
+
+/** The ids of the rows under the task at `id` (its subtasks, at every level). */
+export function rowsUnder(rows: Row[], id: string): string[] {
+  const i = rows.findIndex((r) => r.task.id === id);
+  if (i < 0) return [];
+  const out: string[] = [];
+  for (let j = i + 1; j < rows.length && rows[j]!.depth > rows[i]!.depth; j++) out.push(rows[j]!.task.id);
+  return out;
+}

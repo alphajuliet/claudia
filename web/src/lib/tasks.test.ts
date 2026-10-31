@@ -1,6 +1,6 @@
 import type { List, Task } from "@claudia/shared";
 import { describe, expect, it } from "vitest";
-import { groupByList, isSnoozed, treeRows } from "./tasks";
+import { collapseRows, groupByList, isSnoozed, parentsIn, rowsUnder, treeRows } from "./tasks";
 
 const task = (overrides: Partial<Task> & Pick<Task, "id">): Task => ({
   listId: "L1",
@@ -86,5 +86,39 @@ describe("isSnoozed", () => {
     expect(isSnoozed(task({ id: "a", snoozedUntil: "2026-11-01T00:00:00.000Z" }), now)).toBe(true);
     expect(isSnoozed(task({ id: "b", snoozedUntil: "2026-10-30T00:00:00.000Z" }), now)).toBe(false);
     expect(isSnoozed(task({ id: "c" }), now)).toBe(false);
+  });
+});
+
+describe("collapsing", () => {
+  // A
+  //   B
+  //     C
+  //   D
+  // E
+  const rows = treeRows([
+    task({ id: "A", position: "a0" }),
+    task({ id: "B", parentId: "A", position: "a0" }),
+    task({ id: "C", parentId: "B", position: "a0" }),
+    task({ id: "D", parentId: "A", position: "a1" }),
+    task({ id: "E", position: "a1" }),
+  ]);
+  const ids = (rs: { task: Task }[]) => rs.map((r) => r.task.id);
+
+  it("finds the tasks with subtasks", () => {
+    expect([...parentsIn(rows)]).toEqual(["A", "B"]);
+  });
+
+  it("hides everything under a collapsed task, at every level", () => {
+    expect(ids(collapseRows(rows, new Set(["A"])))).toEqual(["A", "E"]);
+    expect(ids(collapseRows(rows, new Set(["B"])))).toEqual(["A", "B", "D", "E"]);
+    expect(ids(collapseRows(rows, new Set(["B", "E"])))).toEqual(["A", "B", "D", "E"]);
+    expect(ids(collapseRows(rows, new Set()))).toEqual(["A", "B", "C", "D", "E"]);
+  });
+
+  it("lists the rows under a task", () => {
+    expect(rowsUnder(rows, "A")).toEqual(["B", "C", "D"]);
+    expect(rowsUnder(rows, "B")).toEqual(["C"]);
+    expect(rowsUnder(rows, "E")).toEqual([]);
+    expect(rowsUnder(rows, "Z")).toEqual([]);
   });
 });

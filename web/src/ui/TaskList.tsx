@@ -4,10 +4,11 @@ import type { Task } from "@claudia/shared";
 import { usePendingCompletions, useSetCompleted, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
-import type { Row } from "../lib/tasks";
+import { collapseRows, parentsIn, rowsUnder, type Row } from "../lib/tasks";
+import { setCollapsed, useCollapsed } from "./collapsed";
 import { useCommand } from "./keyboard";
 import { InlineMarkdown } from "./Markdown";
-import { dueDateOf, TaskRow } from "./TaskRow";
+import { Disclosure, dueDateOf, TaskRow } from "./TaskRow";
 import { useSelectedTask } from "./selection";
 import { useToast } from "./Toast";
 
@@ -66,9 +67,13 @@ interface RowProps {
   onRename: (task: Task, title: string) => void;
   onSelect: (task: Task) => void;
   onHighlight: (task: Task) => void;
+  onToggle: (task: Task, collapsed: boolean) => void;
 }
 
-function TaskSection({ section, pending, selectedId, highlightId, ...rest }: RowProps & { section: Section }) {
+/** A section as shown: `rows` without collapsed parts, `all` with them, and which tasks have subtasks. */
+interface ShownSection extends Section { all: Row[]; parents: Set<string>; collapsed: Set<string> }
+
+function TaskSection({ section, pending, selectedId, highlightId, ...rest }: RowProps & { section: ShownSection }) {
   const { heading } = section;
   const id = useId();
   const rows = (
@@ -81,6 +86,8 @@ function TaskSection({ section, pending, selectedId, highlightId, ...rest }: Row
           pending={pending.has(r.task.id)}
           selected={r.task.id === selectedId}
           highlighted={r.task.id === highlightId}
+          expandable={section.parents.has(r.task.id)}
+          collapsed={section.collapsed.has(r.task.id)}
           {...rest}
         />
       ))}
@@ -90,6 +97,9 @@ function TaskSection({ section, pending, selectedId, highlightId, ...rest }: Row
   return (
     <section className="task-section" aria-labelledby={id}>
       <h2 id={id} className="section-title">
+        {heading && section.all.length > 0 && (
+          <Disclosure title={heading.title} collapsed={section.collapsed.has(heading.id)} onToggle={(c) => rest.onToggle(heading, c)} />
+        )}
         {heading ? (
           <button
             type="button"
@@ -167,7 +177,14 @@ function useHighlight(order: Task[]) {
   };
   const current = highlightId ? order.find((t) => t.id === highlightId) : undefined;
 
-  return { highlightId, current, highlight, move };
+  /** Highlights a task and focuses its row; the open panel follows. */
+  const goTo = (t: Task) => {
+    highlight(t);
+    focusTask(t.id);
+    if (selectedId && selectedId !== t.id) select(t.id, { follow: true });
+  };
+
+  return { highlightId, current, highlight, move, goTo };
 }
 
 /** Task rows in sections, with loading, error and empty states. */
@@ -179,8 +196,50 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   const pending = usePendingCompletions();
   const { selectedId, select } = useSelectedTask();
   const shown = !query.error && !query.isPending;
-  const order = shown ? sections.flatMap((s) => [...(s.heading ? [s.heading] : []), ...s.rows.map((r) => r.task)]) : [];
-  const { highlightId, current, highlight, move } = useHighlight(order);
+  const collapsed = useCollapsed();
+  const shownSections: ShownSection[] = sections.map((s) => ({
+    ...s,
+    all: s.rows,
+    rows: s.heading && collapsed.has(s.heading.id) ? [] : collapseRows(s.rows, collapsed),
+    parents: parentsIn(s.rows),
+    collapsed,
+  }));
+  const order = shown ? shownSections.flatMap((s) => [...(s.heading ? [s.heading] : []), ...s.rows.map((r) => r.task)]) : [];
+  const { highlightId, current, highlight, move, goTo } = useHighlight(order);
+
+  /** The section a task shows in (as its heading or a row). */
+  const sectionOf = (t: Task) => shownSections.find((s) => s.heading?.id === t.id || s.rows.some((r) => r.task.id === t.id));
+  const canCollapse = (t: Task) => {
+    const s = sectionOf(t);
+    return Boolean(s && (s.heading?.id === t.id ? s.all.length > 0 : s.parents.has(t.id)));
+  };
+  // Collapsing over the highlighted row hands the highlight (and focus, if the row had it) to the collapsed item.
+  const toggle = (t: Task, value: boolean) => {
+    if (value && highlightId) {
+      const s = sectionOf(t);
+      const under = s?.heading?.id === t.id ? s.all.map((r) => r.task.id) : shownSections.flatMap((x) => rowsUnder(x.all, t.id));
+      if (under.includes(highlightId)) {
+        const hadFocus = document.activeElement?.closest("[data-task-id]")?.getAttribute("data-task-id") === highlightId;
+        highlight(t);
+        if (hadFocus) focusTask(t.id);
+      }
+    }
+    setCollapsed(t.id, value);
+  };
+
+  useCommand("collapse", () => {
+    if (!current) return false;
+    if (canCollapse(current) && !collapsed.has(current.id)) return void toggle(current, true);
+    // Already collapsed, or nothing under it: go to its parent task, or the heading it sits under.
+    const s = sectionOf(current);
+    const parent = current.parentId ? order.find((t) => t.id === current.parentId) : undefined;
+    const up = parent ?? (current.kind === "task" ? s?.heading : undefined);
+    if (up) goTo(up);
+  });
+  useCommand("expand", () => {
+    if (!current || !collapsed.has(current.id)) return false;
+    setCollapsed(current.id, false);
+  });
 
   // Arrow keys keep their usual meaning (radios, scrolling the panel) outside the list.
   const arrowsHere = (e: KeyboardEvent) =>
@@ -216,7 +275,7 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   if (sections.every((s) => s.rows.length === 0 && !s.title)) return <p className="list-state muted">{empty}</p>;
   return (
     <div className="task-sections">
-      {sections.map((s) => (
+      {shownSections.map((s) => (
         <TaskSection
           key={s.key}
           section={s}
@@ -229,6 +288,7 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
           onRename={onRename}
           onSelect={(t) => select(t.id)}
           onHighlight={highlight}
+          onToggle={toggle}
         />
       ))}
     </div>

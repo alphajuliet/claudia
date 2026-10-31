@@ -354,7 +354,24 @@ button.section-title-button.selected { color: var(--accent); }
   padding: 0.25rem 0.5rem 0.25rem calc(0.5rem + var(--depth, 0) * var(--indent));
   border-radius: var(--radius);
 }
+.task-row { position: relative; }
 .task-row:hover { background: var(--row-hover); }
+/* The ▸/▾ toggle sits in the gutter left of the checkbox, so rows line up with or without one. */
+button.disclosure {
+  position: absolute;
+  left: calc(var(--depth, 0) * var(--indent) - 0.75rem);
+  width: 1.1rem;
+  height: 1.4rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1;
+}
+button.disclosure:hover { color: var(--fg); filter: none; }
+.section-title { position: relative; }
+.section-title button.disclosure { left: -1.1rem; top: 50%; transform: translateY(-50%); }
 .task-row.selected, .task-row.selected:hover { background: var(--accent-soft); }
 .task-row:focus { outline: none; }
 .task-row.highlighted { outline: 2px solid var(--focus); outline-offset: -2px; }

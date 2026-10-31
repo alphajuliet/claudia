@@ -62,6 +62,8 @@ function Shell() {
   // come after the list's own and so are tried first. (Enter stays free for the drawer's links.)
   const covered = drawerOpen ? () => {} : undefined;
   useCommand("next", covered);
+  useCommand("collapse", covered);
+  useCommand("expand", covered);
   useCommand("previous", covered);
   useCommand("complete", covered);
   useCommand("rename", covered);

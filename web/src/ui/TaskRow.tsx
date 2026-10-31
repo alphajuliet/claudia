@@ -91,7 +91,25 @@ function TaskTitle({ task, onRename }: { task: Task; onRename: (task: Task, titl
  * marks the row whose details are showing. The row can take focus (the keyboard highlight), and focus anywhere in
  * it calls `onHighlight`.
  */
-export function TaskRow({ task, depth, today, timeZone, pending, selected = false, highlighted = false, onComplete, onRename, onSelect, onHighlight }: {
+/** The ▸/▾ toggle of a heading or a task with subtasks. */
+export function Disclosure({ title, collapsed, onToggle }: { title: string; collapsed: boolean; onToggle: (collapsed: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      className="disclosure"
+      aria-expanded={!collapsed}
+      aria-label={`${collapsed ? "Expand" : "Collapse"} ${title}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggle(!collapsed);
+      }}
+    >
+      <span aria-hidden="true">{collapsed ? "▸" : "▾"}</span>
+    </button>
+  );
+}
+
+export function TaskRow({ task, depth, today, timeZone, pending, selected = false, highlighted = false, expandable = false, collapsed = false, onComplete, onRename, onSelect, onHighlight, onToggle }: {
   task: Task;
   depth: number;
   today: string;
@@ -99,15 +117,19 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
   pending: boolean;
   selected?: boolean;
   highlighted?: boolean;
+  /** It has subtasks, so it shows a toggle; `collapsed` hides them. */
+  expandable?: boolean;
+  collapsed?: boolean;
   onComplete: (task: Task) => void;
   onRename: (task: Task, title: string) => void;
   onSelect?: (task: Task) => void;
   onHighlight?: (task: Task) => void;
+  onToggle?: (task: Task, collapsed: boolean) => void;
 }) {
   const due = dueDateOf(task, timeZone);
   const label = due ? formatDue(due, today) : null;
   const onRowClick = (e: MouseEvent<HTMLLIElement>) => {
-    if (onSelect && !(e.target as Element).closest(".task-check, .task-title")) onSelect(task);
+    if (onSelect && !(e.target as Element).closest(".task-check, .task-title, .disclosure")) onSelect(task);
   };
   return (
     <li
@@ -117,6 +139,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
       data-task-id={task.id}
       onFocus={() => onHighlight?.(task)}
       data-depth={depth} style={{ "--depth": depth } as CSSProperties} onClick={onRowClick}>
+      {expandable && <Disclosure title={task.title} collapsed={collapsed} onToggle={(c) => onToggle?.(task, c)} />}
       <input type="checkbox" className="task-check" aria-label={`Complete ${task.title}`} checked={false} disabled={pending} onChange={() => onComplete(task)} />
       <TaskTitle task={task} onRename={onRename} />
       <span className="task-meta">
