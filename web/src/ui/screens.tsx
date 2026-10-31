@@ -188,7 +188,7 @@ export function ListScreen({ id }: { id: string }) {
     <>
       <ScreenHeader title={list?.name ?? "List"} onRename={list ? (name) => rename(list.id, name) : undefined} />
       <QuickAdd target={list && { listId: list.id, listName: list.name }} />
-      <TaskList query={tasks} sections={listSections(visibleRows(tasks.data ?? []))} empty="Nothing here." />
+      <TaskList query={tasks} sections={listSections(visibleRows(tasks.data ?? []))} empty="Nothing here." reorder={{ listId: id }} />
     </>
   );
 }

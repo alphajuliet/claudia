@@ -1,6 +1,7 @@
 /** Fixtures and a stateful fake API for the screen tests. Not a test file itself. */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
+import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { vi } from "vitest";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
@@ -27,9 +28,12 @@ export const projects = list("01JA0000000000000000000002", "Projects", work.id);
 export const garden = list("01JA0000000000000000000003", "Garden", personal.id);
 
 let seq = 0;
-/** A task with a fresh ULID (`01JB…` plus a counter in valid Crockford digits). */
+/**
+ * A task with a fresh ULID (`01JB…` plus a counter in valid Crockford digits), placed after the ones made before it
+ * (a valid fractional index, so moves can place others around it).
+ */
 export const task = (fields: Partial<Task> & Pick<Task, "title" | "listId">): Task => ({
-  id: `01JB00000000000000000${String(++seq).padStart(5, "0")}`, parentId: null, kind: "task", position: `a${String(seq).padStart(5, "0")}`,
+  id: `01JB00000000000000000${String(++seq).padStart(5, "0")}`, parentId: null, kind: "task", position: `a${String(seq).padStart(5, "0")}V`,
   notes: null, dueDate: null, dueAt: null, startDate: null, snoozedUntil: null, recurRule: null, recurFrom: null,
   completedAt: null, labels: [], metadata: null, createdAt: at, updatedAt: at, ...fields,
 });
@@ -53,8 +57,8 @@ export interface StubOptions {
 /**
  * A small fake of the API: tasks are filtered by listId, parentId, label, dueBefore, q (title or notes) and status; complete/uncomplete
  * change them along with their subtasks; POST /api/tasks creates, GET /api/tasks/{id} reads, PATCH updates (a
- * recurRule not starting "FREQ=" is refused with a 422, as is a rule without recurFrom), move changes list (to the
- * top level, taking subtasks along, as the server does) and DELETE removes a task and its subtasks. `holdRefetch`
+ * recurRule not starting "FREQ=" is refused with a 422, as is a rule without recurFrom), move places a task as the
+ * server does (see `moveIn`) and DELETE removes a task and its subtasks. `holdRefetch`
  * holds task GETs made after the first complete or uncomplete.
  */
 export function stubApi(tasks: Task[], opts: StubOptions = {}) {
@@ -132,11 +136,8 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
       if (opts.failMove || !(await pass("POST", pathname!, JSON.parse(String(init.body))))) return fail("Boom");
       const t = store.get(move[1]!);
       if (!t) return json({ error: { code: "not_found", message: "Task not found" } }, 404);
-      const { listId = t.listId } = JSON.parse(String(init.body)) as { listId?: string };
-      if (listId !== t.listId) for (const d of descendants(t.id)) store.set(d.id, { ...d, listId });
-      const saved = { ...t, listId, parentId: listId === t.listId ? t.parentId : null };
-      store.set(t.id, saved);
-      return json(saved);
+      const saved = moveIn(store, t, JSON.parse(String(init.body)) as MoveBody);
+      return saved ? json(saved) : json({ error: { code: "invalid_placement", message: "Sibling not found in this scope" } }, 422);
     }
     const m = pathname!.match(/^\/api\/tasks\/(\w+)\/(complete|uncomplete)$/);
     if (m && init?.method === "POST") {
@@ -162,6 +163,45 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+interface MoveBody { listId?: string; parentId?: string | null; afterId?: string; beforeId?: string; withSection?: boolean }
+
+const byPosition = (a: Task, b: Task) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0);
+
+/**
+ * POST /api/tasks/{id}/move, as `worker/src/routes/tasks.ts` does it: the task goes after `afterId`, before
+ * `beforeId` or last among its new siblings. Changing list without a parent puts it at the top level there, and
+ * its subtasks follow it. With `withSection` a heading's section (the top-level tasks down to the next heading)
+ * lands straight after it, in order. Null when the placement isn't a sibling (or is inside the section).
+ */
+function moveIn(store: Map<string, Task>, t: Task, body: MoveBody): Task | null {
+  const all = [...store.values()];
+  const listId = body.listId ?? t.listId;
+  const parentId = body.parentId !== undefined ? body.parentId : listId === t.listId ? t.parentId : null;
+  const section: Task[] = [];
+  if (body.withSection) {
+    const topLevel = all.filter((x) => x.listId === t.listId && x.parentId === null).sort(byPosition);
+    for (const x of topLevel.slice(topLevel.indexOf(t) + 1)) {
+      if (x.kind === "heading") break;
+      section.push(x);
+    }
+  }
+  const moving = new Set([t.id, ...section.map((x) => x.id)]);
+  const siblings = all.filter((x) => x.listId === listId && x.parentId === parentId && !moving.has(x.id)).sort(byPosition);
+  const anchor = body.afterId ?? body.beforeId;
+  const at = anchor ? siblings.findIndex((x) => x.id === anchor) : siblings.length;
+  if (at < 0) return null;
+  const [low, high] = body.afterId ? [siblings[at], siblings[at + 1]] : [siblings[at - 1], siblings[at]];
+  const position = generateKeyBetween(low?.position ?? null, high?.position ?? null);
+  const positions = generateNKeysBetween(position, high?.position ?? null, section.length);
+  const subtasks = (id: string): Task[] => all.filter((x) => x.parentId === id).flatMap((x) => [x, ...subtasks(x.id)]);
+  if (listId !== t.listId)
+    for (const top of [t, ...section]) for (const d of subtasks(top.id)) store.set(d.id, { ...d, listId });
+  section.forEach((x, i) => store.set(x.id, { ...x, listId, position: positions[i]! }));
+  const saved = { ...t, listId, parentId, position };
+  store.set(t.id, saved);
+  return saved;
 }
 
 /** What `GET /api/counts` would say for these tasks (snoozing and due times aside). */

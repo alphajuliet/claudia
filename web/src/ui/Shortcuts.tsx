@@ -3,6 +3,9 @@ import { COMMANDS } from "../lib/commands";
 
 const NAMES: Record<string, string> = { ArrowDown: "↓", ArrowUp: "↑", Escape: "Esc", Enter: "Enter", Backspace: "⌫" };
 
+/** A key as shown: "Alt+ArrowUp" reads "⌥↑". */
+const name = (k: string): string => (k.startsWith("Alt+") ? `⌥${name(k.slice(4))}` : NAMES[k] ?? k);
+
 /** One binding as keycaps: "g i" reads "g then i". */
 function Keys({ binding }: { binding: string }) {
   const keys = binding.split(" ");
@@ -11,7 +14,7 @@ function Keys({ binding }: { binding: string }) {
       {keys.map((k, i) => (
         <Fragment key={i}>
           {i > 0 && " then "}
-          <kbd>{NAMES[k] ?? k}</kbd>
+          <kbd>{name(k)}</kbd>
         </Fragment>
       ))}
     </>

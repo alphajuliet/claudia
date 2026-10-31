@@ -1,4 +1,4 @@
-import type { Command, CommandId } from "./commands";
+import { COMMANDS, type Command, type CommandId } from "./commands";
 
 /**
  * Matches keys to commands, one key at a time. A key that starts a chord gives "pending"; the next key within
@@ -39,9 +39,15 @@ export function createMatcher(commands: Command[], chordMs = 1500) {
 
 const NOT_TEXT = new Set(["checkbox", "radio", "button", "submit", "reset", "range", "color", "file", "image"]);
 
-/** True when a key press belongs to the browser or a field: Ctrl, ⌘ or Alt held, or typing in a text field. */
-export function ignoresKeys(e: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; target: EventTarget | null }): boolean {
-  if (e.ctrlKey || e.metaKey || e.altKey) return true;
+/** The keys bound with Alt ("ArrowUp" for "Alt+ArrowUp"): with Alt, only these are ours. */
+const ALT_KEYS = new Set(COMMANDS.flatMap((c) => c.keys).filter((k) => k.startsWith("Alt+")).map((k) => k.slice(4)));
+
+/**
+ * True when a key press belongs to the browser or a field: Ctrl or ⌘ held, Alt held with a key no command binds
+ * with it, or typing in a text field.
+ */
+export function ignoresKeys(e: { ctrlKey: boolean; metaKey: boolean; altKey: boolean; key: string; target: EventTarget | null }): boolean {
+  if (e.ctrlKey || e.metaKey || (e.altKey && !ALT_KEYS.has(e.key))) return true;
   const t = e.target;
   if (!(t instanceof HTMLElement)) return false;
   if (t instanceof HTMLInputElement) return !NOT_TEXT.has(t.type);

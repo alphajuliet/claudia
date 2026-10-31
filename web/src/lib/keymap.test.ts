@@ -11,6 +11,13 @@ describe("createMatcher", () => {
     expect(m.match("q", 0)).toBeNull();
   });
 
+  it("matches keys with Alt", () => {
+    const m = createMatcher(COMMANDS);
+    expect(m.match("Alt+ArrowUp", 0)).toBe("moveUp");
+    expect(m.match("Alt+ArrowDown", 0)).toBe("moveDown");
+    expect(m.match("Alt+j", 0)).toBeNull();
+  });
+
   it("matches a chord typed within the time limit", () => {
     const m = createMatcher(COMMANDS);
     expect(m.match("g", 1000)).toBe("pending");
@@ -43,8 +50,8 @@ describe("createMatcher", () => {
 });
 
 describe("ignoresKeys", () => {
-  const press = (target: EventTarget | null, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean }> = {}) =>
-    ignoresKeys({ ctrlKey: false, metaKey: false, altKey: false, target, ...mods });
+  const press = (target: EventTarget | null, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; key: string }> = {}) =>
+    ignoresKeys({ ctrlKey: false, metaKey: false, altKey: false, key: "j", target, ...mods });
   const el = (tag: string, props: { type?: string } = {}): HTMLElement => Object.assign(document.createElement(tag), props);
 
   it("ignores keys with Ctrl, ⌘ or Alt", () => {
@@ -52,6 +59,14 @@ describe("ignoresKeys", () => {
     expect(press(document.body, { ctrlKey: true })).toBe(true);
     expect(press(document.body, { altKey: true })).toBe(true);
     expect(press(document.body)).toBe(false);
+  });
+
+  it("lets Alt through only for keys bound with it, and not in text fields", () => {
+    expect(press(document.body, { altKey: true, key: "ArrowUp" })).toBe(false);
+    expect(press(document.body, { altKey: true, key: "ArrowDown" })).toBe(false);
+    expect(press(document.body, { altKey: true, key: "j" })).toBe(true);
+    expect(press(document.body, { altKey: true, ctrlKey: true, key: "ArrowUp" })).toBe(true);
+    expect(press(document.createElement("textarea"), { altKey: true, key: "ArrowUp" })).toBe(true);
   });
 
   it("ignores keys typed in text fields but not on checkboxes or buttons", () => {

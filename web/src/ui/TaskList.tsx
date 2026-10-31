@@ -1,9 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import type { Task } from "@claudia/shared";
-import { useDeleteTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
+import { useDeleteTask, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
+import { displayItems, stepMove } from "../lib/reorder";
 import { collapseRows, parentsIn, rowsUnder, type Row } from "../lib/tasks";
 import { setCollapsed, useCollapsed } from "./collapsed";
 import { BottomSheet } from "./BottomSheet";
@@ -282,8 +283,40 @@ function useOpenRow() {
   return { openId, setOpenId };
 }
 
-/** Task rows in sections, with loading, error and empty states. */
-export function TaskList({ query, sections, empty }: { query: QueryState; sections: Section[]; empty: string }) {
+/** Moves the highlighted task with Alt+↑ and Alt+↓, keeping focus on it as its row moves (or remounts) elsewhere. */
+function useStepMove(sections: ShownSection[], current: Task | undefined, order: Task[], enabled: boolean, arrowsHere: (e: KeyboardEvent) => boolean) {
+  const move = useMoveTask();
+  const toast = useToast();
+  // The task last moved from the keyboard: its row gets focus back if the move took it away.
+  const moved = useRef<string | null>(null);
+  const ids = order.map((t) => t.id).join(" ");
+  useEffect(() => {
+    const id = moved.current;
+    if (!id || !current || current.id !== id) return;
+    if (document.activeElement === document.body || !document.activeElement) focusTask(id);
+  }, [ids]); // when the rows change
+  // Once the highlight goes elsewhere, it is an ordinary row again.
+  useEffect(() => {
+    if (current?.id !== moved.current) moved.current = null;
+  }, [current?.id]);
+
+  const step = (direction: -1 | 1) => (e: KeyboardEvent) => {
+    if (!enabled || !current || !arrowsHere(e)) return false;
+    const request = stepMove(displayItems(sections), current, direction);
+    // At the end of the line the key is still ours: it does nothing.
+    if (!request) return;
+    moved.current = current.id;
+    move.mutateAsync({ id: current.id, ...request }).catch((err: Error) => toast.show({ message: err.message, error: true }));
+  };
+  useCommand("moveUp", step(-1));
+  useCommand("moveDown", step(1));
+}
+
+/**
+ * Task rows in sections, with loading, error and empty states. With `reorder` (a list screen), Alt+↑ and Alt+↓
+ * move the highlighted task.
+ */
+export function TaskList({ query, sections, empty, reorder }: { query: QueryState; sections: Section[]; empty: string; reorder?: { listId: string } }) {
   const timeZone = useTimeZone();
   const today = todayIn(timeZone);
   const complete = useComplete();
@@ -357,6 +390,7 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
     !e.key.startsWith("Arrow") || e.target === document.body || (e.target instanceof Element && e.target.closest("main") !== null);
   useCommand("next", (e) => arrowsHere(e) && move(1));
   useCommand("previous", (e) => arrowsHere(e) && move(-1));
+  useStepMove(shownSections, current, order, reorder !== undefined, arrowsHere);
   useCommand("open", (e) => {
     if (!current) return false;
     // Enter on a button or link keeps its own meaning: it opens only from the row itself (or nothing focused).

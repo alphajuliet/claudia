@@ -1,4 +1,5 @@
 import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, type Task } from "@claudia/shared";
+import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
 import { useSession } from "../session/SessionProvider";
@@ -280,10 +281,10 @@ export function useCreateTask() {
 
 const updateKey = taskWriteKey("update");
 
-/** Whether another change to the same task is still running besides this one. */
-const updatingAgain = (queryClient: QueryClient, id: string) =>
+/** Whether another change (of the kind `key` names) to the same task is still running besides this one. */
+const updatingAgain = (queryClient: QueryClient, id: string, key: QueryKey = updateKey) =>
   queryClient.isMutating({
-    mutationKey: updateKey,
+    mutationKey: key,
     predicate: (m) => (m.state.variables as { id?: string } | undefined)?.id === id,
   }) > 1;
 
@@ -316,20 +317,96 @@ export function useUpdateTask() {
   });
 }
 
-export interface TaskMove { id: string; listId?: string; parentId?: string | null; afterId?: string; beforeId?: string }
+export interface TaskMove {
+  id: string;
+  listId?: string;
+  parentId?: string | null;
+  afterId?: string;
+  beforeId?: string;
+  /** For a heading: its section (the top-level tasks down to the next heading) moves straight after it. */
+  withSection?: boolean;
+}
+
+const byPosition = (a: Task, b: Task) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0);
+
+/** The list a cached task list is for (its `listId` query), or null for views, filters and the panel. */
+const listOfKey = (key: QueryKey) => (typeof key[1] === "string" ? new URLSearchParams(key[1]).get("listId") : null);
 
 /**
- * Moves a task (and its subtasks) to another list or parent, or reorders it. Changing list without a parent puts it at
- * the top level there. Lists are refetched rather than changed at once.
+ * Where a move puts its tasks, worked out over every cached copy, as the server does it: the task (and with
+ * `withSection` its section, in order) gets a list, a parent and a position between its new neighbours, and its
+ * subtasks follow it to another list. Null when the task isn't cached, or the neighbours aren't.
+ */
+function movedInCache(queryClient: QueryClient, { id, ...to }: TaskMove): Map<string, Partial<Task>> | null {
+  const all = new Map<string, Task>();
+  for (const [key, tasks] of queryClient.getQueriesData<Task[]>(tasksKey))
+    if (!isOne(key)) for (const t of tasks ?? []) all.set(t.id, t);
+  const task = all.get(id);
+  if (!task) return null;
+  const tasks = [...all.values()];
+  const listId = to.listId ?? task.listId;
+  // Changing list without naming a parent puts the task at the top level there.
+  const parentId = to.parentId !== undefined ? to.parentId : listId === task.listId ? task.parentId : null;
+
+  // A heading's section: the top-level tasks after it, down to the next heading.
+  const topLevel = tasks.filter((t) => t.listId === task.listId && t.parentId === null).sort(byPosition);
+  const section: Task[] = [];
+  if (to.withSection)
+    for (const t of topLevel.slice(topLevel.findIndex((t) => t.id === id) + 1)) {
+      if (t.kind === "heading") break;
+      section.push(t);
+    }
+  const moving = new Set([id, ...section.map((t) => t.id)]);
+
+  const siblings = tasks.filter((t) => t.listId === listId && t.parentId === parentId && !moving.has(t.id)).sort(byPosition);
+  const anchor = to.afterId ?? to.beforeId;
+  const at = anchor ? siblings.findIndex((t) => t.id === anchor) : siblings.length;
+  if (at < 0) return null;
+  const [low, high] = to.afterId ? [siblings[at], siblings[at + 1]] : [siblings[at - 1], siblings[at]];
+  const position = generateKeyBetween(low?.position ?? null, high?.position ?? null);
+  const positions = generateNKeysBetween(position, high?.position ?? null, section.length);
+
+  const out = new Map<string, Partial<Task>>([[id, { listId, parentId, position }]]);
+  section.forEach((t, i) => out.set(t.id, { listId, position: positions[i]! }));
+  if (listId !== task.listId)
+    for (const top of moving) for (const sub of withSubtasks(tasks, top)) if (!out.has(sub)) out.set(sub, { listId });
+  return out;
+}
+
+const moveKey = taskWriteKey("move");
+
+/**
+ * Moves a task (and its subtasks) to another list or parent, or reorders it; with `withSection`, a heading takes its
+ * section along. Changing list without a parent puts it at the top level there, and omitting the placement puts it
+ * last. It moves in every cached list at once (leaving lists for another list); on failure those tasks are put back.
+ * While a later move of the same task is running, an earlier one's answer leaves it where it is shown.
  */
 export function useMoveTask() {
   const { api } = useSession();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationKey: taskWriteKey("move"),
+    mutationKey: moveKey,
     mutationFn: async ({ id, ...to }: TaskMove) => json(await api(`/api/tasks/${id}/move`, send("POST", to)), TaskSchema),
+    onMutate: async (move) => {
+      await queryClient.cancelQueries(tasksKey);
+      const moved = movedInCache(queryClient, move);
+      if (!moved) return { changed: [] };
+      const target = moved.get(move.id)!.listId;
+      return {
+        changed: changeCached(queryClient, (tasks) => new Set(tasks.filter((t) => moved.has(t.id)).map((t) => t.id)), (t, key) => {
+          if (isOne(key)) return t;
+          const list = listOfKey(key);
+          return list && list !== target ? null : { ...t, ...moved.get(t.id) };
+        }),
+      };
+    },
+    onError: (_error, { id }, context) => {
+      if (!updatingAgain(queryClient, id, moveKey)) restoreCached(queryClient, context?.changed);
+    },
     // Where it now sits is shown in any list that has it (such as the detail panel's) until the refetch sorts the rest.
-    onSuccess: (saved) => writeCached(queryClient, saved),
+    onSuccess: (saved) => {
+      if (!updatingAgain(queryClient, saved.id, moveKey)) writeCached(queryClient, saved);
+    },
     onSettled: () => refetchWhenLast(queryClient),
   });
 }

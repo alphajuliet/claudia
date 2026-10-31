@@ -6,7 +6,7 @@ import { createMatcher, ignoresKeys } from "../lib/keymap";
 export type CommandHandler = (e: KeyboardEvent) => boolean | void;
 
 /** Commands that may run again while their key is held down; the rest run once per press. */
-const REPEATS = new Set<CommandId>(["next", "previous"]);
+const REPEATS = new Set<CommandId>(["next", "previous", "moveUp", "moveDown"]);
 
 type Registry = Map<CommandId, CommandHandler[]>;
 
@@ -14,7 +14,7 @@ const KeyboardContext = createContext<Registry | null>(null);
 
 /**
  * One window `keydown` listener for every command. The handler registered last for a command runs it. Keys typed
- * in fields, with Ctrl, ⌘ or Alt, or already handled further in (`preventDefault`, or stopped) are left alone.
+ * in fields, with Ctrl or ⌘ (or Alt, unless bound with it), or already handled further in (`preventDefault`, or stopped) are left alone.
  */
 export function KeyboardProvider({ children }: { children: ReactNode }) {
   const registry = useRef<Registry>(new Map()).current;
@@ -27,7 +27,8 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         return;
       }
       // Caps Lock gives capitals without Shift: read them as the lower-case key (Shift+C stays C).
-      const key = e.key.length === 1 && !e.shiftKey ? e.key.toLowerCase() : e.key;
+      const base = e.key.length === 1 && !e.shiftKey ? e.key.toLowerCase() : e.key;
+      const key = e.altKey ? `Alt+${base}` : base;
       const id = matcher.match(key, Date.now());
       if (id === "pending") {
         e.preventDefault();
