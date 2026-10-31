@@ -1,6 +1,6 @@
 # Phone layout and touch for editing tasks
 
-Date: 2026-11-01. Status: approved.
+Date: 2026-11-01. Status: approved; built.
 
 Board card: "Phone layout and touch for editing tasks" (#Mobile). On a phone today, tapping a title renames it inline (bringing up the keyboard) and the title fills most of the row, so opening a task means hitting the margin. The sheet closes only with a small Close button, the checkbox is about 17px, and the on-screen keyboard can cover the field being edited. This card fixes getting in and out of a task, adds row swipes, and enlarges touch targets. It applies to touch screens (phone and iPad), detected per interaction by pointer type or `(pointer: coarse)`; mouse and keyboard behaviour on desktop is unchanged.
 
@@ -36,3 +36,13 @@ Touch only, built by hand on pointer events (no library).
 ## Not in scope
 
 Drag to reorder (its own BACKLOG card), swipe-down to close, and the phone Today, Capture and Triage screens (their own card).
+
+## As built
+
+- Touch targets are a fixed 44px (`--touch`), not 2.75rem, because the root font is 14.5px. The checkbox shows at about 22px.
+- A tap, or any rightward movement, on a row whose Date and Snooze are showing closes it without opening or completing the task. Completing the open row (checkbox, swipe or `x`) also closes it.
+- A left drag stops at the width of the two buttons. Rows use `touch-action: pan-y pinch-zoom` and, on touch screens, no text selection (inputs excepted).
+- The click after a swipe is ignored only within 500ms of lifting the finger, since iOS sends no click after a drag.
+- A child losing the browser's implicit touch capture (when the row takes it) is not a cancel; only the row losing its own capture is. A browser check with touch emulation caught this; jsdom doesn't model implicit capture.
+- The bottom sheet traps Tab, stops keys reaching the list's commands, hides the field's own label (its title says it), and says "This task no longer exists." for a deleted task.
+- Checked in Chromium with touch emulation at 390px, light and dark; not yet on an iPhone. The sheet still uses the desktop label column on a phone; a phone layout for the panel itself is not part of this card.
