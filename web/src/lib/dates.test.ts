@@ -47,6 +47,16 @@ describe("zonedToUtc and splitIn", () => {
     expect(zonedToUtc("2026-11-03", "00:00", "Australia/Sydney")).toBe("2026-11-02T13:00:00.000Z");
   });
 
+  it("moves a time in the spring-forward gap forward, and takes the first of a repeated hour", () => {
+    expect(zonedToUtc("2026-10-04", "02:30", "Australia/Sydney")).toBe("2026-10-03T16:30:00.000Z");
+    expect(zonedToUtc("2026-04-05", "02:30", "Australia/Sydney")).toBe("2026-04-04T16:30:00.000Z");
+    expect(zonedToUtc("2026-04-05", "01:30", "Australia/Sydney")).toBe("2026-04-04T14:30:00.000Z");
+  });
+
+  it("handles a half-hour zone", () => {
+    expect(zonedToUtc("2026-11-03", "09:00", "Australia/Adelaide")).toBe("2026-11-02T22:30:00.000Z");
+  });
+
   it("splits a timestamp into the local date and time", () => {
     expect(splitIn("2026-11-02T13:00:00.000Z", "Australia/Sydney")).toEqual({ date: "2026-11-03", time: "00:00" });
     expect(splitIn("2026-11-03T08:00:00.000Z", "Australia/Sydney")).toEqual({ date: "2026-11-03", time: "19:00" });

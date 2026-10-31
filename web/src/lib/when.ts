@@ -72,14 +72,15 @@ const hhmm = (h: number, min: number) => `${String(h).padStart(2, "0")}:${String
 /** All of `words` as a time ("HH:MM"), or null. A bare number is not a time. */
 function parseTime(words: string[]): string | null {
   if (words[0] === "at" && words.length > 1) words = words.slice(1);
-  const s = words.join("");
+  const s = words.join(" ");
   if (s === "noon") return "12:00";
   if (s === "midnight") return "00:00";
-  let m = /^(\d{1,2})(?:[:.](\d{2}))?(am|pm|a|p)$/.exec(s);
+  // "3pm", "3p" or "3 pm", but not "3 a": a lone letter after a space is more likely a word.
+  let m = /^(\d{1,2})(?:[:.](\d{2}))?(?:(am|pm|a|p)| (am|pm))$/.exec(s);
   if (m) {
     const h = Number(m[1]), min = Number(m[2] ?? 0);
     if (h < 1 || h > 12 || min > 59) return null;
-    return hhmm((h % 12) + (m[3]!.startsWith("p") ? 12 : 0), min);
+    return hhmm((h % 12) + ((m[3] ?? m[4])!.startsWith("p") ? 12 : 0), min);
   }
   m = /^(\d{1,2}):(\d{2})$/.exec(s);
   if (m && Number(m[1]) < 24 && Number(m[2]) < 60) return hhmm(Number(m[1]), Number(m[2]));
@@ -102,19 +103,20 @@ function parseTail(words: string[], today: string): { date: string | null; time:
   return null;
 }
 
-const MAX_TAIL = 6;
+const MAX_TAIL = 7;
 const word = (w: string) => w.toLowerCase().replace(/[,.]+$/, "");
 
 /**
  * A date or time at the end of quick-add text: the longest tail of words that reads as one, leaving at least one word
- * of title. `matched` is the tail as typed. A time alone is today, or tomorrow once it has passed.
+ * of title. `matched` is the tail as typed. A time alone is today, or tomorrow once it has passed. A tail straight after
+ * "next" or "this" is a half-read phrase ("next weekend"), so it is left as text.
  */
 export function parseWhen(text: string, now: Date, timeZone: string): { title: string; matched: string; when: When } | null {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const today = todayIn(timeZone, now);
   for (let i = Math.max(1, words.length - MAX_TAIL); i < words.length; i++) {
     const tail = parseTail(words.slice(i).map(word), today);
-    if (!tail) continue;
+    if (!tail || /^(next|this)$/.test(word(words[i - 1]!))) continue;
     const date = tail.date ?? (tail.time! > splitIn(now.toISOString(), timeZone).time ? today : addDays(today, 1));
     return { title: words.slice(0, i).join(" "), matched: words.slice(i).join(" "), when: { date, time: tail.time } };
   }

@@ -6,9 +6,16 @@ const toUtc = (date: string) => {
   return new Date(Date.UTC(y!, m! - 1, d!));
 };
 
+/** One formatter per time zone, built once: quick add formats on every keystroke. */
+const cached = (make: (timeZone: string) => Intl.DateTimeFormat) => {
+  const formats = new Map<string, Intl.DateTimeFormat>();
+  return (timeZone: string) => formats.get(timeZone) ?? formats.set(timeZone, make(timeZone)).get(timeZone)!;
+};
+
+const dayFormat = cached((timeZone) => new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }));
+
 /** Today's date (YYYY-MM-DD) in a time zone. */
-export const todayIn = (timeZone: string, at = new Date()) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
+export const todayIn = (timeZone: string, at = new Date()) => dayFormat(timeZone).format(at);
 
 export const daysBetween = (from: string, to: string) => Math.round((toUtc(to).getTime() - toUtc(from).getTime()) / DAY_MS);
 
@@ -35,21 +42,30 @@ export const addDays = (date: string, n: number) => new Date(toUtc(date).getTime
 /** 0 is Sunday. */
 export const weekdayOf = (date: string) => toUtc(date).getUTCDay();
 
-const parts = (timeZone: string, at: Date) =>
-  Object.fromEntries(
+const partsFormat = cached(
+  (timeZone) =>
     new Intl.DateTimeFormat("en-CA", {
       timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
-    }).formatToParts(at).map((p) => [p.type, p.value]),
-  ) as Record<string, string>;
+    }),
+);
+
+const parts = (timeZone: string, at: Date) =>
+  Object.fromEntries(partsFormat(timeZone).formatToParts(at).map((p) => [p.type, p.value])) as Record<string, string>;
+
+// Some engines print midnight as "24" even with h23, so the hour is taken modulo 24.
+const hourOf = (p: Record<string, string>) => +p.hour! % 24;
 
 /** How far the zone is ahead of UTC at an instant, in milliseconds. */
 const offsetAt = (timeZone: string, at: number) => {
   const p = parts(timeZone, new Date(Math.floor(at / 1000) * 1000));
-  const wall = Date.UTC(+p.year!, +p.month! - 1, +p.day!, +p.hour!, +p.minute!, +p.second!);
+  const wall = Date.UTC(+p.year!, +p.month! - 1, +p.day!, hourOf(p), +p.minute!, +p.second!);
   return wall - Math.floor(at / 1000) * 1000;
 };
 
-/** A wall-clock date and time in a zone as a UTC timestamp. Checked twice so it holds across a daylight-saving change. */
+/**
+ * A wall-clock date and time in a zone as a UTC timestamp. Checked twice so it holds across a daylight-saving change;
+ * a time inside the spring-forward gap moves forward (2:30 am in Sydney on 4 October is 3:30 am).
+ */
 export function zonedToUtc(date: string, time: string, timeZone: string): string {
   const [h, m] = time.split(":").map(Number);
   const wall = toUtc(date).getTime() + (h! * 60 + m!) * 60_000;
@@ -61,7 +77,7 @@ export function zonedToUtc(date: string, time: string, timeZone: string): string
 /** A timestamp as the local date and "HH:MM" in a zone. */
 export function splitIn(iso: string, timeZone: string): { date: string; time: string } {
   const p = parts(timeZone, new Date(iso));
-  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${String(hourOf(p)).padStart(2, "0")}:${p.minute}` };
 }
 
 /** "15:05" as "3:05 pm". */
