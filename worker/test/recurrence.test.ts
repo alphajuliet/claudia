@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, daysBetween, isValidRule, nextDueDate, todayIn } from "../src/lib/recurrence";
+import { addDays, daysBetween, isValidRule, nextDueDate, startOfDayIn, todayIn } from "../src/lib/recurrence";
 
 describe("nextDueDate, repeat from due", () => {
   it("completed late: next occurrence after today, not after the old due date", () => {
@@ -79,5 +79,21 @@ describe("date helpers", () => {
     const at = new Date("2026-10-25T15:30:00Z"); // 02:30 on the 26th in Sydney
     expect(todayIn("Australia/Sydney", at)).toBe("2026-10-26");
     expect(todayIn("UTC", at)).toBe("2026-10-25");
+  });
+});
+
+describe("startOfDayIn", () => {
+  it("is local midnight as a UTC instant", () => {
+    expect(startOfDayIn("2026-11-02", "Australia/Sydney").toISOString()).toBe("2026-11-01T13:00:00.000Z"); // AEDT, +11
+    expect(startOfDayIn("2026-07-01", "Australia/Sydney").toISOString()).toBe("2026-06-30T14:00:00.000Z"); // AEST, +10
+    expect(startOfDayIn("2026-11-02", "UTC").toISOString()).toBe("2026-11-02T00:00:00.000Z");
+    expect(startOfDayIn("2026-11-02", "America/New_York").toISOString()).toBe("2026-11-02T05:00:00.000Z");
+  });
+  it("handles the days Sydney changes its clocks", () => {
+    // Daylight saving starts at 2am on Sun 4 Oct 2026 and ends at 3am on Sun 5 Apr 2026: midnight is before both.
+    expect(startOfDayIn("2026-10-04", "Australia/Sydney").toISOString()).toBe("2026-10-03T14:00:00.000Z");
+    expect(startOfDayIn("2026-10-05", "Australia/Sydney").toISOString()).toBe("2026-10-04T13:00:00.000Z");
+    expect(startOfDayIn("2026-04-05", "Australia/Sydney").toISOString()).toBe("2026-04-04T13:00:00.000Z");
+    expect(startOfDayIn("2026-04-06", "Australia/Sydney").toISOString()).toBe("2026-04-05T14:00:00.000Z");
   });
 });

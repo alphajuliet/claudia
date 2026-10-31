@@ -19,6 +19,25 @@ export const daysBetween = (from: string, to: string) => Math.round((toUtc(to).g
 export const todayIn = (timeZone: string, at = new Date()) =>
   new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(at);
 
+/** How far a time zone is ahead of UTC at an instant, in milliseconds. */
+function offsetAt(timeZone: string, at: number): number {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  }).formatToParts(at);
+  const n = (type: string) => Number(parts.find((p) => p.type === type)!.value);
+  return Date.UTC(n("year"), n("month") - 1, n("day"), n("hour"), n("minute"), n("second")) - Math.floor(at / 1000) * 1000;
+}
+
+/**
+ * The instant local midnight starts a date (YYYY-MM-DD) in a time zone. The offset is taken at a first guess,
+ * then again at the result, in case daylight saving changes between the two.
+ */
+export function startOfDayIn(date: string, timeZone: string): Date {
+  const midnightUtc = toUtc(date).getTime();
+  const guess = midnightUtc - offsetAt(timeZone, midnightUtc);
+  return new Date(midnightUtc - offsetAt(timeZone, guess));
+}
+
 /** A rule we can advance: parses, has a FREQ, and is no finer than daily (so the calculation stays cheap). */
 export function isValidRule(rule: string): boolean {
   try {

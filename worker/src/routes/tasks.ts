@@ -1,6 +1,6 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { BatchItem } from "drizzle-orm/batch";
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import {
   IdParam,
   TaskCreateSchema,
@@ -16,7 +16,7 @@ import { eventQuery } from "../lib/events";
 import { newId, now } from "../lib/ids";
 import { chunk, resolveLabelIds } from "../lib/labels";
 import { positionFor } from "../lib/position";
-import { addDays, daysBetween, isValidRule, nextDueDate, todayIn, userTimeZone } from "../lib/recurrence";
+import { addDays, daysBetween, isValidRule, nextDueDate, startOfDayIn, todayIn, userTimeZone } from "../lib/recurrence";
 import {
   commonErrors,
   jsonBody,
@@ -126,15 +126,20 @@ const setLabels = (db: Db, taskId: string, ids: string[]): BatchItem<"sqlite">[]
 
 const snapshot = (r: Row, names: string[]) => toTask(r, names);
 
-/** Tasks matching a query, in list order. Shared by `GET /api/tasks` and saved filters. */
+/**
+ * Tasks matching a query, in list order. Shared by `GET /api/tasks` and saved filters.
+ * Due ranges match a due date, or a due time by its day in the user's time zone.
+ */
 export async function findTasks(db: Db, q: z.infer<typeof TaskQuerySchema>) {
+  const timeZone = q.dueBefore || q.dueAfter ? await userTimeZone(db) : null;
+  const dayStart = (date: string) => startOfDayIn(date, timeZone!).toISOString();
   const where = and(
     live,
     q.listId ? eq(tasks.listId, q.listId) : undefined,
     q.parentId ? eq(tasks.parentId, q.parentId) : undefined,
     q.status === "open" ? isNull(tasks.completedAt) : q.status === "completed" ? isNotNull(tasks.completedAt) : undefined,
-    q.dueBefore ? lte(tasks.dueDate, q.dueBefore) : undefined,
-    q.dueAfter ? gte(tasks.dueDate, q.dueAfter) : undefined,
+    q.dueBefore ? or(lte(tasks.dueDate, q.dueBefore), lt(tasks.dueAt, dayStart(addDays(q.dueBefore, 1)))) : undefined,
+    q.dueAfter ? or(gte(tasks.dueDate, q.dueAfter), gte(tasks.dueAt, dayStart(q.dueAfter))) : undefined,
     q.q ? sql`(instr(lower(${tasks.title}), lower(${q.q})) > 0 OR instr(lower(coalesce(${tasks.notes}, '')), lower(${q.q})) > 0)` : undefined,
     q.label
       ? sql`EXISTS (SELECT 1 FROM ${taskLabels} tl JOIN ${labels} l ON l.id = tl.label_id WHERE tl.task_id = ${tasks.id} AND lower(l.name) = lower(${q.label}))`

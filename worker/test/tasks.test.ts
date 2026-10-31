@@ -120,6 +120,20 @@ describe("queries", () => {
     expect(await query("?q=rent")).toEqual(["Pay rent", "Call dentist"]);
   });
 
+  it("matches due times by their day in the user's time zone", async () => {
+    await task("Dinner", { dueAt: "2026-11-02T08:00:00.000Z" }); // 7pm on Mon 2 Nov in Sydney
+    await task("Early call", { dueAt: "2026-11-01T14:00:00.000Z" }); // 1am on Mon 2 Nov in Sydney, still 1 Nov in UTC
+    await task("Pay rent", { dueDate: "2026-11-02" });
+
+    expect(await query("?dueBefore=2026-11-02")).toEqual(["Dinner", "Early call", "Pay rent"]);
+    expect(await query("?dueBefore=2026-11-01")).toEqual([]);
+    expect(await query("?dueAfter=2026-11-02")).toEqual(["Dinner", "Early call", "Pay rent"]);
+    expect(await query("?dueAfter=2026-11-03")).toEqual([]);
+
+    await api("PUT", "/api/settings/timeZone", { value: "UTC" });
+    expect(await query("?dueBefore=2026-11-01")).toEqual(["Early call"]);
+  });
+
   it("filters by list and parent, and pages", async () => {
     await task("In inbox");
     await api("POST", "/api/tasks", { listId: other.id, title: "In other" });
