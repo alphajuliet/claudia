@@ -54,10 +54,10 @@ describe("selecting a task", () => {
     expect(href()).toBe(`/list/${garden.id}`);
   });
 
-  it("closes with the close button or Escape in the panel, keeping the path", async () => {
+  it("closes with the Done button or Escape in the panel, keeping the path", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { view, p } = await openOn(weed);
-    await userEvent.click(p.getByRole("button", { name: "Close" }));
+    await userEvent.click(p.getByRole("button", { name: "Done" }));
     expect(view.href()).toBe(`/list/${garden.id}`);
     await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
 
@@ -81,7 +81,7 @@ describe("selecting a task", () => {
     const { href } = renderAt("/inbox?task=01JB0000000000000000099999");
     const p = await inPanel();
     expect(await p.findByText("This task no longer exists.")).toBeTruthy();
-    await userEvent.click(p.getByRole("button", { name: "Close" }));
+    await userEvent.click(p.getByRole("button", { name: "Done" }));
     expect(href()).toBe("/inbox");
   });
 });
@@ -533,7 +533,7 @@ describe("the detail panel", () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
     fireEvent.change(p.getByLabelText("Due date"), { target: { value: "2026-11-05" } });
-    await userEvent.click(p.getByRole("button", { name: "Close" }));
+    await userEvent.click(p.getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: "2026-11-05", dueAt: null }]));
     await new Promise((resolve) => setTimeout(resolve, 700));

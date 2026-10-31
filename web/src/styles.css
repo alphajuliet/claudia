@@ -528,9 +528,16 @@ input.task-title-input {
 .detail:focus { outline: none; }
 
 .detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   justify-content: flex-end;
   padding: 0.6rem 0.75rem 0;
+  background: var(--bg);
+}
+@media (pointer: coarse) {
+  .detail-done { min-width: 2.75rem; min-height: 2.75rem; }
 }
 
 .detail-body {

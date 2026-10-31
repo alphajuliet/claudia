@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import type { Task } from "@claudia/shared";
 import { formatDue, todayIn } from "../lib/dates";
 import { InlineMarkdown, plainText } from "./Markdown";
@@ -10,8 +10,15 @@ export const dueDateOf = (task: Task, timeZone: string) =>
 /**
  * The title (inline Markdown), as a button that turns into a text input showing the raw text. Enter or leaving the field saves a changed,
  * non-empty title through `onRename`; Escape cancels. After a keyboard save or cancel, focus returns to the title.
+ * A tap (the row's last pointer was touch or pen) calls `onOpen` instead, when given, so a phone opens the task
+ * rather than bringing up the keyboard.
  */
-function TaskTitle({ task, onRename }: { task: Task; onRename: (task: Task, title: string) => void }) {
+function TaskTitle({ task, onRename, onOpen, pointerType }: {
+  task: Task;
+  onRename: (task: Task, title: string) => void;
+  onOpen?: () => void;
+  pointerType: RefObject<string | null>;
+}) {
   const [draft, setDraft] = useState<string | null>(null);
   const done = useRef(false);
   const refocus = useRef(false);
@@ -45,7 +52,11 @@ function TaskTitle({ task, onRename }: { task: Task; onRename: (task: Task, titl
         role="button"
         tabIndex={0}
         className="task-title"
-        onClick={edit}
+        onClick={() => {
+          const type = pointerType.current;
+          if (onOpen && (type === "touch" || type === "pen")) onOpen();
+          else edit();
+        }}
         onKeyDown={(e) => {
           // Keys on a link inside the title are the link's.
           if (e.target !== e.currentTarget) return;
@@ -89,7 +100,7 @@ function TaskTitle({ task, onRename }: { task: Task; onRename: (task: Task, titl
 
 /**
  * One task. While `pending` (a complete or reopen is running), its checkbox is disabled so a double click sends one.
- * `onSelect` is called for clicks on the row outside the checkbox and title (it opens the detail panel); `selected`
+ * `onSelect` is called for clicks on the row outside the checkbox and title, and for taps on the title (it opens the detail panel); `selected`
  * marks the row whose details are showing. The row can take focus (the keyboard highlight), and focus anywhere in
  * it calls `onHighlight`.
  */
@@ -130,6 +141,8 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
 }) {
   const due = dueDateOf(task, timeZone);
   const label = due ? formatDue(due, today) : null;
+  // The pointer type of the last press in the row: a tap on the title opens the task instead of renaming it.
+  const pointerType = useRef<string | null>(null);
   const onRowClick = (e: MouseEvent<HTMLLIElement>) => {
     if (onSelect && !(e.target as Element).closest(".task-check, .task-title, .disclosure")) onSelect(task);
   };
@@ -140,6 +153,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
       tabIndex={-1}
       data-task-id={task.id}
       onFocus={() => onHighlight?.(task)}
+      onPointerDown={(e) => { pointerType.current = e.pointerType; }}
       data-depth={depth} style={{ "--depth": depth } as CSSProperties} onClick={onRowClick}>
       {expandable && <Disclosure title={task.title} collapsed={collapsed} onToggle={(c) => onToggle?.(task, c)} />}
       <input
@@ -150,7 +164,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
         disabled={pending}
         onChange={() => onComplete(task)}
       />
-      <TaskTitle task={task} onRename={onRename} />
+      <TaskTitle task={task} onRename={onRename} onOpen={onSelect && (() => onSelect(task))} pointerType={pointerType} />
       <span className="task-meta">
         {task.labels.map((l) => <span key={l} className="chip">{l}</span>)}
         {label && <span className={label.overdue ? "due overdue" : "due"}>{label.text}</span>}

@@ -154,7 +154,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
   return (
     <aside ref={ref} className="detail" aria-label="Task details" tabIndex={-1} onKeyDown={onKeyDown}>
       <header className="detail-header">
-        <button type="button" className="quiet small" onClick={onClose}>Close</button>
+        <button type="button" className="quiet small detail-done" onClick={onClose}>Done</button>
       </header>
       <div className="detail-body">
         <Body id={id} onClose={onClose} />

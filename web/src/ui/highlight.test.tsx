@@ -70,12 +70,12 @@ describe("the keyboard highlight", () => {
     expect(document.activeElement).toBe(row("Plant tomatoes"));
   });
 
-  it("gives focus back to the row when the panel's Close button is used", async () => {
+  it("gives focus back to the row when the panel's Done button is used", async () => {
     const { tasks } = threeTasks();
     await main().findByText("Weed the beds");
     await userEvent.click(row("Plant tomatoes"));
     expect(panel()).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Close" }));
+    await userEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(panel()).toBeNull();
     expect(document.activeElement).toBe(row("Plant tomatoes"));
     expect(tasks).toHaveLength(3);
