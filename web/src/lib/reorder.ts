@@ -4,8 +4,11 @@ import type { Row } from "./tasks";
 /** The rows as shown, in order: headings and task rows with their depth. Collapsed parts are not in it. */
 export type Item = { kind: "heading"; task: Task } | { kind: "row"; task: Task; depth: number };
 
-/** A request for POST /api/tasks/{id}/move (id separate). `parentId` is always sent, null for the top level. */
-export interface MoveRequest { parentId: string | null; beforeId?: string; listId?: string; withSection?: true }
+/**
+ * A request for POST /api/tasks/{id}/move (id separate). `parentId` is always sent, null for the top level.
+ * `afterId` (a heading, never with `beforeId`) puts a task first in that heading's section, hidden tasks or not.
+ */
+export interface MoveRequest { parentId: string | null; beforeId?: string; afterId?: string; listId?: string; withSection?: true }
 
 /** Where a drop lands. */
 export type Drop =
@@ -54,6 +57,9 @@ function previousAt(items: Item[], i: number, depth: number): Item | undefined {
 
 const request = (parentId: string | null, before?: Item): MoveRequest => (before ? { parentId, beforeId: before.task.id } : { parentId });
 
+/** First in the section of `heading`. */
+const firstUnder = (heading: Item): MoveRequest => ({ parentId: null, afterId: heading.task.id });
+
 const sectionRequest = (before?: Item): MoveRequest => ({ ...request(null, before), withSection: true });
 
 /** The items left once the dragged task and everything under it (its subtasks, or a heading's section) are taken out. */
@@ -81,16 +87,20 @@ export function headingGaps(items: Item[]): number[] {
   return [...gaps, items.length];
 }
 
-/** Where a task is now, as a move request: for Undo after a move to another list. A heading's place is past its section. */
+/**
+ * Where a task is now, as a move request: for Undo after a move to another list. A heading's place is past its
+ * section, and a task straight after a heading is first under it.
+ */
 export function placeOf(items: Item[], task: Task): MoveRequest {
   const i = items.findIndex((item) => item.task.id === task.id);
   if (i < 0) return request(task.parentId);
   const item = items[i]!;
   if (item.kind === "heading") return request(null, items[endOf(items, i)]);
+  if (item.depth === 0 && items[i - 1]?.kind === "heading") return firstUnder(items[i - 1]!);
   return request(task.parentId, nextAt(items, i + 1, item.depth));
 }
 
-const samePlace = (a: MoveRequest, b: MoveRequest) => a.parentId === b.parentId && a.beforeId === b.beforeId;
+const samePlace = (a: MoveRequest, b: MoveRequest) => a.parentId === b.parentId && a.beforeId === b.beforeId && a.afterId === b.afterId;
 
 /** The move request for a drop, or null when it lands where the task already is. `items` excludes the dragged ones. */
 export function moveFor(items: Item[], dragged: Task, drop: Drop, original: Item[]): MoveRequest | null {
@@ -103,7 +113,7 @@ export function moveFor(items: Item[], dragged: Task, drop: Drop, original: Item
   if (drop.kind === "into") {
     const target = items.find((item) => item.task.id === drop.taskId);
     if (target?.kind !== "row") return null;
-    return was.parentId === drop.taskId && !was.beforeId ? null : { parentId: drop.taskId };
+    return was.parentId === drop.taskId && !was.beforeId && !was.afterId ? null : { parentId: drop.taskId };
   }
   const { index, depth } = drop;
   let parentId: string | null = null;
@@ -114,7 +124,8 @@ export function moveFor(items: Item[], dragged: Task, drop: Drop, original: Item
     if (parent?.kind !== "row" || parent.depth !== depth - 1) return null;
     parentId = parent.task.id;
   }
-  const next = request(parentId, nextAt(items, index, depth));
+  const above = items[index - 1];
+  const next = depth === 0 && above?.kind === "heading" ? firstUnder(above) : request(parentId, nextAt(items, index, depth));
   return samePlace(next, was) ? null : next;
 }
 
@@ -140,7 +151,7 @@ export function stepMove(items: Item[], task: Task, direction: -1 | 1): MoveRequ
   }
   const next = nextAt(items, endOf(items, i), item.depth);
   if (!next) return null;
-  const n = items.indexOf(next);
-  // Past a heading the task goes first in its section: before the item straight after the heading.
-  return request(parentId, nextAt(items, next.kind === "heading" ? n + 1 : endOf(items, n), item.depth));
+  // Past a heading the task goes first in its section, even when the section is collapsed.
+  if (next.kind === "heading") return firstUnder(next);
+  return request(parentId, nextAt(items, endOf(items, items.indexOf(next)), item.depth));
 }

@@ -145,7 +145,10 @@ describe("placeOf", () => {
 
   it("leaves the placement out for the last child", () => {
     expect(placeOf(items, find(items, "c"))).toEqual({ parentId: "a" });
-    expect(placeOf(items, find(items, "e"))).toEqual({ parentId: null });
+  });
+
+  it("places a task straight after a heading first under it", () => {
+    expect(placeOf(items, find(items, "e"))).toEqual({ parentId: null, afterId: "H" });
   });
 
   it("counts a heading as the next top-level sibling", () => {
@@ -202,7 +205,24 @@ describe("moveFor: gaps", () => {
   it("puts a task first in a section when dropped after its heading", () => {
     const items = outline("a", "b", "# H", "c");
     // Without a: [b, H, c], the gap after H.
-    expect(drop(items, "a", { kind: "gap", index: 2, depth: 0 })).toEqual({ parentId: null, beforeId: "c" });
+    expect(drop(items, "a", { kind: "gap", index: 2, depth: 0 })).toEqual({ parentId: null, afterId: "H" });
+  });
+
+  it("puts a task first in a collapsed section when dropped after its heading", () => {
+    const items = outline("a", "b", "# H", "# H2", "c"); // H is collapsed: no visible rows
+    // Without a: [b, H, H2, c], the gap after H.
+    expect(drop(items, "a", { kind: "gap", index: 2, depth: 0 })).toEqual({ parentId: null, afterId: "H" });
+  });
+
+  it("is null for the first task under a heading dropped back there", () => {
+    const items = outline("a", "# H", "b", "c");
+    // Without b: [a, H, c], the gap after H.
+    expect(drop(items, "b", { kind: "gap", index: 2, depth: 0 })).toBeNull();
+  });
+
+  it("moves a task first under its heading from further down the section", () => {
+    const items = outline("# H", "b", "c");
+    expect(drop(items, "c", { kind: "gap", index: 1, depth: 0 })).toEqual({ parentId: null, afterId: "H" });
   });
 
   it("moves a task with subtasks", () => {
@@ -354,11 +374,21 @@ describe("stepMove: top-level tasks", () => {
   });
 
   it("moves down past a heading to the start of its section", () => {
-    expect(stepMove(items, find(items, "b"), 1)).toEqual({ parentId: null, beforeId: "c" });
+    expect(stepMove(items, find(items, "b"), 1)).toEqual({ parentId: null, afterId: "H" });
   });
 
-  it("moves down past a heading with an empty section to the end", () => {
-    expect(stepMove(items, find(items, "d"), 1)).toEqual({ parentId: null });
+  it("moves down past a heading with an empty section to the start of it", () => {
+    expect(stepMove(items, find(items, "d"), 1)).toEqual({ parentId: null, afterId: "H2" });
+  });
+
+  it("moves down past a collapsed heading to the start of its section", () => {
+    const collapsed = outline("a", "# H", "# H2", "c"); // H is collapsed: no visible rows
+    expect(stepMove(collapsed, find(collapsed, "a"), 1)).toEqual({ parentId: null, afterId: "H" });
+  });
+
+  it("moves the first task under a heading up to the end of the section above", () => {
+    const first = outline("a", "# H", "b");
+    expect(stepMove(first, find(first, "b"), -1)).toEqual({ parentId: null, beforeId: "H" });
   });
 
   it("is null at the ends", () => {
