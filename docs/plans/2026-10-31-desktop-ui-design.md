@@ -1,6 +1,6 @@
 # Desktop daily driver: design
 
-Date: 2026-10-31. Status: approved; step 1 built.
+Date: 2026-10-31. Status: approved; steps 1 and 2 built.
 
 The first real web UI. It replaces the signed-in placeholder with a three-pane desktop app that later phone and iPad layouts reuse. Godspeed is the reference for look and keys.
 
@@ -13,7 +13,7 @@ The first real web UI. It replaces the signed-in placeholder with a three-pane d
   - A context switch (All, Work, Personal, Home) that narrows both the tree and every view. The choice is remembered in the browser.
   - Sign out at the bottom.
 - **Task list (centre).** Each row has a checkbox, title, label chips and the due date shown relatively ("Today", "Tomorrow", "Fri", "3 Nov"; overdue in red). In a list, rows follow list order with subtasks indented and headings as section titles. In a view, rows group under their list's name, lists in sidebar order.
-- **Detail panel (right).** Step 2.
+- **Detail panel (right).** Built in step 2.
 
 ## Views
 
