@@ -100,6 +100,8 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   onSave: (when: When | null) => void;
 }) {
   const shown = value && formatWhen(value, today, nowTime);
+  // Without times, a new day drops the one already set (such as an imported due time on a repeating task).
+  const keptTime = timeDisabled ? null : value?.time ?? null;
   return (
     <Field label={label} group>
       <div className="when">
@@ -122,7 +124,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
               key={c.label}
               type="button"
               className="quiet small"
-              onClick={() => onSave({ date: c.date, time: c.time ?? value?.time ?? null })}
+              onClick={() => onSave({ date: c.date, time: timeDisabled ? null : c.time ?? keptTime })}
             >
               {c.label}
             </button>
@@ -134,7 +136,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
             label={`${label} date`}
             value={value?.date ?? null}
             complete={wholeDate}
-            onSave={(date) => onSave(date ? { date, time: value?.time ?? null } : null)}
+            onSave={(date) => onSave(date ? { date, time: keptTime } : null)}
           />
           <IdleInput
             type="time"

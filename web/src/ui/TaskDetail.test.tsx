@@ -168,6 +168,13 @@ describe("the detail panel", () => {
     expect(p.getByRole("group", { name: "Due" }).textContent).toContain(shown.text);
   });
 
+  it("changing a repeating task's day drops its due time", async () => {
+    const call = task({ title: "Call Sam", listId: garden.id, dueAt: "2026-11-03T08:00:00.000Z", recurRule: "FREQ=WEEKLY", recurFrom: "due" });
+    const { fetchMock, p } = await openOn(call);
+    await userEvent.click(within(p.getByRole("group", { name: "Due" })).getByRole("button", { name: "Tomorrow" }));
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${call.id}`)).toEqual([{ dueDate: addDays(today, 1), dueAt: null }]);
+  });
+
   it("a repeating task can't take a time", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-11-05", recurRule: "FREQ=WEEKLY", recurFrom: "due" });
     const { p } = await openOn(weed);
