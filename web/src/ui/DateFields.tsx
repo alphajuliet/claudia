@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { Task } from "@claudia/shared";
 import { formatWhen, splitIn, todayIn, type When } from "../lib/dates";
 import { dueFields, quickDates } from "../lib/when";
@@ -22,9 +22,10 @@ const wholeTime = (time: string) => TIME.test(time);
  * A native date or time input. A complete value saves after a moment without changes, or on leaving the field, so
  * retyping a day sends one save. One still being typed (a year on its way to 2026) waits until leaving the field.
  */
-function IdleInput({ type, label, value, complete, disabled = false, onSave }: {
+function IdleInput({ type, label, value, complete, disabled = false, describedBy, onSave }: {
   type: "date" | "time";
   label: string;
+  describedBy?: string;
   value: string | null;
   complete: (value: string) => boolean;
   disabled?: boolean;
@@ -63,6 +64,7 @@ function IdleInput({ type, label, value, complete, disabled = false, onSave }: {
       className="detail-date"
       aria-label={label}
       disabled={disabled}
+      aria-describedby={describedBy}
       value={draft ?? value ?? ""}
       onChange={(e) => {
         const typed = e.target.value;
@@ -72,8 +74,8 @@ function IdleInput({ type, label, value, complete, disabled = false, onSave }: {
       }}
       onBlur={() => {
         cancel();
-        // A browser's date and time fields report a whole value or "".
-        if (draft !== null) save(draft);
+        // Only a whole value or none: a year left at 0202 isn't saved.
+        if (draft !== null && (draft === "" || complete(draft))) save(draft);
         setDraft(null);
       }}
     />
@@ -100,6 +102,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   onSave: (when: When | null) => void;
 }) {
   const shown = value && formatWhen(value, today, nowTime);
+  const noteId = useId();
   // Without times, a new day drops the one already set (such as an imported due time on a repeating task).
   const keptTime = timeDisabled ? null : value?.time ?? null;
   return (
@@ -124,6 +127,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
               key={c.label}
               type="button"
               className="quiet small"
+              aria-label={`${label}: ${c.label}`}
               onClick={() => onSave({ date: c.date, time: timeDisabled ? null : c.time ?? keptTime })}
             >
               {c.label}
@@ -144,10 +148,11 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
             value={value?.time ?? null}
             complete={wholeTime}
             disabled={timeDisabled}
+            describedBy={timeDisabled ? noteId : undefined}
             onSave={(time) => onSave(time ? { date: value?.date ?? today, time } : value && { date: value.date, time: null })}
           />
         </div>
-        {timeDisabled && <p className="when-note muted">Times on repeating tasks are coming</p>}
+        {timeDisabled && <p id={noteId} className="when-note muted">Times on repeating tasks are coming</p>}
       </div>
     </Field>
   );

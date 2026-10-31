@@ -119,7 +119,8 @@ function Body({ id, onClose }: { id: string; onClose: () => void }) {
       <TitleField task={task} />
       <NotesField task={task} />
       <div className="detail-fields">
-        <DateFields task={task} timeZone={timeZone} onClose={onClose} />
+        {/* Keyed so a date still being typed can't show on, or save to, the next task. */}
+        <DateFields key={task.id} task={task} timeZone={timeZone} onClose={onClose} />
         <LabelsField task={task} />
         <ListField task={task} />
         <RepeatField task={task} />
