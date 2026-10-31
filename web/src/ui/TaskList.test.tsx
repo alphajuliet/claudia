@@ -1,0 +1,209 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import { Router } from "wouter";
+import { memoryLocation } from "wouter/memory-location";
+import type { Folder, List, Task } from "@claudia/shared";
+import { formatDue, todayIn } from "../lib/dates";
+import { SessionProvider } from "../session/SessionProvider";
+import { tokenStore } from "../session/store";
+import { AppShell } from "./AppShell";
+
+const me = { name: "laptop", scopes: ["write"], expiresAt: null };
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+const at = "2026-10-31T00:00:00.000Z";
+const today = todayIn("Australia/Sydney");
+const addDays = (date: string, n: number) => new Date(Date.parse(`${date}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+
+const work: Folder = { id: "01JC0000000000000000000001", name: "Acme", parentId: null, context: "work", position: "a0", createdAt: at, updatedAt: at };
+const personal: Folder = { id: "01JC0000000000000000000002", name: "Life", parentId: null, context: "personal", position: "a1", createdAt: at, updatedAt: at };
+const list = (id: string, name: string, folderId: string | null, position = "a0"): List =>
+  ({ id, name, folderId, position, archivedAt: null, createdAt: at, updatedAt: at });
+// The Inbox sorts after Errands by position, but views still put it first.
+const inbox = list("01JA0000000000000000000001", "Inbox", null, "a5");
+const errands = list("01JA0000000000000000000004", "Errands", null, "a0");
+const projects = list("01JA0000000000000000000002", "Projects", work.id);
+const garden = list("01JA0000000000000000000003", "Garden", personal.id);
+
+let seq = 0;
+const task = (fields: Partial<Task> & Pick<Task, "title" | "listId">): Task => ({
+  id: `01JB00000000000000000000${String(++seq).padStart(2, "0")}`, parentId: null, kind: "task", position: `a${seq}`,
+  notes: null, dueDate: null, dueAt: null, startDate: null, snoozedUntil: null, recurRule: null, recurFrom: null,
+  completedAt: null, labels: [], metadata: null, createdAt: at, updatedAt: at, ...fields,
+});
+
+/** A small fake of the API: tasks are filtered by listId, label and status, and complete/uncomplete change them. */
+function stubApi(tasks: Task[], opts: { failComplete?: boolean } = {}) {
+  const store = new Map(tasks.map((t) => [t.id, t]));
+  const bodies: Record<string, unknown> = {
+    "/api/me": me,
+    "/api/folders": [work, personal],
+    "/api/lists": [inbox, errands, projects, garden],
+    "/api/filters": [],
+    "/api/settings": {},
+  };
+  const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+    if (path in bodies) return json(bodies[path]);
+    const [pathname, search = ""] = path.split("?");
+    if (pathname === "/api/tasks") {
+      const q = new URLSearchParams(search);
+      const out = [...store.values()].filter((t) =>
+        (q.get("status") !== "open" || t.completedAt === null)
+        && (!q.get("listId") || t.listId === q.get("listId"))
+        && (!q.get("label") || t.labels.includes(q.get("label")!)));
+      return json(out);
+    }
+    const m = pathname!.match(/^\/api\/tasks\/(\w+)\/(complete|uncomplete)$/);
+    if (m && init?.method === "POST") {
+      const t = store.get(m[1]!)!;
+      if (m[2] === "complete") {
+        if (opts.failComplete) return json({ error: { code: "internal", message: "Boom" } }, 500);
+        const saved = t.recurRule ? { ...t, dueDate: addDays(t.dueDate!, 7) } : { ...t, completedAt: at };
+        store.set(t.id, saved);
+        return json(saved);
+      }
+      const saved = { ...t, completedAt: null };
+      store.set(t.id, saved);
+      return json(saved);
+    }
+    return json({ error: { code: "not_found", message: "Not found" } }, 404);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+function renderAt(path: string) {
+  tokenStore.set("cl_test");
+  const location = memoryLocation({ path });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(
+    <QueryClientProvider client={client}>
+      <SessionProvider>
+        <Router hook={location.hook}>
+          <AppShell />
+        </Router>
+      </SessionProvider>
+    </QueryClientProvider>,
+  );
+}
+
+const main = () => within(screen.getByRole("main"));
+const groupTitles = () => main().getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
+
+describe("task lists", () => {
+  it("groups a view by list in sidebar order, Inbox first, and hides snoozed tasks", async () => {
+    stubApi([
+      task({ title: "Weed the beds", listId: garden.id, labels: ["next"] }),
+      task({ title: "Draft the brief", listId: projects.id, labels: ["next"] }),
+      task({ title: "Buy stamps", listId: errands.id, labels: ["next"] }),
+      task({ title: "Sort the post", listId: inbox.id, labels: ["next"] }),
+      task({ title: "Later, maybe", listId: garden.id, labels: ["next"], snoozedUntil: "2999-01-01T00:00:00.000Z" }),
+      task({ title: "Not next", listId: garden.id }),
+    ]);
+    renderAt("/next");
+    expect(await main().findByText("Weed the beds")).toBeTruthy();
+    expect(groupTitles()).toEqual(["Inbox", "Errands", "Projects", "Garden"]);
+    expect(main().queryByText("Later, maybe")).toBeNull();
+    expect(main().queryByText("Not next")).toBeNull();
+    const projectsGroup = within(screen.getByRole("region", { name: "Projects" }));
+    expect(projectsGroup.getByRole("checkbox", { name: "Complete Draft the brief" })).toBeTruthy();
+  });
+
+  it("narrows a view to the current context", async () => {
+    localStorage.setItem("claudia.context", "work");
+    stubApi([
+      task({ title: "Weed the beds", listId: garden.id, labels: ["next"] }),
+      task({ title: "Draft the brief", listId: projects.id, labels: ["next"] }),
+      task({ title: "Sort the post", listId: inbox.id, labels: ["next"] }),
+    ]);
+    renderAt("/next");
+    expect(await main().findByText("Draft the brief")).toBeTruthy();
+    expect(main().getByText("Sort the post")).toBeTruthy();
+    expect(main().queryByText("Weed the beds")).toBeNull();
+  });
+
+  it("shows a list in outline order with subtasks indented and headings as section titles", async () => {
+    const parent = task({ title: "Plan the trip", listId: garden.id });
+    stubApi([
+      parent,
+      task({ title: "Book flights", listId: garden.id, parentId: parent.id }),
+      task({ title: "Spring", listId: garden.id, kind: "heading" }),
+      task({ title: "Plant tomatoes", listId: garden.id, labels: ["wip"], dueDate: addDays(today, -2) }),
+    ]);
+    renderAt(`/list/${garden.id}`);
+    expect(await main().findByText("Book flights")).toBeTruthy();
+    expect(main().getByRole("heading", { level: 1, name: "Garden" })).toBeTruthy();
+    expect(main().getByRole("heading", { level: 2, name: "Spring" })).toBeTruthy();
+    expect(main().queryByRole("checkbox", { name: "Complete Spring" })).toBeNull();
+
+    const rows = main().getAllByRole("listitem");
+    expect(rows.map((r) => r.textContent?.includes("Plan the trip") ? "parent" : r.textContent?.includes("Book flights") ? "child" : "other").slice(0, 2))
+      .toEqual(["parent", "child"]);
+    expect(rows[0]!.getAttribute("data-depth")).toBe("0");
+    expect(rows[1]!.getAttribute("data-depth")).toBe("1");
+
+    const overdue = main().getByText(formatDue(addDays(today, -2), today).text);
+    expect(overdue.classList.contains("overdue")).toBe(true);
+    expect(main().getByText("wip")).toBeTruthy();
+  });
+
+  it("renders the Inbox list at its own address", async () => {
+    stubApi([task({ title: "Sort the post", listId: inbox.id })]);
+    renderAt(`/list/${inbox.id}`);
+    expect(await main().findByText("Sort the post")).toBeTruthy();
+    expect(main().getByRole("heading", { level: 1, name: "Inbox" })).toBeTruthy();
+  });
+
+  it("shows empty states", async () => {
+    stubApi([]);
+    renderAt("/inbox");
+    expect(await main().findByText("Inbox zero.")).toBeTruthy();
+  });
+
+  it("shows an error with Try again", async () => {
+    stubApi([]);
+    const fetchMock = vi.mocked(fetch);
+    const real = fetchMock.getMockImplementation()!;
+    let failing = true;
+    fetchMock.mockImplementation(async (path, init) =>
+      failing && String(path).startsWith("/api/tasks?") ? json({ error: { code: "internal", message: "Database unavailable" } }, 500) : real(path, init));
+    renderAt("/next");
+    expect(await main().findByText("Database unavailable")).toBeTruthy();
+    failing = false;
+    await userEvent.click(main().getByRole("button", { name: "Try again" }));
+    expect(await main().findByText("Nothing here.")).toBeTruthy();
+  });
+
+  it("completes a plain task, removes it and offers Undo", async () => {
+    const plain = task({ title: "Buy stamps", listId: errands.id, labels: ["next"] });
+    const fetchMock = stubApi([plain]);
+    renderAt("/next");
+    await userEvent.click(await main().findByRole("checkbox", { name: "Complete Buy stamps" }));
+    expect(main().queryByText("Buy stamps")).toBeNull();
+    const toast = await screen.findByRole("status");
+    await waitFor(() => expect(toast.textContent).toContain("Completed “Buy stamps”"));
+
+    await userEvent.click(within(toast).getByRole("button", { name: "Undo" }));
+    expect(fetchMock).toHaveBeenCalledWith(`/api/tasks/${plain.id}/uncomplete`, expect.objectContaining({ method: "POST" }));
+    expect(await main().findByText("Buy stamps")).toBeTruthy();
+  });
+
+  it("completes a repeating task, keeps it and shows its next due date", async () => {
+    stubApi([task({ title: "Water the plants", listId: garden.id, labels: ["next"], dueDate: today, recurRule: "FREQ=WEEKLY" })]);
+    renderAt("/next");
+    await userEvent.click(await main().findByRole("checkbox", { name: "Complete Water the plants" }));
+    const next = formatDue(addDays(today, 7), today).text;
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain(`Next due ${next}`));
+    expect(main().getByText("Water the plants")).toBeTruthy();
+    expect(main().getByText(next)).toBeTruthy();
+  });
+
+  it("restores the row and shows the error when completing fails", async () => {
+    stubApi([task({ title: "Buy stamps", listId: errands.id, labels: ["next"] })], { failComplete: true });
+    renderAt("/next");
+    await userEvent.click(await main().findByRole("checkbox", { name: "Complete Buy stamps" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Boom"));
+    expect(main().getByRole("checkbox", { name: "Complete Buy stamps" })).toBeTruthy();
+  });
+});
