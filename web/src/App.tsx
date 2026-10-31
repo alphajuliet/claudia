@@ -1,6 +1,6 @@
-import { Shell } from "./Shell";
 import { SignIn } from "./SignIn";
 import { SessionProvider, useSession } from "./session/SessionProvider";
+import { AppShell } from "./ui/AppShell";
 
 export function Gate() {
   const { state, retry } = useSession();
@@ -18,7 +18,7 @@ export function Gate() {
     case "signedOut":
       return <SignIn notice={state.notice} />;
     case "signedIn":
-      return <Shell />;
+      return <AppShell />;
   }
 }
 

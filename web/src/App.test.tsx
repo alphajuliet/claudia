@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +9,15 @@ import { tokenStore } from "./session/store";
 
 const me = { name: "laptop", scopes: ["write"], expiresAt: null };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+
+/** Answers /api/me with `me` and the shell's own reads with empty results. */
+const signedInApi = () => vi.fn(async (path: string, _init?: RequestInit) => json(path === "/api/me" ? me : path === "/api/settings" ? {} : []));
+
+/** Waits for the shell, which shows the token's name in the sidebar footer. */
+async function findSignedInAs(name: string) {
+  const sidebar = await screen.findByRole("navigation", { name: "Sidebar" });
+  return within(sidebar).findByText(name);
+}
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -45,14 +54,14 @@ describe("sign-in", () => {
   });
 
   it("checks a pasted token, stores it and shows who is signed in", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json(me));
+    const fetchMock = signedInApi();
     vi.stubGlobal("fetch", fetchMock);
     renderApp();
     await signInWith("  cl_good  ");
-    expect(await screen.findByText(/Signed in as laptop/)).toBeTruthy();
+    expect(await findSignedInAs("laptop")).toBeTruthy();
     expect(screen.getByText(/write/)).toBeTruthy();
     expect(tokenStore.get()).toBe("cl_good");
-    expect(new Headers(fetchMock.mock.calls[0]![1].headers).get("Authorization")).toBe("Bearer cl_good");
+    expect(new Headers(fetchMock.mock.calls[0]![1]!.headers).get("Authorization")).toBe("Bearer cl_good");
   });
 
   it("does not store a rejected token", async () => {
@@ -75,9 +84,9 @@ describe("sign-in", () => {
 describe("stored token", () => {
   it("signs in on load when the token is still good", async () => {
     tokenStore.set("cl_stored");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(me)));
+    vi.stubGlobal("fetch", signedInApi());
     renderApp();
-    expect(await screen.findByText(/Signed in as laptop/)).toBeTruthy();
+    expect(await findSignedInAs("laptop")).toBeTruthy();
   });
 
   it("clears a rejected token on load and says why", async () => {
@@ -90,13 +99,13 @@ describe("stored token", () => {
 
   it("keeps the token when offline and recovers on retry", async () => {
     tokenStore.set("cl_stored");
-    const fetchMock = vi.fn().mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValue(json(me));
+    const fetchMock = signedInApi().mockRejectedValueOnce(new TypeError("Failed to fetch"));
     vi.stubGlobal("fetch", fetchMock);
     renderApp();
     expect(await screen.findByText(/Can't reach Claudia/)).toBeTruthy();
     expect(tokenStore.get()).toBe("cl_stored");
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText(/Signed in as laptop/)).toBeTruthy();
+    expect(await findSignedInAs("laptop")).toBeTruthy();
   });
 
   it("shows the form on retry when the token was cleared meanwhile", async () => {
@@ -113,15 +122,15 @@ describe("stored token", () => {
 describe("signed in", () => {
   it("keeps the signed-in token in memory when storage is blocked", async () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(me)));
+    vi.stubGlobal("fetch", signedInApi());
     renderApp();
     await signInWith("cl_good");
-    expect(await screen.findByText(/Signed in as laptop/)).toBeTruthy();
+    expect(await findSignedInAs("laptop")).toBeTruthy();
   });
 
   it("signs out and forgets the token", async () => {
     tokenStore.set("cl_stored");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json(me)));
+    vi.stubGlobal("fetch", signedInApi());
     renderApp();
     await userEvent.click(await screen.findByRole("button", { name: "Sign out" }));
     expect(screen.getByLabelText("API token")).toBeTruthy();
@@ -130,14 +139,15 @@ describe("signed in", () => {
 
   it("signs out when a later call returns 401", async () => {
     tokenStore.set("cl_stored");
-    const fetchMock = vi.fn().mockResolvedValueOnce(json(me)).mockResolvedValue(json({ error: {} }, 401));
-    vi.stubGlobal("fetch", fetchMock);
+    const shellApi = signedInApi();
+    vi.stubGlobal("fetch", vi.fn(async (path: string) => (path === "/api/probe" ? json({ error: {} }, 401) : shellApi(path))));
     function Probe() {
       const { api } = useSession();
-      return <button onClick={() => api("/api/folders").catch(() => {})}>probe</button>;
+      return <button onClick={() => api("/api/probe").catch(() => {})}>probe</button>;
     }
     renderWithProbe(<Probe />);
-    await userEvent.click(await screen.findByRole("button", { name: "probe" }));
+    await findSignedInAs("laptop");
+    await userEvent.click(screen.getByRole("button", { name: "probe" }));
     await waitFor(() => expect(screen.getByText("That token isn't valid or has expired.")).toBeTruthy());
     expect(tokenStore.get()).toBeNull();
   });
@@ -145,7 +155,7 @@ describe("signed in", () => {
   it("ignores a late 401 from a previous session", async () => {
     let finishOld!: (res: Response) => void;
     const fetchMock = vi.fn((path: string) =>
-      path === "/api/slow" ? new Promise<Response>((resolve) => { finishOld = resolve; }) : Promise.resolve(json(me)),
+      path === "/api/slow" ? new Promise<Response>((resolve) => { finishOld = resolve; }) : signedInApi()(path),
     );
     vi.stubGlobal("fetch", fetchMock);
     function Probe() {
@@ -157,10 +167,10 @@ describe("signed in", () => {
     await userEvent.click(await screen.findByRole("button", { name: "probe" }));
     await userEvent.click(screen.getByRole("button", { name: "Sign out" }));
     await signInWith("cl_b");
-    expect(await screen.findByText(/Signed in as laptop/)).toBeTruthy();
+    expect(await findSignedInAs("laptop")).toBeTruthy();
     finishOld(json({ error: {} }, 401));
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(screen.getByText(/Signed in as laptop/)).toBeTruthy();
+    expect(within(screen.getByRole("navigation", { name: "Sidebar" })).getByText("laptop")).toBeTruthy();
     expect(tokenStore.get()).toBe("cl_b");
   });
 });
