@@ -116,7 +116,14 @@ describe("completing a recurring task", () => {
   it("leaves uncomplete as a no-op on an open recurring task", async () => {
     const t = await task("Bins", { dueDate: today(), recurRule: "FREQ=DAILY", recurFrom: "due" });
     const res = await api("POST", `/api/tasks/${t.id}/uncomplete`);
-    expect(res.body).toEqual(t);
+    expect(res.body).toEqual({ ...t, subtasks: 0 });
+  });
+
+  it("advances a repeating parent and leaves its subtasks open", async () => {
+    const t = await task("Bins", { dueDate: today(), recurRule: "FREQ=DAILY", recurFrom: "due" });
+    const sub = await task("Rinse", { parentId: t.id });
+    expect(await complete(t.id)).toMatchObject({ completedAt: null, dueDate: addDays(today(), 1), subtasks: 0 });
+    expect((await api("GET", `/api/tasks/${sub.id}`)).body.completedAt).toBeNull();
   });
 
   it("completes a non-recurring task as before", async () => {

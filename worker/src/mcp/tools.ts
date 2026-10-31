@@ -127,14 +127,14 @@ export const TOOLS: ToolDef[] = [
   }),
   tool({
     name: "complete_task",
-    description: "Mark a task as done. A repeating task moves to its next due date and stays open. Safe to repeat for other tasks.",
+    description: "Mark a task as done, with its open subtasks at every level. A repeating task moves to its next due date and stays open, leaving its subtasks alone. Safe to repeat for other tasks.",
     access: "write",
     input: strict({ id: id("task") }),
     request: (a) => ({ method: "POST", path: `/api/tasks/${a.id}/complete` }),
   }),
   tool({
     name: "uncomplete_task",
-    description: "Reopen a task that was marked done.",
+    description: "Reopen a task that was marked done. Subtasks completed with it reopen too.",
     access: "write",
     input: strict({ id: id("task") }),
     request: (a) => ({ method: "POST", path: `/api/tasks/${a.id}/uncomplete` }),

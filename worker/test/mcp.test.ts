@@ -110,9 +110,10 @@ describe("working through the tools", () => {
     const moved = (await call(write, "move_task", { id: b.id, afterId: a.id })).data;
     expect(moved.position > a.position).toBe(true); // now after Paint
 
-    expect((await call(write, "complete_task", { id: a.id })).data.completedAt).not.toBeNull();
-    expect((await call(write, "search_tasks", { status: "completed" })).data.map((t: any) => t.title)).toEqual(["Paint"]);
-    expect((await call(write, "uncomplete_task", { id: a.id })).data.completedAt).toBeNull();
+    expect((await call(write, "complete_task", { id: a.id })).data).toMatchObject({ completedAt: expect.any(String), subtasks: 1 });
+    const completed = (await call(write, "search_tasks", { status: "completed" })).data.map((t: any) => t.title);
+    expect([...completed].sort()).toEqual(["Buy paint", "Paint"]); // its subtask too
+    expect((await call(write, "uncomplete_task", { id: a.id })).data).toMatchObject({ completedAt: null, subtasks: 1 });
 
     const filter = (await call(write, "create_filter", { name: "Next", query: "label=next" })).data;
     expect((await call(write, "run_filter", { id: filter.id })).data.map((t: any) => t.title)).toEqual(["Paint"]);

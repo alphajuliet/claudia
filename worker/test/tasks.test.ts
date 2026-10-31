@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
-import { events } from "../src/db/schema";
+import { events, tasks } from "../src/db/schema";
 import { client, db, makeToken, reset } from "./helpers";
 
 let api: ReturnType<typeof client>;
@@ -153,6 +153,61 @@ describe("completion", () => {
 
     const log = await db.select().from(events).where(eq(events.entityId, t.id));
     expect(log.map((e) => e.type).sort()).toEqual(["completed", "created", "uncompleted"]);
+  });
+
+  const typesFor = async (id: string) => (await db.select().from(events).where(eq(events.entityId, id))).map((e) => e.type).sort();
+  const get = async (id: string) => (await api("GET", `/api/tasks/${id}`)).body;
+
+  it("completes open subtasks at every level with it, and reopens them with it", async () => {
+    const parent = await task("Parent");
+    const child = await task("Child", { parentId: parent.id });
+    const grandchild = await task("Grandchild", { parentId: child.id });
+
+    const done = (await api("POST", `/api/tasks/${parent.id}/complete`)).body;
+    expect(done.completedAt).not.toBeNull();
+    expect(done.subtasks).toBe(2);
+    expect((await get(child.id)).completedAt).toBe(done.completedAt);
+    expect((await get(grandchild.id)).completedAt).toBe(done.completedAt);
+    for (const id of [parent.id, child.id, grandchild.id]) expect(await typesFor(id)).toEqual(["completed", "created"]);
+
+    const again = (await api("POST", `/api/tasks/${parent.id}/complete`)).body;
+    expect(again).toMatchObject({ completedAt: done.completedAt, subtasks: 0 });
+
+    const reopened = (await api("POST", `/api/tasks/${parent.id}/uncomplete`)).body;
+    expect(reopened).toMatchObject({ completedAt: null, subtasks: 2 });
+    expect((await get(child.id)).completedAt).toBeNull();
+    expect((await get(grandchild.id)).completedAt).toBeNull();
+    for (const id of [parent.id, child.id, grandchild.id]) expect(await typesFor(id)).toEqual(["completed", "created", "uncompleted"]);
+  });
+
+  it("leaves subtasks completed earlier, and deleted ones, alone", async () => {
+    const parent = await task("Parent");
+    const earlier = await task("Earlier", { parentId: parent.id });
+    const gone = await task("Gone", { parentId: parent.id });
+    const open = await task("Open", { parentId: parent.id });
+    const first = (await api("POST", `/api/tasks/${earlier.id}/complete`)).body;
+    expect((await api("DELETE", `/api/tasks/${gone.id}`)).status).toBe(204);
+
+    const done = (await api("POST", `/api/tasks/${parent.id}/complete`)).body;
+    expect(done.subtasks).toBe(1);
+    expect((await get(earlier.id)).completedAt).toBe(first.completedAt);
+    expect((await get(open.id)).completedAt).toBe(done.completedAt);
+    const [deleted] = await db.select().from(tasks).where(eq(tasks.id, gone.id));
+    expect(deleted!.completedAt).toBeNull();
+
+    expect((await api("POST", `/api/tasks/${parent.id}/uncomplete`)).body.subtasks).toBe(1);
+    expect((await get(earlier.id)).completedAt).toBe(first.completedAt);
+    expect((await get(open.id)).completedAt).toBeNull();
+    expect(await typesFor(earlier.id)).toEqual(["completed", "created"]);
+    expect(await typesFor(gone.id)).toEqual(["created", "deleted"]);
+  });
+
+  it("closes a repeating subtask without advancing it", async () => {
+    const parent = await task("Parent");
+    const repeating = await task("Repeating", { parentId: parent.id, dueDate: "2026-11-02", recurRule: "FREQ=WEEKLY", recurFrom: "due" });
+    const done = (await api("POST", `/api/tasks/${parent.id}/complete`)).body;
+    expect(done.subtasks).toBe(1);
+    expect(await get(repeating.id)).toMatchObject({ completedAt: done.completedAt, dueDate: "2026-11-02" });
   });
 });
 

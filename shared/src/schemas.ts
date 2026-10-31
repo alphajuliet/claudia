@@ -159,6 +159,10 @@ export const TaskSchema = z
   })
   .openapi("Task");
 
+export const TaskCompletionSchema = TaskSchema.extend({
+  subtasks: z.number().int().openapi({ description: "Open subtasks completed (or reopened) with it" }),
+}).openapi("TaskCompletion");
+
 export const taskFieldShapes = {
   title: z.string().min(1),
   notes: z.string().nullable(),
@@ -213,6 +217,7 @@ export const TaskQuerySchema = z.object({
 });
 
 export type Task = z.infer<typeof TaskSchema>;
+export type TaskCompletion = z.infer<typeof TaskCompletionSchema>;
 export type Label = z.infer<typeof LabelSchema>;
 
 // Saved filters (smart lists). `query` is a query string for GET /api/tasks,

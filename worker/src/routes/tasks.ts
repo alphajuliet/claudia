@@ -3,6 +3,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import {
   IdParam,
+  TaskCompletionSchema,
   TaskCreateSchema,
   TaskMoveSchema,
   TaskQuerySchema,
@@ -317,9 +318,9 @@ export const taskRoutes = newRouter()
       tags: tag,
       summary: "Complete a task",
       description:
-        "Completing a task that repeats advances it to its next due date and keeps it open; completing it twice advances it twice. Other tasks: idempotent.",
+        "Completing a task that repeats advances it to its next due date and keeps it open, leaving its subtasks alone; completing it twice advances it twice. Other tasks: idempotent, and their open subtasks at every level are completed with them.",
       request: { params: IdParam },
-      responses: { 200: jsonResponse(TaskSchema, "Completed"), ...commonErrors, ...notFoundError },
+      responses: { 200: jsonResponse(TaskCompletionSchema, "Completed"), ...commonErrors, ...notFoundError },
     }),
     (c) => setCompleted(c.var.db, c.var.actor, c.req.valid("param").id, true).then((t) => c.json(t, 200)),
   )
@@ -329,8 +330,9 @@ export const taskRoutes = newRouter()
       path: "/api/tasks/{id}/uncomplete",
       tags: tag,
       summary: "Reopen a completed task",
+      description: "Subtasks completed with it (at the same time) are reopened too; ones completed separately stay completed.",
       request: { params: IdParam },
-      responses: { 200: jsonResponse(TaskSchema, "Reopened"), ...commonErrors, ...notFoundError },
+      responses: { 200: jsonResponse(TaskCompletionSchema, "Reopened"), ...commonErrors, ...notFoundError },
     }),
     (c) => setCompleted(c.var.db, c.var.actor, c.req.valid("param").id, false).then((t) => c.json(t, 200)),
   )
@@ -367,9 +369,13 @@ export const taskRoutes = newRouter()
     },
   );
 
+/**
+ * Completes or reopens a task. Completing also closes its open subtasks at every level, with the same time;
+ * reopening reopens the subtasks completed with it. `subtasks` counts them.
+ */
 async function setCompleted(db: Db, actor: Actor, id: string, done: boolean) {
   const before = await getTask(db, id);
-  if (Boolean(before.completedAt) === done) return respond(db, before);
+  if (Boolean(before.completedAt) === done) return { ...(await respond(db, before)), subtasks: 0 };
   const at = now();
   const names = (await labelNamesFor(db, [id])).get(id) ?? [];
 
@@ -384,21 +390,37 @@ async function setCompleted(db: Db, actor: Actor, id: string, done: boolean) {
         db.update(tasks).set({ ...dates(advanced), updatedAt: at }).where(eq(tasks.id, id)),
         eventQuery(db, { entityType: "task", entityId: id, type: "completed", before: dates(before), after: dates(advanced), actor }),
       ]);
-      return toTask(advanced, names);
+      return { ...toTask(advanced, names), subtasks: 0 };
     }
   }
 
+  // Subtasks that go with it: open ones when completing, those completed at the same moment when reopening.
+  const descendants = (await subtreeIds(db, id)).filter((x) => x !== id);
+  const subtasks: { id: string; completedAt: string | null }[] = [];
+  for (const part of chunk(descendants)) {
+    subtasks.push(
+      ...(await db
+        .select({ id: tasks.id, completedAt: tasks.completedAt })
+        .from(tasks)
+        .where(and(inArray(tasks.id, part), live, done ? isNull(tasks.completedAt) : eq(tasks.completedAt, before.completedAt!)))),
+    );
+  }
+
   const after: Row = { ...before, completedAt: done ? at : null, updatedAt: at };
-  await runBatch(db, [
-    db.update(tasks).set({ completedAt: after.completedAt, updatedAt: at }).where(eq(tasks.id, id)),
-    eventQuery(db, {
-      entityType: "task",
-      entityId: id,
-      type: done ? "completed" : "uncompleted",
-      before: { completedAt: before.completedAt },
-      after: { completedAt: after.completedAt },
-      actor,
-    }),
-  ]);
-  return toTask(after, names);
+  const statements: BatchItem<"sqlite">[] = [];
+  for (const t of [{ id, completedAt: before.completedAt }, ...subtasks]) {
+    statements.push(
+      db.update(tasks).set({ completedAt: after.completedAt, updatedAt: at }).where(eq(tasks.id, t.id)),
+      eventQuery(db, {
+        entityType: "task",
+        entityId: t.id,
+        type: done ? "completed" : "uncompleted",
+        before: { completedAt: t.completedAt },
+        after: { completedAt: after.completedAt },
+        actor,
+      }),
+    );
+  }
+  await runBatch(db, statements);
+  return { ...toTask(after, names), subtasks: subtasks.length };
 }
