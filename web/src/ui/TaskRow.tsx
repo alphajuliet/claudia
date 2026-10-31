@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 import type { Task } from "@claudia/shared";
 import { formatDue, todayIn } from "../lib/dates";
 import { InlineMarkdown, plainText } from "./Markdown";
+import { useSwipe } from "./useSwipe";
 
 /** The task's due date (YYYY-MM-DD): its date, or the day of its due time in the user's time zone. */
 export const dueDateOf = (task: Task, timeZone: string) =>
@@ -102,7 +103,7 @@ function TaskTitle({ task, onRename, onOpen, pointerType }: {
  * One task. While `pending` (a complete or reopen is running), its checkbox is disabled so a double click sends one.
  * `onSelect` is called for clicks on the row outside the checkbox and title, and for taps on the title (it opens the detail panel); `selected`
  * marks the row whose details are showing. The row can take focus (the keyboard highlight), and focus anywhere in
- * it calls `onHighlight`.
+ * it calls `onHighlight`. On touch, a swipe right completes or reopens it, as the checkbox does (`useSwipe`).
  */
 /** The ▸/▾ toggle of a heading or a task with subtasks. */
 export function Disclosure({ title, collapsed, onToggle }: { title: string; collapsed: boolean; onToggle: (collapsed: boolean) => void }) {
@@ -143,6 +144,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
   const label = due ? formatDue(due, today) : null;
   // The pointer type of the last press in the row: a tap on the title opens the task instead of renaming it.
   const pointerType = useRef<string | null>(null);
+  const swipe = useSwipe<HTMLLIElement>({ onComplete: () => onComplete(task), disabled: pending });
   const onRowClick = (e: MouseEvent<HTMLLIElement>) => {
     if (onSelect && !(e.target as Element).closest(".task-check, .task-title, .disclosure")) onSelect(task);
   };
@@ -153,28 +155,36 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
       tabIndex={-1}
       data-task-id={task.id}
       onFocus={() => onHighlight?.(task)}
-      onPointerDown={(e) => { pointerType.current = e.pointerType; }}
+      {...swipe}
+      onPointerDown={(e) => {
+        pointerType.current = e.pointerType;
+        swipe.onPointerDown(e);
+      }}
       data-depth={depth} style={{ "--depth": depth } as CSSProperties} onClick={onRowClick}>
-      {expandable && <Disclosure title={task.title} collapsed={collapsed} onToggle={(c) => onToggle?.(task, c)} />}
-      <input
-        type="checkbox"
-        className="task-check"
-        aria-label={`${task.completedAt ? "Reopen" : "Complete"} ${plainText(task.title)}`}
-        checked={task.completedAt !== null}
-        disabled={pending}
-        onChange={() => onComplete(task)}
-      />
-      <TaskTitle task={task} onRename={onRename} onOpen={onSelect && (() => onSelect(task))} pointerType={pointerType} />
-      <span className="task-meta">
-        {task.labels.map((l) => <span key={l} className="chip">{l}</span>)}
-        {label && <span className={label.overdue ? "due overdue" : "due"}>{label.text}</span>}
-        {task.recurRule && (
-          <span className="repeat" title="Repeats">
-            <span aria-hidden="true">↻</span>
-            <span className="sr-only">Repeats</span>
-          </span>
-        )}
-      </span>
+      {/* Behind the row, shown as it's swiped right. The checkbox does the same, so it's hidden from assistive tech. */}
+      <span className="swipe-complete" aria-hidden="true">{task.completedAt ? "Reopen" : "Complete"}</span>
+      <div className="task-row-body">
+        {expandable && <Disclosure title={task.title} collapsed={collapsed} onToggle={(c) => onToggle?.(task, c)} />}
+        <input
+          type="checkbox"
+          className="task-check"
+          aria-label={`${task.completedAt ? "Reopen" : "Complete"} ${plainText(task.title)}`}
+          checked={task.completedAt !== null}
+          disabled={pending}
+          onChange={() => onComplete(task)}
+        />
+        <TaskTitle task={task} onRename={onRename} onOpen={onSelect && (() => onSelect(task))} pointerType={pointerType} />
+        <span className="task-meta">
+          {task.labels.map((l) => <span key={l} className="chip">{l}</span>)}
+          {label && <span className={label.overdue ? "due overdue" : "due"}>{label.text}</span>}
+          {task.recurRule && (
+            <span className="repeat" title="Repeats">
+              <span aria-hidden="true">↻</span>
+              <span className="sr-only">Repeats</span>
+            </span>
+          )}
+        </span>
+      </div>
     </li>
   );
 }
