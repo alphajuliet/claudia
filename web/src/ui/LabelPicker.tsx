@@ -90,7 +90,10 @@ export function LabelPicker({ all, taken, onAdd }: {
         onKeyDown={onKeyDown}
         onBlur={() => { setOpen(false); setActive(-1); pick(name); }}
       />
-      <ul ref={list} id={`${id}-list`} role="listbox" aria-label="Labels" className="label-options" hidden={!expanded}>
+      <ul ref={list} id={`${id}-list`} role="listbox" aria-label="Labels" className="label-options" hidden={!expanded}
+        // A press anywhere in the list (an option, the gaps, its scroll bar) keeps focus in the field, so the list stays
+        // open and blur doesn't add the typed text as well.
+        onMouseDown={(e) => e.preventDefault()}>
         {expanded && options.map((option, i) => (
           <li
             key={creates(i) ? `\u0000${option}` : option}
@@ -98,8 +101,6 @@ export function LabelPicker({ all, taken, onAdd }: {
             role="option"
             aria-selected={i === active}
             className={creates(i) ? "label-option create" : "label-option"}
-            // Keep focus in the field, so the list stays open and blur doesn't add the typed text as well.
-            onMouseDown={(e) => e.preventDefault()}
             onClick={() => pick(option)}
           >
             {creates(i) ? `Create “${option}”` : option}

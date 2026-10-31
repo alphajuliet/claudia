@@ -212,12 +212,8 @@ export function LabelsField({ task }: { task: Task }) {
   const add = (name: string) => {
     const labels = current();
     if (labels.some((l) => l.toLowerCase() === name.toLowerCase())) return Promise.resolve(true);
-    const isNew = !all.some((l) => l.toLowerCase() === name.toLowerCase());
-    return patch({ labels: [...labels, name] }).then((ok) => {
-      // The server creates a new name as a label: offer it on other tasks too.
-      if (ok && isNew) void queryClient.invalidateQueries({ queryKey: ["labels"] });
-      return ok;
-    });
+    // A new name becomes a label on the server; the update refreshes the labels afterwards.
+    return patch({ labels: [...labels, name] });
   };
   return (
     <Field label="Labels" group>

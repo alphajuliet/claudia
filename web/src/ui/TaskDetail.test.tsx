@@ -603,6 +603,8 @@ describe("the detail panel", () => {
       await userEvent.click(field(p));
       await waitFor(() => expect(optionNames(p)).toEqual(["errand", "outside", "Quick", "readReview"]));
       expect(field(p).getAttribute("aria-expanded")).toBe("true");
+      // A press in the list's gaps or on its scroll bar doesn't take focus from the field.
+      expect(fireEvent.mouseDown(p.getByRole("listbox", { name: "Labels" }))).toBe(false);
     });
 
     it("filters as you type and offers to create a new name", async () => {
