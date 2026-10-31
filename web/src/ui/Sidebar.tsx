@@ -1,32 +1,38 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { useFilters, useFolders, useLists } from "../data/queries";
-import { sidebarTree, type FolderNode } from "../lib/sidebar";
-import { findInbox, VIEWS } from "../lib/views";
+import type { Counts } from "@claudia/shared";
+import { useCounts, useFilters, useFolders, useLists } from "../data/queries";
+import { listOrder, sidebarTree, type FolderNode } from "../lib/sidebar";
+import { findInbox, viewCount, VIEWS } from "../lib/views";
 import { useSession } from "../session/SessionProvider";
 import { CONTEXT_CHOICES, useContextFilter } from "./contextFilter";
 import { THEME_CHOICES, useTheme } from "./theme";
 
-function NavLink({ href, children, onNavigate }: { href: string; children: ReactNode; onNavigate: () => void }) {
+/** A sidebar link, with its count of open tasks when there are any. */
+function NavLink({ href, children, count, onNavigate }: { href: string; children: ReactNode; count?: number; onNavigate: () => void }) {
   const [location] = useLocation();
   const current = location === href;
   return (
     <Link href={href} className="nav-link" aria-current={current ? "page" : undefined} onClick={onNavigate}>
-      {children}
+      <span className="nav-name">{children}</span>
+      {count ? <span className="nav-count">{count}</span> : null}
     </Link>
   );
 }
 
-function FolderItem({ node, onNavigate }: { node: FolderNode; onNavigate: () => void }) {
+/** Open tasks in a list, from the counts. */
+const listCount = (counts: Counts | undefined, id: string) => counts?.lists[id]?.open;
+
+function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Counts | undefined; onNavigate: () => void }) {
   return (
     <li>
       <details open className="folder">
         <summary>{node.folder.name}</summary>
         <ul className="nav-list">
           {node.lists.map((l) => (
-            <li key={l.id}><NavLink href={`/list/${l.id}`} onNavigate={onNavigate}>{l.name}</NavLink></li>
+            <li key={l.id}><NavLink href={`/list/${l.id}`} count={listCount(counts, l.id)} onNavigate={onNavigate}>{l.name}</NavLink></li>
           ))}
-          {node.folders.map((f) => <FolderItem key={f.folder.id} node={f} onNavigate={onNavigate} />)}
+          {node.folders.map((f) => <FolderItem key={f.folder.id} node={f} counts={counts} onNavigate={onNavigate} />)}
         </ul>
       </details>
     </li>
@@ -76,6 +82,9 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   const inboxId = findInbox(lists)?.id;
   // The Inbox list already shows as the Inbox view, so it stays out of the tree.
   const tree = sidebarTree(folders, lists.filter((l) => l.id !== inboxId), context);
+  const counts = useCounts().data;
+  // Views count the lists they show: every list, or the Inbox and the context's lists.
+  const shown = context === "all" ? "all" : [...(inboxId ? [inboxId] : []), ...listOrder(tree)];
 
   return (
     <nav ref={ref} className="sidebar" aria-label="Sidebar" id="sidebar" onKeyDown={onKeyDown}>
@@ -91,7 +100,9 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
         <ul className="nav-list">
           <li><NavLink href="/search" onNavigate={onNavigate}>Search</NavLink></li>
           {VIEWS.filter((v) => v.id !== "inbox" || inboxId).map((v) => (
-            <li key={v.id}><NavLink href={`/${v.id}`} onNavigate={onNavigate}>{v.name}</NavLink></li>
+            <li key={v.id}>
+              <NavLink href={`/${v.id}`} count={counts && viewCount(v.id, counts, shown, inboxId)} onNavigate={onNavigate}>{v.name}</NavLink>
+            </li>
           ))}
         </ul>
 
@@ -111,9 +122,9 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
             <h2 id="sidebar-lists" className="nav-heading">Lists</h2>
             <ul className="nav-list">
               {tree.lists.map((l) => (
-                <li key={l.id}><NavLink href={`/list/${l.id}`} onNavigate={onNavigate}>{l.name}</NavLink></li>
+                <li key={l.id}><NavLink href={`/list/${l.id}`} count={listCount(counts, l.id)} onNavigate={onNavigate}>{l.name}</NavLink></li>
               ))}
-              {tree.folders.map((f) => <FolderItem key={f.folder.id} node={f} onNavigate={onNavigate} />)}
+              {tree.folders.map((f) => <FolderItem key={f.folder.id} node={f} counts={counts} onNavigate={onNavigate} />)}
             </ul>
           </section>
         )}

@@ -220,6 +220,9 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.nav-count { flex: none; margin-left: 0.5rem; color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
+.nav-link[aria-current="page"] .nav-count { color: inherit; font-weight: 450; }
 .nav-link:hover { background: var(--row-hover); text-decoration: none; }
 .nav-link[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 550; }
 

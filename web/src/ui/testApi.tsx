@@ -74,6 +74,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   let changed = false;
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     if (path in bodies) return json(bodies[path]);
+    if (path === "/api/counts") return json(countsOf([...store.values()]));
     const [pathname, search = ""] = path.split("?");
     if (pathname === "/api/tasks" && init?.method === "POST") {
       if (opts.failCreate) return fail("Boom");
@@ -150,6 +151,19 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   });
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
+}
+
+/** What `GET /api/counts` would say for these tasks (snoozing and due times aside). */
+function countsOf(tasks: Task[]) {
+  const lists: Record<string, { open: number; today: number; labels: Record<string, number> }> = {};
+  for (const t of tasks) {
+    if (t.kind !== "task" || t.completedAt !== null) continue;
+    const c = (lists[t.listId] ??= { open: 0, today: 0, labels: {} });
+    c.open++;
+    if (t.dueDate !== null && t.dueDate <= today) c.today++;
+    for (const l of t.labels) c.labels[l.toLowerCase()] = (c.labels[l.toLowerCase()] ?? 0) + 1;
+  }
+  return { lists };
 }
 
 /** The JSON bodies sent with `method` to `path`, in order. */

@@ -1,4 +1,4 @@
-import { FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, type Task } from "@claudia/shared";
+import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, type Task } from "@claudia/shared";
 import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
 import { useSession } from "../session/SessionProvider";
@@ -32,6 +32,8 @@ export const useFolders = () => useGet(["folders"], "/api/folders", FolderSchema
 export const useLists = () => useGet(["lists"], "/api/lists", ListSchema.array());
 export const useFilters = () => useGet(["filters"], "/api/filters", FilterSchema.array());
 export const useLabels = () => useGet(["labels"], "/api/labels", LabelSchema.array());
+/** Open-task counts per list, for the sidebar. Not under ["tasks"]: those entries are all task lists. */
+export const useCounts = () => useGet(["counts"], "/api/counts", CountsSchema);
 
 /** The user's time zone setting, or the default until it loads. */
 export function useTimeZone(): string {
@@ -92,7 +94,9 @@ const tasksKey = { queryKey: ["tasks"] };
 
 /** Refetches the task lists once the last running task change settles, without holding up its result. */
 function refetchWhenLast(queryClient: QueryClient) {
-  if (queryClient.isMutating({ mutationKey: ["tasks"] }) === 1) void queryClient.invalidateQueries(tasksKey);
+  if (queryClient.isMutating({ mutationKey: ["tasks"] }) !== 1) return;
+  void queryClient.invalidateQueries(tasksKey);
+  void queryClient.invalidateQueries({ queryKey: ["counts"] });
 }
 
 /** Tasks changed or removed in one cached list, with where they were, so a failure can put back just those. */

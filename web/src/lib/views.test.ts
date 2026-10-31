@@ -1,6 +1,6 @@
 import type { List } from "@claudia/shared";
 import { describe, expect, it } from "vitest";
-import { findInbox, viewQuery } from "./views";
+import { findInbox, viewQuery, viewCount } from "./views";
 
 const stamp = "2026-10-01T00:00:00.000Z";
 const list = (id: string, name: string, archivedAt: string | null = null): List => ({
@@ -35,5 +35,29 @@ describe("findInbox", () => {
     const lists = [list("old", "Inbox", stamp), list("work", "Work"), list("in", "INBOX")];
     expect(findInbox(lists)?.id).toBe("in");
     expect(findInbox([list("old", "inbox", stamp)])).toBeUndefined();
+  });
+});
+
+describe("viewCount", () => {
+  const counts = {
+    lists: {
+      IN: { open: 4, today: 1, labels: { next: 1 } },
+      A: { open: 3, today: 2, labels: { next: 2, waitingon: 1 } },
+      B: { open: 5, today: 0, labels: { someday: 5 } },
+    },
+  };
+
+  it("counts the Inbox list for Inbox", () => {
+    expect(viewCount("inbox", counts, ["A"], "IN")).toBe(4);
+    expect(viewCount("inbox", counts, "all", undefined)).toBe(0);
+  });
+
+  it("adds up the lists shown for the other views", () => {
+    expect(viewCount("today", counts, "all", "IN")).toBe(3);
+    expect(viewCount("today", counts, ["IN", "B"], "IN")).toBe(1);
+    expect(viewCount("next", counts, ["IN", "A"], "IN")).toBe(3);
+    expect(viewCount("waiting", counts, "all", "IN")).toBe(1);
+    expect(viewCount("someday", counts, ["A"], "IN")).toBe(0);
+    expect(viewCount("wip", counts, ["Z"], "IN")).toBe(0);
   });
 });
