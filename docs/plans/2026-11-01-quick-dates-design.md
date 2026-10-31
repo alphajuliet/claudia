@@ -8,7 +8,7 @@ Board card: "Quick dates and due times" (#Desktop #Mobile). Today the detail pan
 
 One component in the detail panel, used for Due and for Snooze.
 
-- Quick buttons: **Today**, **Tomorrow**, **This weekend** (the coming Saturday; on a Saturday, today), **Next week** (the coming Monday). Snooze replaces Today with **This evening** (6 pm today; hidden after 6 pm).
+- Quick buttons: **Today**, **Tomorrow**, **This weekend** (the coming Saturday; on a Saturday or Sunday, today), **Next week** (the coming Monday). Snooze replaces Today with **This evening** (6 pm today; hidden after 6 pm).
 - A native date input for any other day, so iOS and iPad show their own picker.
 - An optional native time input.
   - A date alone saves `dueDate` and clears `dueAt`.
@@ -24,7 +24,8 @@ One component in the detail panel, used for Due and for Snooze.
 
 ### Snooze
 
-- Writes `snoozedUntil`. A date without a time means the start of that day in the user's time zone.
+- Writes `snoozedUntil`. A date without a time means the start of that day in the user's time zone. Choices that would snooze into the past (This weekend on a weekend) are left out.
+- A snooze that has passed shows as none.
 - Views already hide snoozed tasks, so snoozing takes the task off screen. The panel closes and a toast says "Snoozed until Sat" with Undo, which restores the previous `snoozedUntil`.
 - A snoozed task opened from search shows its snooze with Clear.
 
@@ -38,7 +39,7 @@ One component in the detail panel, used for Due and for Snooze.
 A parser in `web/src/lib/when.ts`, hand-written (the vocabulary is small and fully testable; no library).
 
 - `#labels` are taken out first. The parser then reads words backwards from the end for as long as they still form a date, a time, or both. Only that tail counts: "Book Friday dinner" stays text; "Call Sam fri 3pm" is due Friday at 3 pm.
-- Dates: `today`/`tod`, `tomorrow`/`tmr`, weekday names short or long (`fri`, `friday`, `next fri` = the one after the coming one), `weekend`, `next week`, `in N days`/`in N weeks`, `3 Nov`, `Nov 3`, `3/11` (day first), each with an optional year. A date without a year that has passed this year means next year.
+- Dates: `today`/`tod`, `tomorrow`/`tmr`, weekday names short or long (`fri`, `friday`; today counts, as in Todoist; `next fri` is a week after that), `weekend`, `next week`, `in N days`/`in N weeks`, `3 Nov`, `Nov 3`, `3/11` (day first), each with an optional year. A date without a year that has passed this year means next year.
 - Times: `3pm`, `3:30pm`, `3.30pm`, `15:00`, `noon`, `midnight`, optionally after `at`. A time alone means today, or tomorrow if it has passed.
 - A preview chip under the field shows what will be set ("Due Fri, 3:00 pm"). Its × keeps the words as part of the title for this entry.
 - A parsed date replaces Today's "due today" default. A tail that is the whole text is the title, as with labels ("Tomorrow" alone is a task called "Tomorrow").
@@ -46,7 +47,7 @@ A parser in `web/src/lib/when.ts`, hand-written (the vocabulary is small and ful
 
 ## Testing
 
-- Unit tests for the parser and for the date arithmetic (weekend, next week, start of day to UTC), with a fixed now and time zone, including the Sydney daylight-saving changes (5 October 2026, 5 April 2026).
+- Unit tests for the parser and for the date arithmetic (weekend, next week, start of day to UTC), with a fixed now and time zone, including the Sydney daylight-saving changes (4 October 2026 and 5 April 2026).
 - Component tests: the quick buttons, adding and clearing a time (dueDate and dueAt swap), the disabled time on a repeating task, snooze with Undo, a read-only Start, and the quick-add preview and its ×.
 
 ## Not in scope
