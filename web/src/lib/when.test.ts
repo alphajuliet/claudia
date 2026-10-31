@@ -76,6 +76,8 @@ describe("parseWhen", () => {
     expect(when("Tomorrow")).toBeNull();
     expect(when("Call mum at 5")).toBeNull();
     expect(when("Plan next weekend")).toBeNull();
+    expect(when("Do this tomorrow")).toMatchObject({ title: "Do this", when: { date: "2026-11-01" } });
+    expect(when("Do this today")).toMatchObject({ title: "Do this", when: { date: "2026-10-31" } });
   });
 
   it("keeps a number at the end of the title out of the time", () => {

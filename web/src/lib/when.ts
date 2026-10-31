@@ -109,14 +109,14 @@ const word = (w: string) => w.toLowerCase().replace(/[,.]+$/, "");
 /**
  * A date or time at the end of quick-add text: the longest tail of words that reads as one, leaving at least one word
  * of title. `matched` is the tail as typed. A time alone is today, or tomorrow once it has passed. A tail straight after
- * "next" or "this" is a half-read phrase ("next weekend"), so it is left as text.
+ * "next" or "this" that starts with "week" or "weekend" is a half-read phrase ("next weekend"), so it is left as text.
  */
 export function parseWhen(text: string, now: Date, timeZone: string): { title: string; matched: string; when: When } | null {
   const words = text.trim().split(/\s+/).filter(Boolean);
   const today = todayIn(timeZone, now);
   for (let i = Math.max(1, words.length - MAX_TAIL); i < words.length; i++) {
     const tail = parseTail(words.slice(i).map(word), today);
-    if (!tail || /^(next|this)$/.test(word(words[i - 1]!))) continue;
+    if (!tail || (/^(next|this)$/.test(word(words[i - 1]!)) && /^(week|weekend)$/.test(word(words[i]!)))) continue;
     const date = tail.date ?? (tail.time! > splitIn(now.toISOString(), timeZone).time ? today : addDays(today, 1));
     return { title: words.slice(0, i).join(" "), matched: words.slice(i).join(" "), when: { date, time: tail.time } };
   }
