@@ -2,7 +2,8 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode 
 import type { Task } from "@claudia/shared";
 import { useCreateTask, usePendingCompletions, useTask, useTasks, useTimeZone } from "../data/queries";
 import { useComplete, useDelete } from "./TaskList";
-import { DateFields, FieldStatus, LabelsField, ListField, NotesField, RepeatField, TitleField, useSave } from "./TaskFields";
+import { DateFields } from "./DateFields";
+import { FieldStatus, LabelsField, ListField, NotesField, RepeatField, TitleField, useSave } from "./TaskFields";
 import { wasFollowed } from "./selection";
 import { InlineMarkdown, plainText } from "./Markdown";
 
@@ -118,7 +119,7 @@ function Body({ id, onClose }: { id: string; onClose: () => void }) {
       <TitleField task={task} />
       <NotesField task={task} />
       <div className="detail-fields">
-        <DateFields task={task} timeZone={timeZone} />
+        <DateFields task={task} timeZone={timeZone} onClose={onClose} />
         <LabelsField task={task} />
         <ListField task={task} />
         <RepeatField task={task} />

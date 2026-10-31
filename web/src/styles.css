@@ -625,6 +625,17 @@ input.task-title-input {
 .detail-inline-input::placeholder { color: var(--muted); }
 .detail-rule { width: 100%; margin-left: 0; border-color: var(--border); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86rem; }
 
+.when { display: grid; gap: 0.35rem; width: 100%; padding: 0.15rem 0; }
+.when-current { display: flex; align-items: center; gap: 0.5rem; min-height: 1.9rem; }
+.when-current .due { min-width: 0; text-align: left; }
+.when-choices { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.when-inputs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.when-inputs .detail-date { margin-left: 0; border-color: var(--border); }
+.when-note { font-size: 0.85rem; }
+@media (pointer: coarse) {
+  .when-choices button.quiet.small { min-height: 2.25rem; padding: 0.3rem 0.75rem; }
+}
+
 .detail-chips { display: contents; }
 .chip-removable { display: inline-flex; align-items: center; gap: 0.15rem; padding-right: 0.15rem; }
 .chip-remove {

@@ -3,7 +3,6 @@ import { flushSync } from "react-dom";
 import type { Task } from "@claudia/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFolders, useLabels, useLists, useMoveTask, useUpdateTask, type TaskPatch } from "../data/queries";
-import { todayIn } from "../lib/dates";
 import { PRESETS, presetFor, ruleFor, type Preset } from "../lib/repeat";
 import { sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox } from "../lib/views";
@@ -15,7 +14,7 @@ import { useToast, type ToastMessage } from "./Toast";
  * toast, which is still there when the panel has closed.
  */
 
-type SaveState = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
+export type SaveState = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
 
 const SAVED_MS = 2500;
 
@@ -61,7 +60,7 @@ export function FieldStatus({ state }: { state: SaveState }) {
 }
 
 /** Saves a patch to the task, tracked by its own field status. */
-function usePatch(task: Task) {
+export function usePatch(task: Task) {
   const update = useUpdateTask();
   const save = useSave();
   return {
@@ -75,7 +74,7 @@ const copyAction = (label: string, text: string): ToastMessage["action"] =>
   navigator.clipboard ? { label, run: () => void navigator.clipboard.writeText(text).catch(() => {}) } : undefined;
 
 /** A labelled row: a small muted label on the left, the value beside it. */
-function Field({ label, htmlFor, children, group = false }: { label: string; htmlFor?: string; children: ReactNode; group?: boolean }) {
+export function Field({ label, htmlFor, children, group = false }: { label: string; htmlFor?: string; children: ReactNode; group?: boolean }) {
   const id = useId();
   if (group) {
     return (
@@ -197,111 +196,6 @@ export function NotesField({ task }: { task: Task }) {
       )}
       <FieldStatus state={state} />
     </div>
-  );
-}
-
-const DATE = /^(\d{4})-\d{2}-\d{2}$/;
-
-const DATE_IDLE_MS = 600;
-
-/**
- * A date picker with Clear. A complete date saves after a moment without changes, or on leaving the field, so
- * retyping a day sends one save. One whose year is still being typed (a browser's date field shows 0002, 0020, 0202
- * on the way to 2026) waits until leaving the field.
- */
-function DateInput({ label, name, value, onSave, status }: {
-  label: string;
-  name: string;
-  value: string | null;
-  onSave: (date: string | null) => void;
-  status: SaveState;
-}) {
-  const id = useId();
-  const [draft, setDraft] = useState<string | null>(null);
-  // The waiting save, bound to the task it was typed for.
-  const pending = useRef<(() => void) | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const cancel = () => {
-    clearTimeout(timer.current);
-    pending.current = null;
-  };
-  const flush = () => {
-    const run = pending.current;
-    cancel();
-    run?.();
-  };
-  const save = (date: string) => {
-    const next = date === "" ? null : date;
-    if (next !== value) onSave(next);
-  };
-  const later = (date: string) => {
-    cancel();
-    pending.current = () => {
-      save(date);
-      setDraft(null);
-    };
-    timer.current = setTimeout(flush, DATE_IDLE_MS);
-  };
-  // Closing the panel doesn't drop a date waiting to save.
-  useEffect(() => flush, []);
-  return (
-    <Field label={label} htmlFor={id}>
-      <input
-        id={id}
-        type="date"
-        className="detail-date"
-        value={draft ?? value ?? ""}
-        onChange={(e) => {
-          const date = e.target.value;
-          const year = DATE.exec(date)?.[1];
-          setDraft(date);
-          if (year && Number(year) >= 1900) later(date);
-          else cancel();
-        }}
-        onBlur={() => {
-          cancel();
-          if (draft !== null && (draft === "" || DATE.test(draft))) save(draft);
-          setDraft(null);
-        }}
-      />
-      {value && (
-        <button type="button" className="quiet small" aria-label={`Clear ${name}`} onClick={() => { cancel(); setDraft(null); onSave(null); }}>
-          Clear
-        </button>
-      )}
-      <FieldStatus state={status} />
-    </Field>
-  );
-}
-
-/** A due time as "3 Nov, 7:00 pm" in the user's time zone, with the year when it isn't this year. */
-const formatDueAt = (iso: string, timeZone: string) => {
-  const at = new Date(iso);
-  const sameYear = todayIn(timeZone, at).slice(0, 4) === todayIn(timeZone).slice(0, 4);
-  return new Intl.DateTimeFormat("en-AU", {
-    timeZone, day: "numeric", month: "short", hour: "numeric", minute: "2-digit", ...(sameYear ? {} : { year: "numeric" }),
-  }).format(at);
-};
-
-/** Due and start dates. A task due at a time shows it read-only, with Clear; times aren't edited here. */
-export function DateFields({ task, timeZone }: { task: Task; timeZone: string }) {
-  const due = usePatch(task);
-  const start = usePatch(task);
-  return (
-    <>
-      {task.dueAt && !task.dueDate ? (
-        <Field label="Due" group>
-          <span className="detail-text">{formatDueAt(task.dueAt, timeZone)}</span>
-          <button type="button" className="quiet small" aria-label="Clear due date" onClick={() => void due.patch({ dueAt: null })}>
-            Clear
-          </button>
-          <FieldStatus state={due.state} />
-        </Field>
-      ) : (
-        <DateInput label="Due" name="due date" value={task.dueDate} status={due.state} onSave={(dueDate) => void due.patch({ dueDate })} />
-      )}
-      <DateInput label="Start" name="start date" value={task.startDate} status={start.state} onSave={(startDate) => void start.patch({ startDate })} />
-    </>
   );
 }
 

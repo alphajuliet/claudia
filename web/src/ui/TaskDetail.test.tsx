@@ -2,7 +2,10 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Task } from "@claudia/shared";
-import { errands, garden, inbox, main, projects, renderAt, sentBodies, stubApi, task } from "./testApi";
+import { formatWhen, splitIn, zonedToUtc } from "../lib/dates";
+import { addDays, errands, garden, inbox, main, projects, renderAt, sentBodies, stubApi, task, today } from "./testApi";
+
+const tz = "Australia/Sydney";
 
 /** A promise to settle later, for holding a request. */
 function deferred() {
@@ -115,10 +118,38 @@ describe("the detail panel", () => {
   it("sets and clears the due date", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
-    fireEvent.change(p.getByLabelText("Due"), { target: { value: "2026-11-05" } });
-    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: "2026-11-05" }]));
+    const due = within(p.getByRole("group", { name: "Due" }));
+    fireEvent.change(due.getByLabelText("Due date"), { target: { value: "2026-11-05" } });
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: "2026-11-05", dueAt: null }]));
     await userEvent.click(await p.findByRole("button", { name: "Clear due date" }));
-    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ dueDate: null });
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ dueDate: null, dueAt: null });
+  });
+
+  it("a quick button sets the day and keeps the time", async () => {
+    const call = task({ title: "Call Sam", listId: garden.id, dueAt: "2026-11-03T08:00:00.000Z" });
+    const { fetchMock, p } = await openOn(call);
+    await userEvent.click(within(p.getByRole("group", { name: "Due" })).getByRole("button", { name: "Tomorrow" }));
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${call.id}`)).toEqual([
+      { dueDate: null, dueAt: zonedToUtc(addDays(today, 1), "19:00", tz) },
+    ]);
+  });
+
+  it("adding a time moves the date to dueAt", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-11-05" });
+    const { fetchMock, p } = await openOn(weed);
+    const time = p.getByLabelText("Due time");
+    fireEvent.change(time, { target: { value: "09:30" } });
+    fireEvent.blur(time);
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: null, dueAt: "2026-11-04T22:30:00.000Z" }]));
+  });
+
+  it("clearing the time keeps the day", async () => {
+    const call = task({ title: "Call Sam", listId: garden.id, dueAt: "2026-11-03T08:00:00.000Z" });
+    const { fetchMock, p } = await openOn(call);
+    const time = p.getByLabelText("Due time");
+    fireEvent.change(time, { target: { value: "" } });
+    fireEvent.blur(time);
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${call.id}`)).toEqual([{ dueDate: "2026-11-03", dueAt: null }]));
   });
 
   it("sets the start date", async () => {
@@ -128,13 +159,20 @@ describe("the detail panel", () => {
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ startDate: null }]);
   });
 
-  it("shows a due time read-only, with Clear", async () => {
-    const call = task({ title: "Call Sam", listId: garden.id, dueAt: "2026-11-03T08:00:00.000Z" });
-    const { fetchMock, p } = await openOn(call);
+  it("shows a due time", async () => {
+    const dueAt = "2026-11-03T08:00:00.000Z";
+    const call = task({ title: "Call Sam", listId: garden.id, dueAt });
+    const { p } = await openOn(call);
+    const shown = formatWhen(splitIn(dueAt, tz), today, splitIn(new Date().toISOString(), tz).time);
     // The row's label already says Due.
-    expect(p.getByRole("group", { name: "Due" }).textContent).toContain("3 Nov, 7:00 pm");
-    await userEvent.click(p.getByRole("button", { name: "Clear due date" }));
-    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${call.id}`)).toEqual([{ dueAt: null }]);
+    expect(p.getByRole("group", { name: "Due" }).textContent).toContain(shown.text);
+  });
+
+  it("a repeating task can't take a time", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-11-05", recurRule: "FREQ=WEEKLY", recurFrom: "due" });
+    const { p } = await openOn(weed);
+    expect((p.getByLabelText("Due time") as HTMLInputElement).disabled).toBe(true);
+    expect(p.getByText("Times on repeating tasks are coming")).toBeTruthy();
   });
 
   it("adds and removes labels, sending the whole set", async () => {
@@ -293,18 +331,18 @@ describe("the detail panel", () => {
   it("saves a changed date once, after a pause or on leaving the field", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
-    const due = p.getByLabelText("Due");
+    const due = p.getByLabelText("Due date");
     fireEvent.change(due, { target: { value: "2026-11-05" } });
     fireEvent.change(due, { target: { value: "2026-11-15" } });
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([]);
-    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: "2026-11-15" }]));
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: "2026-11-15", dueAt: null }]));
     await new Promise((resolve) => setTimeout(resolve, 700));
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toHaveLength(1);
 
     fireEvent.change(due, { target: { value: "2026-11-20" } });
     fireEvent.blur(due);
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toHaveLength(2), { timeout: 300 });
-    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ dueDate: "2026-11-20" });
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ dueDate: "2026-11-20", dueAt: null });
   });
 
   it("shows a failed save in the toast after the panel has closed, offering to copy the notes", async () => {
