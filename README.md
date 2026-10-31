@@ -32,7 +32,7 @@ One Cloudflare Worker serves everything:
 
 Data lives in D1 (SQLite), accessed through Drizzle ORM. Cron Triggers handle nightly backups to R2; recurrence advances when a task is completed, not on a schedule. The API is protected by scoped API tokens, which the web app, scripts and the iOS Shortcut all use. The remote MCP uses OAuth with an owner passphrase.
 
-The web app asks for an API token the first time you open it, checks it with `GET /api/me`, and keeps it in the browser's local storage until you sign out. Mint one for the browser with `npm run token:create -w @claudia/worker -- --remote --name browser --scopes write` (the secret is shown once). Signed in, it shows the desktop views (Inbox, Today, Next, WIP, Waiting, Someday), your saved filters and every list, narrowed by context (Work, Personal, Home), and you can complete tasks with Undo.
+The web app asks for an API token the first time you open it, checks it with `GET /api/me`, and keeps it in the browser's local storage until you sign out. Mint one for the browser with `npm run token:create -w @claudia/worker -- --remote --name browser --scopes write` (the secret is shown once). Signed in, it shows the desktop views (Inbox, Today, Next, WIP, Waiting, Someday), your saved filters and every list, narrowed by context (Work, Personal, Home), and you can complete tasks with Undo. Add tasks from any screen (`#label` adds a label), click a title to rename it, and click a row to open the detail panel for notes, dates, labels, list, repeat, subtasks and delete.
 
 ## Development
 
