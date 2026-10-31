@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Task } from "@claudia/shared";
-import { formatWhen, splitIn, zonedToUtc } from "../lib/dates";
+import { formatDue, formatWhen, splitIn, zonedToUtc } from "../lib/dates";
 import { addDays, errands, garden, inbox, main, projects, renderAt, sentBodies, stubApi, task, today } from "./testApi";
 
 const tz = "Australia/Sydney";
@@ -161,11 +161,77 @@ describe("the detail panel", () => {
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${call.id}`)).toEqual([{ dueDate: "2026-11-03", dueAt: null }]));
   });
 
-  it("sets the start date", async () => {
+  it("snoozes with a quick choice, closes the panel and offers Undo", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    const { fetchMock, view, p } = await openOn(weed);
+    await userEvent.click(within(p.getByRole("group", { name: "Snooze" })).getByRole("button", { name: "Snooze: Tomorrow" }));
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ snoozedUntil: zonedToUtc(addDays(today, 1), "00:00", tz) }]);
+    expect(view.href()).toBe(`/list/${garden.id}`);
+    expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Snoozed until Tomorrow"));
+    expect(main().queryByText("Weed the beds")).toBeNull();
+    await userEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ snoozedUntil: null }));
+    expect(await main().findByText("Weed the beds")).toBeTruthy();
+  });
+
+  it("says so when undoing a snooze fails", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    let patches = 0;
+    const { p } = await openOn(weed, [weed], { gate: () => (++patches > 1 ? Promise.reject(new Error("no")) : undefined) });
+    await userEvent.click(within(p.getByRole("group", { name: "Snooze" })).getByRole("button", { name: "Snooze: Tomorrow" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Snoozed until Tomorrow"));
+    await userEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Boom"));
+  });
+
+  it("offers This evening only before 6 pm, and no Today", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    const { p } = await openOn(weed);
+    const snooze = within(p.getByRole("group", { name: "Snooze" }));
+    const evening = splitIn(new Date().toISOString(), tz).time < "18:00";
+    expect(snooze.queryByRole("button", { name: "Snooze: This evening" }) !== null).toBe(evening);
+    expect(snooze.queryByRole("button", { name: "Snooze: Today" })).toBeNull();
+    expect((snooze.getByLabelText("Snooze time") as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it("a past snooze shows as none", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id, snoozedUntil: "2020-01-01T00:00:00.000Z" });
+    const { p } = await openOn(weed);
+    const snooze = within(p.getByRole("group", { name: "Snooze" }));
+    expect(snooze.getByText("None")).toBeTruthy();
+    expect(snooze.queryByRole("button", { name: "Clear snooze" })).toBeNull();
+  });
+
+  it("a snoozed task shows its snooze with Clear", async () => {
+    const snoozedUntil = zonedToUtc(addDays(today, 3), "00:00", tz);
+    const weed = task({ title: "Weed the beds", listId: garden.id, snoozedUntil });
+    const { fetchMock, view, p } = await openOn(weed);
+    const snooze = within(p.getByRole("group", { name: "Snooze" }));
+    expect(snooze.getByText(formatWhen({ date: addDays(today, 3), time: null }, today, "00:00").text)).toBeTruthy();
+    await userEvent.click(snooze.getByRole("button", { name: "Clear snooze" }));
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ snoozedUntil: null }]);
+    expect(view.href()).toBe(`/list/${garden.id}?task=${weed.id}`);
+    expect(screen.getByRole("complementary", { name: "Task details" })).toBeTruthy();
+  });
+
+  it("shows a start date read-only, with Clear", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id, startDate: "2026-11-01" });
     const { fetchMock, p } = await openOn(weed);
-    await userEvent.click(p.getByRole("button", { name: "Clear start date" }));
+    const start = within(p.getByRole("group", { name: "Start" }));
+    expect(start.getByText(formatDue("2026-11-01", today).text)).toBeTruthy();
+    expect(start.queryByRole("textbox")).toBeNull();
+    expect(p.queryByLabelText("Start date")).toBeNull();
+    const names = p.getAllByRole("group").map((g) => g.getAttribute("aria-labelledby") && document.getElementById(g.getAttribute("aria-labelledby")!)?.textContent);
+    expect(names.filter((n) => n === "Due" || n === "Snooze" || n === "Start")).toEqual(["Due", "Snooze", "Start"]);
+    await userEvent.click(start.getByRole("button", { name: "Clear start date" }));
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ startDate: null }]);
+  });
+
+  it("has no Start without a start date", async () => {
+    const plain = task({ title: "Weed the beds", listId: garden.id });
+    const { p } = await openOn(plain);
+    expect(p.queryByRole("group", { name: "Start" })).toBeNull();
   });
 
   it("shows a due time", async () => {

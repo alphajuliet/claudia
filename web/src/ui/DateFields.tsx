@@ -1,8 +1,11 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { Task } from "@claudia/shared";
-import { formatWhen, splitIn, todayIn, type When } from "../lib/dates";
+import { useUpdateTask } from "../data/queries";
+import { formatDue, formatWhen, splitIn, todayIn, zonedToUtc, type When } from "../lib/dates";
+import { isSnoozed } from "../lib/tasks";
 import { dueFields, quickDates } from "../lib/when";
 import { Field, FieldStatus, usePatch, type SaveState } from "./TaskFields";
+import { useToast } from "./Toast";
 
 /*
  * The panel's date fields. Each is a WhenField: what is set now, quick choices, and native date and time inputs, so
@@ -189,28 +192,88 @@ function DueField({ task, timeZone }: { task: Task; timeZone: string }) {
   );
 }
 
-/** The start date, edited as before for now. */
-function StartField({ task }: { task: Task }) {
+/** The task's snooze as a When: one that has passed is none, and midnight is the day alone. */
+function snoozeWhen(task: Task, timeZone: string): When | null {
+  if (!isSnoozed(task)) return null;
+  const { date, time } = splitIn(task.snoozedUntil!, timeZone);
+  return { date, time: time === "00:00" ? null : time };
+}
+
+/**
+ * Snooze: a day alone is the start of that day. Views hide snoozed tasks, so snoozing into the future closes the panel
+ * at once, then the toast says until when, with Undo.
+ */
+function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone: string; onClose: () => void }) {
   const { state, patch } = usePatch(task);
+  const update = useUpdateTask();
+  const toast = useToast();
+  const today = todayIn(timeZone);
+  const nowTime = splitIn(new Date().toISOString(), timeZone).time;
+  const quick = quickDates(today);
+  const choices: WhenChoice[] = [
+    ...(nowTime < "18:00" ? [{ label: "This evening", date: today, time: "18:00" }] : []),
+    ...[
+      { label: "Tomorrow", date: quick.tomorrow },
+      { label: "This weekend", date: quick.weekend },
+      { label: "Next week", date: quick.nextWeek },
+    ].filter((c) => c.date !== today),
+  ];
+  const onSave = (when: When | null) => {
+    const previous = task.snoozedUntil;
+    const snoozedUntil = when ? zonedToUtc(when.date, when.time ?? "00:00", timeZone) : null;
+    const away = snoozedUntil !== null && snoozedUntil > new Date().toISOString();
+    if (away) onClose();
+    void patch({ snoozedUntil }).then((saved) => {
+      if (!saved || !away) return;
+      toast.show({
+        message: `Snoozed until ${formatWhen(when!, todayIn(timeZone), nowTime).text}`,
+        action: {
+          label: "Undo",
+          run: () => {
+            update.mutateAsync({ id: task.id, patch: { snoozedUntil: previous } }).catch((e: Error) => toast.show({ message: e.message, error: true }));
+          },
+        },
+      });
+    });
+  };
+  return (
+    <WhenField
+      label="Snooze"
+      name="snooze"
+      value={snoozeWhen(task, timeZone)}
+      choices={choices}
+      today={today}
+      nowTime={nowTime}
+      status={state}
+      onSave={onSave}
+    />
+  );
+}
+
+/** A start date, shown only when one is set. Nothing uses it, so the panel can clear it but not set it. */
+function StartField({ task, timeZone }: { task: Task; timeZone: string }) {
+  const { state, patch } = usePatch(task);
+  if (!task.startDate) return null;
   return (
     <Field label="Start" group>
-      <IdleInput type="date" label="Start date" value={task.startDate} complete={wholeDate} onSave={(startDate) => void patch({ startDate })} />
-      {task.startDate && (
+      <div className="when-current">
+        <span>{formatDue(task.startDate, todayIn(timeZone)).text}</span>
         <button type="button" className="quiet small" aria-label="Clear start date" onClick={() => void patch({ startDate: null })}>
           Clear
         </button>
-      )}
-      <FieldStatus state={state} />
+        <FieldStatus state={state} />
+      </div>
     </Field>
   );
 }
 
-/** The task's dates. `onClose` is for Snooze, which closes the panel once the task leaves the view. */
-export function DateFields({ task, timeZone }: { task: Task; timeZone: string; onClose: () => void }) {
+/** The task's dates: Due, Snooze, then Start. `onClose` closes the panel when a snooze takes the task out of view. */
+export function DateFields({ task, timeZone, onClose }: { task: Task; timeZone: string; onClose: () => void }) {
   return (
     <>
       <DueField task={task} timeZone={timeZone} />
-      <StartField task={task} />
+      <SnoozeField task={task} timeZone={timeZone} onClose={onClose} />
+      <StartField task={task} timeZone={timeZone} />
     </>
   );
 }
