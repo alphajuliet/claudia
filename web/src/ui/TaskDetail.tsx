@@ -1,11 +1,10 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Task } from "@claudia/shared";
-import { useCreateTask, useDeleteTask, usePendingCompletions, useTask, useTasks, useTimeZone } from "../data/queries";
-import { useComplete } from "./TaskList";
+import { useCreateTask, usePendingCompletions, useTask, useTasks, useTimeZone } from "../data/queries";
+import { useComplete, useDelete } from "./TaskList";
 import { DateFields, FieldStatus, LabelsField, ListField, NotesField, RepeatField, TitleField, useSave } from "./TaskFields";
 import { wasFollowed } from "./selection";
 import { InlineMarkdown, plainText } from "./Markdown";
-import { useToast } from "./Toast";
 
 /** The task's open subtasks, each with a checkbox, and a field that adds one to the end. */
 function Subtasks({ task }: { task: Task }) {
@@ -72,16 +71,8 @@ function Subtasks({ task }: { task: Task }) {
 
 /** Deletes the task and its subtasks after asking (there's no undo), closing the panel at once. */
 function DeleteButton({ task, onClose }: { task: Task; onClose: () => void }) {
-  const remove = useDeleteTask();
-  const toast = useToast();
-  const onClick = () => {
-    if (!window.confirm(`Delete “${task.title}” and its subtasks? This can't be undone.`)) return;
-    onClose();
-    remove.mutateAsync({ task }).then(
-      () => toast.show({ message: `Deleted “${task.title}”` }),
-      (e: Error) => toast.show({ message: e.message, error: true }),
-    );
-  };
+  const onDelete = useDelete();
+  const onClick = () => void onDelete(task, onClose);
   return (
     <div className="detail-footer">
       <button type="button" className="quiet danger" onClick={onClick}>

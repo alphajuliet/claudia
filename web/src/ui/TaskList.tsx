@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import type { Task } from "@claudia/shared";
-import { usePendingCompletions, useSetCompleted, useTimeZone, useUpdateTask } from "../data/queries";
+import { useDeleteTask, usePendingCompletions, useSetCompleted, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
 import { collapseRows, parentsIn, rowsUnder, type Row } from "../lib/tasks";
@@ -54,6 +54,25 @@ export function useComplete() {
     } catch (e) {
       toast.show({ message: (e as Error).message, error: true });
     }
+  };
+}
+
+/**
+ * Deletes a task and its subtasks after asking (there's no undo), reporting the outcome in the toast. `onGone` runs
+ * once the user has said yes, before the task leaves the screen (the panel closes with it). False if they said no.
+ */
+export function useDelete() {
+  const remove = useDeleteTask();
+  const toast = useToast();
+  return (task: Task, onGone?: () => void): boolean => {
+    const title = plainText(task.title);
+    if (!window.confirm(`Delete “${title}” and its subtasks? This can't be undone.`)) return false;
+    onGone?.();
+    remove.mutateAsync({ task }).then(
+      () => toast.show({ message: `Deleted “${title}”` }),
+      (e: Error) => toast.show({ message: e.message, error: true }),
+    );
+    return true;
   };
 }
 
@@ -281,6 +300,11 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   useCommand("complete", () => {
     if (!current || current.kind !== "task") return false;
     if (!pending.has(current.id)) void onComplete(current);
+  });
+  const onDelete = useDelete();
+  useCommand("delete", () => {
+    if (!current) return false;
+    onDelete(current, () => { if (selectedId === current.id) select(null); });
   });
   useCommand("rename", () => {
     const title = current?.kind === "task" && document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(current.id)}"] .task-title`);

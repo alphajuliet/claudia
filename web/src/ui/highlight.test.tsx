@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { garden, inbox, main, renderAt, sentBodies, stubApi, task } from "./testApi";
 
 const row = (title: string) => main().getByText(title).closest("li")!;
@@ -202,5 +202,49 @@ describe("the keyboard highlight", () => {
     expect(row("Plant tomatoes").classList).not.toContain("highlighted");
     await userEvent.keyboard("j");
     expect(document.activeElement).toBe(row("Weed the beds"));
+  });
+
+  it("deletes the highlighted task with Delete or Backspace after asking, and moves the highlight on", async () => {
+    const { tasks, fetchMock } = threeTasks();
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("j{Delete}");
+    expect(confirm).toHaveBeenCalledWith("Delete “Weed the beds” and its subtasks? This can't be undone.");
+    await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
+    expect(fetchMock.mock.calls.some(([p, init]) => p === `/api/tasks/${tasks[0]!.id}` && init?.method === "DELETE")).toBe(true);
+    await waitFor(() => expect(document.activeElement).toBe(row("Plant tomatoes")));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Deleted “Weed the beds”"));
+
+    // Saying no keeps it.
+    confirm.mockReturnValue(false);
+    await userEvent.keyboard("{Backspace}");
+    expect(confirm).toHaveBeenCalledTimes(2);
+    expect(main().getByText("Plant tomatoes")).toBeTruthy();
+  });
+
+  it("closes the panel when the task it shows is deleted from the keyboard", async () => {
+    const { href } = threeTasks();
+    vi.stubGlobal("confirm", () => true);
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("j{Enter}");
+    await screen.findByRole("textbox", { name: "Title" });
+    // Focus is in the panel (not a field): Backspace still deletes the highlighted task.
+    await userEvent.keyboard("{Backspace}");
+    expect(panel()).toBeNull();
+    expect(href()).toBe(`/list/${garden.id}`);
+    await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
+  });
+
+  it("leaves Backspace alone while typing", async () => {
+    const confirm = vi.fn(() => true);
+    vi.stubGlobal("confirm", confirm);
+    threeTasks();
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("j");
+    const field = main().getByRole("textbox", { name: "Add a task" }) as HTMLInputElement;
+    await userEvent.type(field, "ab{Backspace}");
+    expect(field.value).toBe("a");
+    expect(confirm).not.toHaveBeenCalled();
   });
 });

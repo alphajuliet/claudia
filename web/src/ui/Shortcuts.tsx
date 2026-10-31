@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, type KeyboardEvent } from "react";
 import { COMMANDS } from "../lib/commands";
 
-const NAMES: Record<string, string> = { ArrowDown: "↓", ArrowUp: "↑", Escape: "Esc", Enter: "Enter" };
+const NAMES: Record<string, string> = { ArrowDown: "↓", ArrowUp: "↑", Escape: "Esc", Enter: "Enter", Backspace: "⌫" };
 
 /** One binding as keycaps: "g i" reads "g then i". */
 function Keys({ binding }: { binding: string }) {
