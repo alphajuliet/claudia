@@ -60,11 +60,8 @@ export function useTask(id: string) {
       return res.status === 404 ? [] : [await json(res, TaskSchema)];
     },
     initialData: () => {
-      for (const [, tasks] of queryClient.getQueriesData<Task[]>(tasksKey)) {
-        const found = tasks?.find((t) => t.id === id);
-        if (found) return [found];
-      }
-      return undefined;
+      const found = cachedTask(queryClient, id);
+      return found && [found];
     },
     // A cached copy shows at once, but is checked with the server.
     initialDataUpdatedAt: 0,
@@ -91,6 +88,15 @@ const send = (method: string, body: unknown): RequestInit => ({
 /** Every task change has a key under this prefix, so the last one running can tell. */
 const taskWriteKey = (kind: string) => ["tasks", kind];
 const tasksKey = { queryKey: ["tasks"] };
+
+/** A task as any cached list or panel entry has it now, or undefined. */
+export function cachedTask(queryClient: QueryClient, id: string): Task | undefined {
+  for (const [, tasks] of queryClient.getQueriesData<Task[]>(tasksKey)) {
+    const found = tasks?.find((t) => t.id === id);
+    if (found) return found;
+  }
+  return undefined;
+}
 
 /** Refetches the task lists once the last running task change settles, without holding up its result. */
 function refetchWhenLast(queryClient: QueryClient) {

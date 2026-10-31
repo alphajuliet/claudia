@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { Task } from "@claudia/shared";
-import { useUpdateTask } from "../data/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { cachedTask, useUpdateTask } from "../data/queries";
 import { formatDue, formatWhen, splitIn, todayIn, zonedToUtc, type When } from "../lib/dates";
 import { isSnoozed } from "../lib/tasks";
 import { dueFields, quickDates } from "../lib/when";
@@ -102,7 +103,8 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   timeDisabled?: boolean;
   showOverdue?: boolean;
   status: SaveState;
-  onSave: (when: When | null) => void;
+  /** `quick` is true for a quick choice, false for Clear or a typed date or time. */
+  onSave: (when: When | null, quick: boolean) => void;
 }) {
   const shown = value && formatWhen(value, today, nowTime);
   const noteId = useId();
@@ -118,7 +120,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
             <span className="muted">None</span>
           )}
           {value && (
-            <button type="button" className="quiet small" aria-label={`Clear ${name}`} onClick={() => onSave(null)}>
+            <button type="button" className="quiet small" aria-label={`Clear ${name}`} onClick={() => onSave(null, false)}>
               Clear
             </button>
           )}
@@ -131,7 +133,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
               type="button"
               className="quiet small"
               aria-label={`${label}: ${c.label}`}
-              onClick={() => onSave({ date: c.date, time: timeDisabled ? null : c.time ?? keptTime })}
+              onClick={() => onSave({ date: c.date, time: timeDisabled ? null : c.time ?? keptTime }, true)}
             >
               {c.label}
             </button>
@@ -143,7 +145,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
             label={`${label} date`}
             value={value?.date ?? null}
             complete={wholeDate}
-            onSave={(date) => onSave(date ? { date, time: keptTime } : null)}
+            onSave={(date) => onSave(date ? { date, time: keptTime } : null, false)}
           />
           <IdleInput
             type="time"
@@ -152,7 +154,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
             complete={wholeTime}
             disabled={timeDisabled}
             describedBy={timeDisabled ? noteId : undefined}
-            onSave={(time) => onSave(time ? { date: value?.date ?? today, time } : value && { date: value.date, time: null })}
+            onSave={(time) => onSave(time ? { date: value?.date ?? today, time } : value && { date: value.date, time: null }, false)}
           />
         </div>
         {timeDisabled && <p id={noteId} className="when-note muted">Times on repeating tasks are coming</p>}
@@ -200,12 +202,14 @@ function snoozeWhen(task: Task, timeZone: string): When | null {
 }
 
 /**
- * Snooze: a day alone is the start of that day. Views hide snoozed tasks, so snoozing into the future closes the panel
- * at once, then the toast says until when, with Undo.
+ * Snooze: a day alone is the start of that day, and one already passed isn't saved. Views hide snoozed tasks, so a
+ * quick choice closes the panel at once; a typed date leaves it open for a time to follow. Either way the toast then
+ * says until when, with Undo.
  */
 function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone: string; onClose: () => void }) {
   const { state, patch } = usePatch(task);
   const update = useUpdateTask();
+  const queryClient = useQueryClient();
   const toast = useToast();
   const today = todayIn(timeZone);
   const nowTime = splitIn(new Date().toISOString(), timeZone).time;
@@ -218,18 +222,29 @@ function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone: string
       { label: "Next week", date: quick.nextWeek },
     ].filter((c) => c.date !== today),
   ];
-  const onSave = (when: When | null) => {
+  const onSave = (when: When | null, quick: boolean) => {
+    if (!when) {
+      void patch({ snoozedUntil: null });
+      return;
+    }
     const previous = task.snoozedUntil;
-    const snoozedUntil = when ? zonedToUtc(when.date, when.time ?? "00:00", timeZone) : null;
-    const away = snoozedUntil !== null && snoozedUntil > new Date().toISOString();
-    if (away) onClose();
+    const snoozedUntil = zonedToUtc(when.date, when.time ?? "00:00", timeZone);
+    // A choice from a render before 6 pm, or today typed without a time.
+    if (Date.parse(snoozedUntil) <= Date.now()) {
+      toast.show({ message: "That time has passed" });
+      return;
+    }
+    if (quick) onClose();
     void patch({ snoozedUntil }).then((saved) => {
-      if (!saved || !away) return;
+      if (!saved) return;
       toast.show({
-        message: `Snoozed until ${formatWhen(when!, todayIn(timeZone), nowTime).text}`,
+        message: `Snoozed until ${formatWhen(when, todayIn(timeZone), nowTime).text}`,
         action: {
           label: "Undo",
           run: () => {
+            // Only while the task still has this snooze: a later change wins.
+            const now = cachedTask(queryClient, task.id)?.snoozedUntil;
+            if (!now || Date.parse(now) !== Date.parse(snoozedUntil)) return;
             update.mutateAsync({ id: task.id, patch: { snoozedUntil: previous } }).catch((e: Error) => toast.show({ message: e.message, error: true }));
           },
         },
