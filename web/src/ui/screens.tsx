@@ -28,6 +28,57 @@ export function Home() {
   return <Redirect to={lists.isSuccess && !findInbox(lists.data) ? "/today" : "/inbox"} replace />;
 }
 
+/** Open tasks first, then completed ones not already among them. */
+function merge(open: Task[], done: Task[]): Task[] {
+  const ids = new Set(open.map((t) => t.id));
+  return [...open, ...done.filter((t) => !ids.has(t.id))];
+}
+
+/** A query string with its status replaced. */
+const withStatus = (query: string, status: string) => {
+  const q = new URLSearchParams(query);
+  q.set("status", status);
+  return q.toString();
+};
+
+interface Loaded { data: Task[] | undefined; isPending: boolean; error: Error | null; refetch: () => unknown }
+
+/**
+ * Combines a screen's open tasks with its completed ones (when shown). Completed tasks come from a query of their own,
+ * so they never crowd open ones out of the limit, and the screen shows its open tasks without waiting for them.
+ */
+function combine(open: Loaded, done: Loaded, show: boolean, include: (t: Task) => boolean = () => true): Loaded {
+  return {
+    data: open.data && (show ? merge(open.data, (done.data ?? []).filter((t) => t.completedAt !== null && include(t))) : open.data),
+    isPending: open.isPending,
+    error: open.error ?? (show ? done.error : null),
+    refetch: () => {
+      void open.refetch();
+      if (show) void done.refetch();
+    },
+  };
+}
+
+/** The Show completed toggle for a screen's header, with Shift+C. */
+function ShowCompletedButton() {
+  const [show, setShow] = useShowCompleted();
+  useCommand("toggleCompleted", () => setShow(!show));
+  return (
+    <button type="button" className="quiet small" aria-pressed={show} onClick={() => setShow(!show)}>
+      {show ? "Hide completed" : "Show completed"}
+    </button>
+  );
+}
+
+function ScreenHeader({ title }: { title: string }) {
+  return (
+    <header className="screen-header">
+      <h1>{title}</h1>
+      <ShowCompletedButton />
+    </header>
+  );
+}
+
 /**
  * Sections for a view or filter: open, unsnoozed tasks (headings left out) grouped by list in sidebar order,
  * narrowed to the current context. The Inbox list is not in the sidebar tree, so it is put first.
@@ -62,12 +113,17 @@ function BuiltInView({ id, name }: { id: ViewId; name: string }) {
     ...(label ? { labels: [label] } : {}),
     ...(id === "today" ? { dueToday: true } : {}),
   };
-  const tasks = useTasks(query);
+  const [show] = useShowCompleted();
+  const open = useTasks(query, { keepPrevious: true, keepsCompleted: show });
+  const done = useTasks(show && query ? withStatus(query, "completed") : null, { keepPrevious: true });
+  const timeZone = useTimeZone();
+  // Today shows what was completed today, not every task ever due before it.
+  const tasks = combine(open, done, show, id === "today" ? (t) => todayIn(timeZone, new Date(t.completedAt!)) === today : undefined);
   const sections = useGroupedSections(tasks.data);
   const noInbox = id === "inbox" && lists.isSuccess && !inbox;
   return (
     <>
-      <h1>{name}</h1>
+      <ScreenHeader title={name} />
       <QuickAdd target={target} announce />
       {noInbox ? (
         <p className="list-state muted">There's no list called Inbox.</p>
@@ -109,18 +165,15 @@ function listSections(rows: Row[]): Section[] {
 export function ListScreen({ id }: { id: string }) {
   const lists = useLists();
   const list: List | undefined = lists.data?.find((l) => l.id === id);
-  const [showCompleted, setShowCompleted] = useShowCompleted();
-  const tasks = useTasks(new URLSearchParams({ listId: id, status: showCompleted ? "all" : "open", limit: "500" }).toString(), { keepPrevious: true });
-  useCommand("toggleCompleted", () => setShowCompleted(!showCompleted));
+  const [show] = useShowCompleted();
+  const query = new URLSearchParams({ listId: id, status: "open", limit: "500" }).toString();
+  const open = useTasks(query, { keepPrevious: true, keepsCompleted: show });
+  const done = useTasks(show ? withStatus(query, "completed") : null, { keepPrevious: true });
+  const tasks = combine(open, done, show);
   if (lists.isSuccess && !list) return <NotFound />;
   return (
     <>
-      <header className="screen-header">
-        <h1>{list?.name ?? "List"}</h1>
-        <button type="button" className="quiet small" aria-pressed={showCompleted} onClick={() => setShowCompleted(!showCompleted)}>
-          {showCompleted ? "Hide completed" : "Show completed"}
-        </button>
-      </header>
+      <ScreenHeader title={list?.name ?? "List"} />
       <QuickAdd target={list && { listId: list.id, listName: list.name }} />
       <TaskList query={tasks} sections={listSections(visibleRows(tasks.data ?? []))} empty="Nothing here." />
     </>
@@ -131,13 +184,16 @@ export function FilterScreen({ id }: { id: string }) {
   const filters = useFilters();
   const filter = filters.data?.find((f) => f.id === id);
   const inbox = findInbox(useLists().data ?? []);
-  const tasks = useFilterTasks(id);
-  // A filter's query may match completed tasks, but the screen shows open ones only.
-  const sections = useGroupedSections(tasks.data?.filter((t) => t.completedAt === null));
+  const [show] = useShowCompleted();
+  const open = useFilterTasks(id, { keepPrevious: true, keepsCompleted: show });
+  const done = useFilterTasks(show ? id : null, { status: "completed", keepPrevious: true });
+  // A filter's own query may match completed tasks: they show only with the toggle on.
+  const tasks = combine({ ...open, data: open.data?.filter((t) => show || t.completedAt === null) }, done, show);
+  const sections = useGroupedSections(tasks.data);
   if (filters.isSuccess && !filter) return <NotFound />;
   return (
     <>
-      <h1>{filter?.name ?? "Filter"}</h1>
+      <ScreenHeader title={filter?.name ?? "Filter"} />
       <QuickAdd target={inbox && { listId: inbox.id, listName: inbox.name }} announce />
       <TaskList query={tasks} sections={sections} empty="Nothing here." />
     </>

@@ -41,9 +41,8 @@ export function useTimeZone(): string {
 }
 
 /** Tasks matching a query string (without the "?"). Null waits. */
-/** Tasks for a query. With `keepPrevious`, the rows shown stay while a changed query loads (no "Loading…"). */
-export const useTasks = (query: string | null, opts: { keepPrevious?: boolean } = {}) =>
-  useGet(["tasks", query], query === null ? null : `/api/tasks?${query}`, TasksSchema, opts);
+export const useTasks = (query: string | null, opts: TaskListOptions = {}) =>
+  useGet(listKey(["tasks", query], opts), query === null ? null : `/api/tasks?${query}`, TasksSchema, opts);
 
 /**
  * One task, as a list of none or one so that it sits with the other task lists and every task change (at once, on
@@ -71,7 +70,14 @@ export function useTask(id: string) {
   });
 }
 
-export const useFilterTasks = (id: string) => useGet(["tasks", "filter", id], `/api/filters/${id}/tasks?limit=500`, TasksSchema);
+/** A saved filter's tasks; `status` overrides the filter's own (null leaves the query off). */
+export const useFilterTasks = (id: string | null, opts: TaskListOptions & { status?: "completed" } = {}) =>
+  useGet(
+    listKey(["tasks", "filter", id, ...(opts.status ? [opts.status] : [])], opts),
+    id === null ? null : `/api/filters/${id}/tasks?limit=500${opts.status ? `&status=${opts.status}` : ""}`,
+    TasksSchema,
+    opts,
+  );
 
 /** A JSON request body. */
 const send = (method: string, body: unknown): RequestInit => ({
@@ -95,9 +101,24 @@ type Changed = { key: QueryKey; before: { task: Task; index: number; removed: bo
 /** The detail panel's entry for one task (see `useTask`), as opposed to a list of tasks. */
 const isOne = (key: QueryKey) => key[1] === "one";
 
-/** Entries that show completed tasks too (the panel's, and lists fetched with `status=all`), so completing marks rather than removes. */
+/**
+ * Entries whose tasks stay on screen when completed (the panel's, lists fetched with `status=all`, and open lists
+ * shown with their completed tasks), so completing marks rather than removes.
+ */
 const keepsCompleted = (key: QueryKey) =>
-  isOne(key) || (typeof key[1] === "string" && new URLSearchParams(key[1]).get("status") === "all");
+  isOne(key) || key.at(-1) === WITH_COMPLETED || (typeof key[1] === "string" && new URLSearchParams(key[1]).get("status") === "all");
+
+/** Ends the key of a task list shown with its completed tasks (so it is a cache entry of its own). */
+const WITH_COMPLETED = "withCompleted";
+
+interface TaskListOptions {
+  /** While a changed query loads, keep showing the rows (no "Loading…"). */
+  keepPrevious?: boolean;
+  /** The screen also shows completed tasks: completing one marks it rather than removing it. */
+  keepsCompleted?: boolean;
+}
+
+const listKey = (base: QueryKey, opts: TaskListOptions) => (opts.keepsCompleted ? [...base, WITH_COMPLETED] : base);
 
 /**
  * In every cached task list, replaces the tasks picked by `pick` with `change(task, key)`, or removes them where it

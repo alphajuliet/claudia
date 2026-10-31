@@ -87,6 +87,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
       const q = new URLSearchParams(search);
       const out = [...store.values()].filter((t) =>
         (q.get("status") !== "open" || t.completedAt === null)
+        && (q.get("status") !== "completed" || t.completedAt !== null)
         && (!q.get("listId") || t.listId === q.get("listId"))
         && (!q.get("parentId") || t.parentId === q.get("parentId"))
         && (!q.get("label") || t.labels.includes(q.get("label")!))
@@ -94,8 +95,9 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
         && (!q.get("q") || `${t.title}\n${t.notes ?? ""}`.toLowerCase().includes(q.get("q")!.toLowerCase())));
       return json(out);
     }
-    // A saved filter here matches every task, completed ones included.
-    if (/^\/api\/filters\/\w+\/tasks$/.test(pathname!)) return json([...store.values()]);
+    // A saved filter here matches every task, completed ones included (or only those, with status=completed).
+    if (/^\/api\/filters\/\w+\/tasks$/.test(pathname!))
+      return json([...store.values()].filter((t) => new URLSearchParams(search).get("status") !== "completed" || t.completedAt !== null));
     const one = pathname!.match(/^\/api\/tasks\/(\w+)$/);
     if (one && !store.has(one[1]!)) return json({ error: { code: "not_found", message: "Task not found" } }, 404);
     if (one && (!init?.method || init.method === "GET")) return json(store.get(one[1]!));

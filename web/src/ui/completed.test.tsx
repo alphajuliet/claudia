@@ -2,7 +2,8 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { resetShowCompleted } from "./showCompleted";
-import { at, garden, main, renderAt, stubApi, task } from "./testApi";
+import type { Filter } from "@claudia/shared";
+import { at, garden, inbox, main, renderAt, stubApi, task, today } from "./testApi";
 
 const row = (title: string) => main().getByText(title).closest("li")!;
 const posts = (fetchMock: ReturnType<typeof stubApi>, suffix: string) =>
@@ -30,7 +31,7 @@ describe("show completed", () => {
     expect(row("Plan").classList).toContain("completed");
     expect((main().getByRole("checkbox", { name: "Reopen Plan" }) as HTMLInputElement).checked).toBe(true);
     expect(row("Dig").getAttribute("data-depth")).toBe("1");
-    expect(fetchMock.mock.calls.some(([p]) => String(p).includes("status=all"))).toBe(true);
+    expect(fetchMock.mock.calls.some(([p]) => String(p).includes("status=completed"))).toBe(true);
     expect(main().getByRole("button", { name: "Hide completed" }).getAttribute("aria-pressed")).toBe("true");
 
     unmount();
@@ -90,5 +91,48 @@ describe("show completed", () => {
     await userEvent.keyboard("C");
     expect(document.activeElement).toBe(main().getByRole("textbox", { name: "Add a task" }));
     expect(main().queryByText("Plan")).toBeNull();
+  });
+
+  it("works in views too: Inbox, Next and saved filters", async () => {
+    const tasks = [
+      task({ title: "Open errand", listId: inbox.id, labels: ["next"], position: "b0" }),
+      task({ title: "Done errand", listId: inbox.id, labels: ["next"], completedAt: at, position: "b1" }),
+    ];
+    const filter: Filter = { id: "01JD0000000000000000000009", name: "Everything", query: "status=open", position: "a0", createdAt: at, updatedAt: at };
+    for (const path of ["/inbox", "/next", `/filter/${filter.id}`]) {
+      stubApi(tasks, { filters: [filter] });
+      const { unmount } = renderAt(path);
+      await main().findByText("Open errand");
+      expect(main().queryByText("Done errand")).toBeNull();
+      await userEvent.keyboard("{Shift>}C{/Shift}");
+      expect(await main().findByText("Done errand")).toBeTruthy();
+      expect(row("Done errand").classList).toContain("completed");
+      await userEvent.click(main().getByRole("button", { name: "Hide completed" }));
+      unmount();
+    }
+  });
+
+  it("shows only what was completed today in Today", async () => {
+    stubApi([
+      task({ title: "Pay the rent", listId: inbox.id, dueDate: today }),
+      task({ title: "Paid the gas", listId: inbox.id, dueDate: today, completedAt: new Date().toISOString() }),
+      task({ title: "Paid last year", listId: inbox.id, dueDate: "2020-01-01", completedAt: "2020-01-01T00:00:00.000Z" }),
+    ]);
+    renderAt("/today");
+    await main().findByText("Pay the rent");
+    await userEvent.click(main().getByRole("button", { name: "Show completed" }));
+    expect(await main().findByText("Paid the gas")).toBeTruthy();
+    expect(main().queryByText("Paid last year")).toBeNull();
+  });
+
+  it("keeps a task completed in a view on screen, ticked", async () => {
+    stubApi([task({ title: "Sort the post", listId: inbox.id })]);
+    renderAt("/inbox");
+    await userEvent.click(await main().findByRole("button", { name: "Show completed" }));
+    await userEvent.click(main().getByRole("checkbox", { name: "Complete Sort the post" }));
+    await waitFor(() => expect(row("Sort the post").classList).toContain("completed"));
+    // Still there once the lists have been fetched again.
+    await new Promise((r) => setTimeout(r, 50));
+    expect(row("Sort the post").classList).toContain("completed");
   });
 });

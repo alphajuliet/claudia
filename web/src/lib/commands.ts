@@ -17,7 +17,7 @@ export const COMMANDS: Command[] = [
   { id: "close", label: "Close task details", keys: ["Escape"] },
   { id: "complete", label: "Complete task", keys: ["x"] },
   { id: "rename", label: "Rename task", keys: ["e"] },
-  { id: "toggleCompleted", label: "Show or hide completed tasks (lists)", keys: ["C"] },
+  { id: "toggleCompleted", label: "Show or hide completed tasks", keys: ["C"] },
   { id: "capture", label: "Add a task", keys: ["c"] },
   { id: "search", label: "Search", keys: ["/"] },
   { id: "goInbox", label: "Go to Inbox", keys: ["g i"] },

@@ -26,8 +26,8 @@ Four cards from NEXT, built in this order, each with its own tests and commits.
 
 ## 4. Show completed
 
-- On list screens, a "Show completed" button in the header and `Shift+C` toggle it; the choice is kept in this browser.
-- When on, the list fetches `status=all`. Completed tasks and subtasks appear in place, ticked, struck through and dimmed. Unticking one, or `x` on it, reopens it.
+- On every screen (lists, Inbox, Today, Next, WIP, Waiting, Someday, saved filters), a "Show completed" button in the header and `Shift+C` toggle it; the choice is kept in this browser. (2026-10-31: widened from lists only after trying it.)
+- When on, the screen fetches its completed tasks with a second query (`status=completed`; for a saved filter, `GET /api/filters/{id}/tasks?status=completed`), so they never crowd open tasks out of the limit. Today shows only tasks completed today. Completed tasks and subtasks appear in place, ticked, struck through and dimmed. Unticking one, or `x` on it, reopens it.
 - Collapse still applies. Snoozed tasks stay hidden.
 
 ## Testing
