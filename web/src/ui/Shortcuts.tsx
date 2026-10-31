@@ -31,9 +31,13 @@ export function Shortcuts({ onClose }: { onClose: () => void }) {
   }, []);
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    // The overlay's keys are its own: nothing else runs while it's open.
+    // The overlay's keys are its own: nothing else runs while it's open, and Tab stays inside.
     e.stopPropagation();
     if (e.key === "Escape") onClose();
+    if (e.key === "Tab") {
+      e.preventDefault();
+      ref.current?.querySelector<HTMLElement>("button")?.focus();
+    }
   };
 
   return (

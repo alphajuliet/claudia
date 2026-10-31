@@ -25,6 +25,13 @@ describe("createMatcher", () => {
     expect(m.match("j", 20)).toBe("next");
   });
 
+  it("forgets a chord on reset", () => {
+    const m = createMatcher(COMMANDS);
+    expect(m.match("g", 0)).toBe("pending");
+    m.reset();
+    expect(m.match("t", 10)).toBeNull();
+  });
+
   it("forgets a chord after the time limit and matches the key alone", () => {
     const m = createMatcher(COMMANDS);
     expect(m.match("g", 0)).toBe("pending");

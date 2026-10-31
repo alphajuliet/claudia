@@ -39,7 +39,7 @@ function Shell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const { selectedId, select } = useSelectedTask();
-  const [, navigate] = useLocation();
+  const [location, navigate] = useLocation();
   const menu = useRef<HTMLButtonElement>(null);
   const close = () => setDrawerOpen(false);
   // Leaving the drawer with Escape or the backdrop returns focus to Menu.
@@ -48,7 +48,8 @@ function Shell() {
     menu.current?.focus();
   };
 
-  useCommand("search", () => navigate("/search"));
+  // On the search screen, `/` is the screen's own (it focuses the field).
+  useCommand("search", () => (location === "/search" ? false : navigate("/search")));
   useCommand("help", () => setHelpOpen(true));
   // Closing the panel puts focus back on the task's row, so the keyboard carries on from there.
   const closePanel = () => {
@@ -56,7 +57,18 @@ function Shell() {
     select(null);
     if (closed) focusTask(closed);
   };
-  useCommand("close", selectedId ? closePanel : undefined);
+  useCommand("close", drawerOpen ? dismissDrawer : selectedId ? closePanel : undefined);
+  // The open drawer covers the list, so the list's keys wait until it closes. Registered as the drawer opens, these
+  // come after the list's own and so are tried first. (Enter stays free for the drawer's links.)
+  const covered = drawerOpen ? () => {} : undefined;
+  useCommand("next", covered);
+  useCommand("previous", covered);
+  useCommand("complete", covered);
+  useCommand("rename", covered);
+  useCommand("capture", covered);
+
+  // Going anywhere (a link, a g chord, search) closes the drawer.
+  useEffect(() => setDrawerOpen(false), [location]);
 
 
   // The drawer is for narrow screens: close it when the window widens to the desktop layout.

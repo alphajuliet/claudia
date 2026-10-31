@@ -1,7 +1,7 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { garden, main, renderAt, sentBodies, stubApi, task } from "./testApi";
+import { garden, inbox, main, renderAt, sentBodies, stubApi, task } from "./testApi";
 
 const row = (title: string) => main().getByText(title).closest("li")!;
 const panel = () => screen.queryByRole("complementary", { name: "Task details" });
@@ -137,5 +137,70 @@ describe("the keyboard highlight", () => {
     expect(main().getByRole("button", { name: "Spring" })).toBeTruthy();
     await userEvent.keyboard("j");
     expect(document.activeElement).toBe(row("Plant bulbs"));
+  });
+
+  it("completes once when x is held down", async () => {
+    const { fetchMock } = threeTasks();
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("j{x>4/}");
+    await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
+    const completes = fetchMock.mock.calls.filter(([p, init]) => String(p).endsWith("/complete") && init?.method === "POST");
+    expect(completes).toHaveLength(1);
+    expect(main().getByText("Plant tomatoes")).toBeTruthy();
+  });
+
+  it("passes the highlight back to the previous row when the last one is completed", async () => {
+    threeTasks();
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("kx");
+    await waitFor(() => expect(main().queryByText("Mulch the roses")).toBeNull());
+    await waitFor(() => expect(document.activeElement).toBe(row("Plant tomatoes")));
+  });
+
+  it("keeps the highlight on a repeating task", async () => {
+    stubApi([task({ title: "Water the ferns", listId: garden.id, dueDate: "2026-10-01", recurRule: "FREQ=WEEKLY", recurFrom: "due" })]);
+    renderAt(`/list/${garden.id}`);
+    await main().findByText("Water the ferns");
+    await userEvent.keyboard("jx");
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Next due"));
+    expect(document.activeElement).toBe(row("Water the ferns"));
+  });
+
+  it("opens with o from a row's title button", async () => {
+    const { tasks } = threeTasks();
+    await main().findByText("Weed the beds");
+    main().getByRole("button", { name: "Plant tomatoes" }).focus();
+    await userEvent.keyboard("o");
+    expect(await screen.findByRole("textbox", { name: "Title" })).toHaveProperty("value", "Plant tomatoes");
+    expect(tasks).toHaveLength(3);
+  });
+
+  it("leaves the arrow keys to the panel's own controls", async () => {
+    const tasks = [
+      task({ title: "Water the ferns", listId: garden.id, dueDate: "2026-10-01", recurRule: "FREQ=WEEKLY", recurFrom: "due" }),
+      task({ title: "Plant tomatoes", listId: garden.id }),
+    ];
+    stubApi(tasks);
+    const { href } = renderAt(`/list/${garden.id}?task=${tasks[0]!.id}`);
+    const radio = await screen.findByRole("radio", { name: "From due date" });
+    radio.focus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(href()).toBe(`/list/${garden.id}?task=${tasks[0]!.id}`);
+  });
+
+  it("starts again on another screen", async () => {
+    stubApi([task({ title: "Weed the beds", listId: inbox.id, labels: ["next"] }), task({ title: "Plant tomatoes", listId: inbox.id, labels: ["next"] })]);
+    renderAt("/next");
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("jj");
+    expect(document.activeElement).toBe(row("Plant tomatoes"));
+    await userEvent.keyboard("gi");
+    await main().findByRole("heading", { name: "Inbox" });
+    await userEvent.keyboard("gn");
+    await main().findByRole("heading", { name: "Next" });
+    await main().findByText("Weed the beds");
+    expect(row("Plant tomatoes").classList).not.toContain("highlighted");
+    await userEvent.keyboard("j");
+    expect(document.activeElement).toBe(row("Weed the beds"));
   });
 });

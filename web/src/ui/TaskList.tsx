@@ -108,8 +108,8 @@ function TaskSection({ section, pending, selectedId, highlightId, ...rest }: Row
 }
 
 /** Focuses the row (or heading) showing a task, if it's on screen. */
-export function focusTask(id: string) {
-  document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: false });
+export function focusTask(id: string, preventScroll = false) {
+  document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(id)}"]`)?.focus({ preventScroll });
 }
 
 /**
@@ -127,6 +127,14 @@ function useHighlight(order: Task[]) {
 
   const highlight = (t: Task) => setState({ path: location, id: t.id });
 
+  // A new screen starts without a highlight (views share one list, so it isn't remounted).
+  const shownAt = useRef(location);
+  useEffect(() => {
+    if (shownAt.current === location) return;
+    shownAt.current = location;
+    setState(null);
+  }, [location]);
+
   useEffect(() => {
     if (!highlightId) return;
     const i = order.findIndex((t) => t.id === highlightId);
@@ -140,8 +148,9 @@ function useHighlight(order: Task[]) {
       return;
     }
     setState({ path: location, id: next.id });
-    // The old row took focus with it when it went: give it to the row now in its place.
-    if (document.activeElement === document.body || !document.activeElement) focusTask(next.id);
+    // The old row took focus with it when it went: give it to the row now in its place, without scrolling (the
+    // change may have come from elsewhere).
+    if (document.activeElement === document.body || !document.activeElement) focusTask(next.id, true);
   }, [ids, highlightId]); // when the rows or the highlight change
 
   const move = (delta: 1 | -1) => {
@@ -172,12 +181,16 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   const order = shown ? sections.flatMap((s) => [...(s.heading ? [s.heading] : []), ...s.rows.map((r) => r.task)]) : [];
   const { highlightId, current, highlight, move } = useHighlight(order);
 
-  useCommand("next", () => move(1));
-  useCommand("previous", () => move(-1));
-  useCommand("open", () => {
-    // Enter on a button or link keeps its own meaning: open only from the row itself (or nothing focused).
+  // Arrow keys keep their usual meaning (radios, scrolling the panel) outside the list.
+  const arrowsHere = (e: KeyboardEvent) =>
+    !e.key.startsWith("Arrow") || e.target === document.body || (e.target instanceof Element && e.target.closest("main") !== null);
+  useCommand("next", (e) => arrowsHere(e) && move(1));
+  useCommand("previous", (e) => arrowsHere(e) && move(-1));
+  useCommand("open", (e) => {
+    if (!current) return false;
+    // Enter on a button or link keeps its own meaning: it opens only from the row itself (or nothing focused).
     const active = document.activeElement;
-    if (!current || !(active === document.body || active?.getAttribute("data-task-id") === current.id)) return false;
+    if (e.key === "Enter" && !(active === document.body || active?.getAttribute("data-task-id") === current.id)) return false;
     select(current.id);
   });
   useCommand("complete", () => {

@@ -17,6 +17,10 @@ export function createMatcher(commands: Command[], chordMs = 1500) {
   }
   let pending: { key: string; at: number } | null = null;
   return {
+    /** Forgets a half-typed chord (a key went elsewhere in between). */
+    reset() {
+      pending = null;
+    },
     match(key: string, now: number): CommandId | "pending" | null {
       if (pending && now - pending.at <= chordMs) {
         const chord = `${pending.key} ${key}`;

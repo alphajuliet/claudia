@@ -3,8 +3,18 @@ import { useLocation, useSearch } from "wouter";
 /** The task the panel last switched to by following the keyboard highlight: that panel leaves focus on the row. */
 let followedId: string | null = null;
 
-/** Whether the panel for `id` was opened by following the highlight (it shouldn't take focus). */
-export const wasFollowed = (id: string) => followedId === id;
+/**
+ * Whether the panel for `id` was opened by following the highlight (it shouldn't take focus). The answer holds for
+ * the rest of this task (so StrictMode's second effect run agrees) and is then forgotten, so going Back to the task
+ * later opens the panel as usual.
+ */
+export function wasFollowed(id: string): boolean {
+  if (followedId !== id) return false;
+  queueMicrotask(() => {
+    if (followedId === id) followedId = null;
+  });
+  return true;
+}
 
 /**
  * The selected task lives in the address as `?task=<id>`, on whatever path is showing, so reload and back keep it.

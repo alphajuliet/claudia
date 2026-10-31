@@ -1,6 +1,7 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useLocation, useSearch } from "wouter";
 import { useTasks } from "../data/queries";
+import { useCommand } from "./keyboard";
 import { useGroupedSections } from "./screens";
 import { TaskList } from "./TaskList";
 
@@ -15,6 +16,20 @@ export function SearchScreen() {
   const search = useSearch();
   const q = new URLSearchParams(search).get("q") ?? "";
   const [text, setText] = useState(q);
+  const input = useRef<HTMLInputElement>(null);
+  // The words this screen last put in the address. A different `q` came from elsewhere (Back, a link), and the
+  // field takes it up.
+  const written = useRef(q);
+  if (q !== written.current) {
+    written.current = q;
+    if (text.trim() !== q) setText(q);
+  }
+
+  // `/` here goes back to the field, keeping the search.
+  useCommand("search", () => {
+    input.current?.focus();
+    input.current?.select();
+  });
 
   useEffect(() => {
     if (text.trim() === q) return;
@@ -23,6 +38,7 @@ export function SearchScreen() {
       if (text.trim()) next.set("q", text.trim());
       else next.delete("q");
       const query = next.toString();
+      written.current = text.trim();
       navigate(query ? `${path}?${query}` : path, { replace: true });
     }, DELAY_MS);
     return () => clearTimeout(timer);
@@ -46,6 +62,7 @@ export function SearchScreen() {
           placeholder="Search titles and notes"
           autoComplete="off"
           autoFocus
+          ref={input}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}

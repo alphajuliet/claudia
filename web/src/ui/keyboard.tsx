@@ -3,7 +3,10 @@ import { COMMANDS, type CommandId } from "../lib/commands";
 import { createMatcher, ignoresKeys } from "../lib/keymap";
 
 /** Runs a command; returning false means "not mine here", and the key keeps its usual effect. */
-export type CommandHandler = () => boolean | void;
+export type CommandHandler = (e: KeyboardEvent) => boolean | void;
+
+/** Commands that may run again while their key is held down; the rest run once per press. */
+const REPEATS = new Set<CommandId>(["next", "previous"]);
 
 type Registry = Map<CommandId, CommandHandler[]>;
 
@@ -19,16 +22,24 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const matcher = createMatcher(COMMANDS);
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.isComposing || ignoresKeys(e)) return;
+      if (e.defaultPrevented || e.isComposing || ignoresKeys(e)) {
+        matcher.reset();
+        return;
+      }
       const id = matcher.match(e.key, Date.now());
       if (id === "pending") {
         e.preventDefault();
         return;
       }
       if (!id) return;
+      // Holding x mustn't complete a run of tasks.
+      if (e.repeat && !REPEATS.has(id)) {
+        e.preventDefault();
+        return;
+      }
       const handlers = registry.get(id) ?? [];
       for (let i = handlers.length - 1; i >= 0; i--) {
-        if (handlers[i]!() !== false) {
+        if (handlers[i]!(e) !== false) {
           e.preventDefault();
           return;
         }
@@ -52,7 +63,7 @@ export function useCommand(id: CommandId, handler: CommandHandler | undefined) {
   const enabled = handler !== undefined;
   useEffect(() => {
     if (!registry || !enabled) return;
-    const run: CommandHandler = () => (latest.current ? latest.current() : false);
+    const run: CommandHandler = (e) => (latest.current ? latest.current(e) : false);
     const list = registry.get(id) ?? [];
     registry.set(id, [...list, run]);
     return () => {
