@@ -4,8 +4,9 @@ import { useFilters, useFilterTasks, useFolders, useLists, useTasks, useTimeZone
 import { todayIn } from "../lib/dates";
 import { listOrder, sidebarTree } from "../lib/sidebar";
 import { groupByList, isSnoozed, treeRows, type Row } from "../lib/tasks";
-import { findInbox, viewQuery, VIEWS, type ViewId } from "../lib/views";
+import { findInbox, viewLabel, viewQuery, VIEWS, type ViewId } from "../lib/views";
 import { useContextFilter } from "./contextFilter";
+import { QuickAdd, type QuickAddTarget } from "./QuickAdd";
 import { TaskList, type Section } from "./TaskList";
 
 export function NotFound() {
@@ -49,13 +50,23 @@ export function ViewScreen({ id }: { id: string }) {
 function BuiltInView({ id, name }: { id: ViewId; name: string }) {
   const lists = useLists();
   const inbox = findInbox(lists.data ?? []);
-  const query = viewQuery(id, { today: todayIn(useTimeZone()), inboxId: inbox?.id });
+  const today = todayIn(useTimeZone());
+  const query = viewQuery(id, { today, inboxId: inbox?.id });
+  // Views add to the Inbox, with the view's label, or due today in Today.
+  const label = viewLabel(id);
+  const target: QuickAddTarget | undefined = inbox && {
+    listId: inbox.id,
+    listName: inbox.name,
+    ...(label ? { labels: [label] } : {}),
+    ...(id === "today" ? { dueDate: today } : {}),
+  };
   const tasks = useTasks(query);
   const sections = useGroupedSections(tasks.data);
   const noInbox = id === "inbox" && lists.isSuccess && !inbox;
   return (
     <>
       <h1>{name}</h1>
+      <QuickAdd target={target} announce />
       {noInbox ? (
         <p className="list-state muted">There's no list called Inbox.</p>
       ) : (
@@ -101,6 +112,7 @@ export function ListScreen({ id }: { id: string }) {
   return (
     <>
       <h1>{list?.name ?? "List"}</h1>
+      <QuickAdd target={list && { listId: list.id, listName: list.name }} />
       <TaskList query={tasks} sections={listSections(visibleRows(tasks.data ?? []))} empty="Nothing here." />
     </>
   );
@@ -109,6 +121,7 @@ export function ListScreen({ id }: { id: string }) {
 export function FilterScreen({ id }: { id: string }) {
   const filters = useFilters();
   const filter = filters.data?.find((f) => f.id === id);
+  const inbox = findInbox(useLists().data ?? []);
   const tasks = useFilterTasks(id);
   // A filter's query may match completed tasks, but the screen shows open ones only.
   const sections = useGroupedSections(tasks.data?.filter((t) => t.completedAt === null));
@@ -116,6 +129,7 @@ export function FilterScreen({ id }: { id: string }) {
   return (
     <>
       <h1>{filter?.name ?? "Filter"}</h1>
+      <QuickAdd target={inbox && { listId: inbox.id, listName: inbox.name }} announce />
       <TaskList query={tasks} sections={sections} empty="Nothing here." />
     </>
   );

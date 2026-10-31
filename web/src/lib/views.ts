@@ -12,6 +12,9 @@ export type ViewId = (typeof VIEWS)[number]["id"];
 
 const LABELS: Partial<Record<ViewId, string>> = { next: "next", wip: "wip", waiting: "waitingOn", someday: "someday" };
 
+/** The label a built-in view shows (and quick add gives), if any. */
+export const viewLabel = (id: ViewId): string | undefined => LABELS[id];
+
 export const findInbox = (lists: List[]) => lists.find((l) => l.archivedAt === null && l.name.toLowerCase() === "inbox");
 
 /** The `GET /api/tasks` query string for a built-in view, or null when it can't be built (no Inbox list). */

@@ -259,6 +259,41 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 .list-state { padding: 0.75rem 0; }
 .list-state button { margin-top: 0.6rem; }
 
+/* Quick add: a light field above the rows, its text on the same left edge as the titles. */
+.quick-add {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: calc(var(--row-height) + 6px);
+  margin-bottom: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius);
+  color: var(--muted);
+}
+.quick-add:hover { background: var(--row-hover); }
+.quick-add:focus-within { background: transparent; box-shadow: inset 0 0 0 1px var(--border); }
+.quick-add-plus {
+  flex: none;
+  width: 1.05rem;
+  font-size: 1.15rem;
+  line-height: 1;
+  text-align: center;
+  transition: color 0.12s ease;
+}
+.quick-add:focus-within .quick-add-plus { color: var(--accent); }
+.quick-add-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  outline: none;
+}
+.quick-add-input::placeholder { color: var(--muted); }
+.quick-add-input:focus-visible { outline: none; }
+
 .task-sections { display: grid; gap: 1.5rem; }
 
 .section-title {
@@ -307,6 +342,31 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* The title is a button that becomes a text input in place: same box, font and line, so the row doesn't move. */
+button.task-title {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font-weight: inherit;
+  text-align: left;
+  cursor: text;
+}
+button.task-title:hover { filter: none; }
+input.task-title-input {
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: 0 1px 0 var(--accent);
+  line-height: inherit;
+  outline: none;
+  text-overflow: clip;
 }
 
 .task-meta {

@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { Task } from "@claudia/shared";
-import { usePendingCompletions, useSetCompleted, useTimeZone } from "../data/queries";
+import { usePendingCompletions, useSetCompleted, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import type { Row } from "../lib/tasks";
 import { dueDateOf, TaskRow } from "./TaskRow";
@@ -39,17 +39,27 @@ function useComplete() {
   };
 }
 
-function TaskSection({ section, today, timeZone, pending, onComplete }: {
+/** Saves a new title (shown at once) and reports a failure in the toast; the old title comes back. */
+function useRename() {
+  const update = useUpdateTask();
+  const toast = useToast();
+  return (task: Task, title: string) => {
+    update.mutateAsync({ id: task.id, patch: { title } }).catch((e: Error) => toast.show({ message: e.message, error: true }));
+  };
+}
+
+function TaskSection({ section, today, timeZone, pending, onComplete, onRename }: {
   section: Section;
   today: string;
   timeZone: string;
   pending: Set<string>;
   onComplete: (task: Task) => void;
+  onRename: (task: Task, title: string) => void;
 }) {
   const id = useId();
   const rows = (
     <ul className="task-list">
-      {section.rows.map((r) => <TaskRow key={r.task.id} task={r.task} depth={r.depth} today={today} timeZone={timeZone} pending={pending.has(r.task.id)} onComplete={onComplete} />)}
+      {section.rows.map((r) => <TaskRow key={r.task.id} task={r.task} depth={r.depth} today={today} timeZone={timeZone} pending={pending.has(r.task.id)} onComplete={onComplete} onRename={onRename} />)}
     </ul>
   );
   if (!section.title) return rows;
@@ -66,6 +76,7 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   const timeZone = useTimeZone();
   const today = todayIn(timeZone);
   const onComplete = useComplete();
+  const onRename = useRename();
   const pending = usePendingCompletions();
 
   if (query.error) {
@@ -80,7 +91,7 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   if (sections.every((s) => s.rows.length === 0 && !s.title)) return <p className="list-state muted">{empty}</p>;
   return (
     <div className="task-sections">
-      {sections.map((s) => <TaskSection key={s.key} section={s} today={today} timeZone={timeZone} pending={pending} onComplete={onComplete} />)}
+      {sections.map((s) => <TaskSection key={s.key} section={s} today={today} timeZone={timeZone} pending={pending} onComplete={onComplete} onRename={onRename} />)}
     </div>
   );
 }
