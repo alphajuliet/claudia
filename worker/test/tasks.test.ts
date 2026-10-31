@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
 import { events, tasks } from "../src/db/schema";
 import { client, db, makeToken, reset } from "./helpers";
@@ -252,6 +252,69 @@ describe("nesting and moving", () => {
     const child = await task("Child", { parentId: parent.id });
     const res = await api("POST", `/api/tasks/${child.id}/move`, { listId: other.id });
     expect(res.body).toMatchObject({ listId: other.id, parentId: null });
+  });
+});
+
+describe("moving a heading with its section", () => {
+  /** Top-level titles of a list in order, open or not. */
+  const order = async (listId: string) =>
+    titles((await api("GET", `/api/tasks?listId=${listId}&status=all`)).body.filter((t: { parentId: string | null }) => !t.parentId));
+  const move = (id: string, body: object) => api("POST", `/api/tasks/${id}/move`, body);
+
+  let h1: { id: string };
+  let a: { id: string };
+  let b: { id: string };
+  let h2: { id: string };
+  let c: { id: string };
+  let done: { id: string };
+  beforeEach(async () => {
+    h1 = await task("H1", { kind: "heading" });
+    a = await task("a");
+    done = await task("done");
+    await api("POST", `/api/tasks/${done.id}/complete`);
+    b = await task("b", { snoozedUntil: "2099-01-01T00:00:00.000Z" });
+    h2 = await task("H2", { kind: "heading" });
+    c = await task("c");
+  });
+
+  it("moves to the end with its tasks, completed and snoozed ones included", async () => {
+    const res = await move(h1.id, { withSection: true });
+    expect(res.status).toBe(200);
+    expect(await order(inbox.id)).toEqual(["H2", "c", "H1", "a", "done", "b"]);
+  });
+
+  it("moves before another heading", async () => {
+    expect((await move(h2.id, { withSection: true, beforeId: h1.id })).status).toBe(200);
+    expect(await order(inbox.id)).toEqual(["H2", "c", "H1", "a", "done", "b"]);
+  });
+
+  it("moves to another list with subtasks, logging each task", async () => {
+    const sub = await task("sub", { parentId: a.id });
+    const res = await move(h1.id, { withSection: true, listId: other.id });
+    expect(res.body).toMatchObject({ listId: other.id, parentId: null });
+    expect(await order(other.id)).toEqual(["H1", "a", "done", "b"]);
+    expect(await order(inbox.id)).toEqual(["H2", "c"]);
+    expect((await api("GET", `/api/tasks/${sub.id}`)).body).toMatchObject({ listId: other.id, parentId: a.id });
+
+    const ids = [h1.id, a.id, done.id, b.id, sub.id];
+    const moved = await db.select().from(events).where(and(eq(events.type, "moved"), inArray(events.entityId, ids)));
+    expect(moved.map((e) => e.entityId).sort()).toEqual([...ids].sort());
+  });
+
+  it("refuses a placement inside its own section", async () => {
+    const res = await move(h1.id, { withSection: true, afterId: a.id });
+    expect(res).toMatchObject({ status: 422, body: { error: { code: "invalid_placement" } } });
+    expect(await order(inbox.id)).toEqual(["H1", "a", "done", "b", "H2", "c"]);
+  });
+
+  it("is only for headings at the top level", async () => {
+    expect(await move(a.id, { withSection: true })).toMatchObject({ status: 422, body: { error: { code: "invalid_section" } } });
+    expect(await move(h1.id, { withSection: true, parentId: c.id })).toMatchObject({ status: 422, body: { error: { code: "invalid_parent" } } });
+  });
+
+  it("leaves a plain heading move alone", async () => {
+    await move(h1.id, {});
+    expect(await order(inbox.id)).toEqual(["a", "done", "b", "H2", "c", "H1"]);
   });
 });
 

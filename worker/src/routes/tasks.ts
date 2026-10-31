@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import type { BatchItem } from "drizzle-orm/batch";
-import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { generateNKeysBetween } from "fractional-indexing";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, not, or, sql } from "drizzle-orm";
 import {
   IdParam,
   TaskCompletionSchema,
@@ -126,6 +127,72 @@ const setLabels = (db: Db, taskId: string, ids: string[]): BatchItem<"sqlite">[]
 ];
 
 const snapshot = (r: Row, names: string[]) => toTask(r, names);
+
+/**
+ * Move a heading and its section (the top-level tasks after it down to the next
+ * heading, open or not) in one batch. The section lands straight after the heading,
+ * in the same order, taking its subtasks along to another list.
+ */
+async function moveWithSection(db: Db, actor: Actor, before: Row, input: z.infer<typeof TaskMoveSchema>) {
+  if (before.kind !== "heading") throw new ApiError(422, "invalid_section", "Only a heading can be moved with its section");
+  if (input.parentId) throw new ApiError(422, "invalid_parent", "A heading can't be nested under a task");
+  const listId = input.listId ?? before.listId;
+  if (listId !== before.listId) await assertList(db, listId);
+
+  const topLevel = and(live, inScope(before.listId, null));
+  const [next] = await db
+    .select({ position: tasks.position })
+    .from(tasks)
+    .where(and(topLevel, eq(tasks.kind, "heading"), gt(tasks.position, before.position)))
+    .orderBy(asc(tasks.position))
+    .limit(1);
+  // The heading and its section, as a range of positions in the old list.
+  const range = and(gte(tasks.position, before.position), next ? lt(tasks.position, next.position) : undefined);
+  const section = await db
+    .select()
+    .from(tasks)
+    .where(and(topLevel, range, ne(tasks.id, before.id)))
+    .orderBy(asc(tasks.position));
+  const sectionIds = new Set(section.map((r) => r.id));
+  if ((input.afterId && sectionIds.has(input.afterId)) || (input.beforeId && sectionIds.has(input.beforeId))) {
+    throw new ApiError(422, "invalid_placement", "A heading can't be placed inside its own section");
+  }
+
+  // Neighbours in the target list, leaving out what is moving.
+  const scope = and(live, inScope(listId, null), listId === before.listId ? not(range!) : undefined);
+  const position = await positionFor(db, tasks, scope, input);
+  const [after] = await db
+    .select({ position: tasks.position })
+    .from(tasks)
+    .where(and(scope, gt(tasks.position, position)))
+    .orderBy(asc(tasks.position))
+    .limit(1);
+  const positions = generateNKeysBetween(position, after?.position ?? null, section.length);
+
+  const at = now();
+  const names = await labelNamesFor(db, [before.id, ...sectionIds]);
+  const statements: BatchItem<"sqlite">[] = [];
+  const moved: Row = { ...before, listId, parentId: null, position, updatedAt: at };
+  for (const [old, row] of [[before, moved] as const, ...section.map((r, i) => [r, { ...r, listId, position: positions[i]!, updatedAt: at }] as const)]) {
+    const labelNames = names.get(old.id) ?? [];
+    statements.push(
+      db.update(tasks).set({ listId, parentId: null, position: row.position, updatedAt: at }).where(eq(tasks.id, old.id)),
+      eventQuery(db, { entityType: "task", entityId: old.id, type: "moved", before: snapshot(old, labelNames), after: snapshot(row, labelNames), actor }),
+    );
+  }
+  if (listId !== before.listId) {
+    for (const r of section) {
+      for (const childId of (await subtreeIds(db, r.id)).filter((x) => x !== r.id)) {
+        statements.push(
+          db.update(tasks).set({ listId, updatedAt: at }).where(eq(tasks.id, childId)),
+          eventQuery(db, { entityType: "task", entityId: childId, type: "moved", before: { listId: before.listId }, after: { listId }, actor }),
+        );
+      }
+    }
+  }
+  await runBatch(db, statements);
+  return toTask(moved, names.get(before.id) ?? []);
+}
 
 /**
  * Tasks matching a query, in list order. Shared by `GET /api/tasks` and saved filters.
@@ -280,6 +347,7 @@ export const taskRoutes = newRouter()
       const db = c.var.db;
       const actor: Actor = c.var.actor;
       const before = await getTask(db, id);
+      if (input.withSection) return c.json(await moveWithSection(db, actor, before, input), 200);
 
       const listId = input.listId ?? before.listId;
       // Changing list without naming a parent puts the task at the top level of the new list.

@@ -63,6 +63,7 @@ describe("request mapping", () => {
       method: "PATCH", path: `/api/tasks/${ID}`, body: { title: "New", dueDate: null },
     });
     expect(req("move_task", { id: ID, listId: ID2 })).toEqual({ method: "POST", path: `/api/tasks/${ID}/move`, body: { listId: ID2 } });
+    expect(req("move_task", { id: ID, withSection: true, beforeId: ID2 }).body).toEqual({ withSection: true, beforeId: ID2 });
     expect(req("move_list", { id: ID, folderId: null })).toEqual({ method: "POST", path: `/api/lists/${ID}/move`, body: { folderId: null } });
     expect(req("update_list", { id: ID, archived: true })).toEqual({ method: "PATCH", path: `/api/lists/${ID}`, body: { archived: true } });
     expect(req("rename_label", { id: ID, name: "doing" })).toEqual({ method: "PATCH", path: `/api/labels/${ID}`, body: { name: "doing" } });

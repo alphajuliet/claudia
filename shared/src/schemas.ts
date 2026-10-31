@@ -213,7 +213,15 @@ export const TaskCreateSchema = z
 export const TaskUpdateSchema = z.object(taskFieldShapes).partial().openapi("TaskUpdate");
 
 export const TaskMoveSchema = z
-  .object({ listId: IdSchema.optional(), parentId: IdSchema.nullable().optional(), ...placementShape })
+  .object({
+    listId: IdSchema.optional(),
+    parentId: IdSchema.nullable().optional(),
+    ...placementShape,
+    withSection: z
+      .boolean()
+      .optional()
+      .openapi({ description: "For a heading: move the tasks under it (down to the next heading) with it" }),
+  })
   .refine(notBoth, NOT_BOTH)
   .openapi("TaskMove");
 
