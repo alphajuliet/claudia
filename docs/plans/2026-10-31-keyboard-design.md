@@ -1,12 +1,12 @@
 # Desktop UI step 3: keyboard commands
 
-Date: 2026-10-31. Status: approved.
+Date: 2026-10-31. Status: approved; built.
 
 Step 3 of the desktop daily driver (`2026-10-31-desktop-ui-design.md`). Every key runs a registered command, so the later `⌘K` palette and keymap editor can be built on the same registry.
 
 ## Registry
 
-- Commands live in `web/src/lib/commands.ts`: an ID, a label, a context and default keys. Defaults follow Godspeed.
+- Commands live in `web/src/lib/commands.ts`: an ID, a label and default keys (contexts come with the palette, when they're needed). Defaults follow Godspeed.
 - One `keydown` listener on the window matches keys and runs the command.
 - Keys are ignored while focus is in a text field, textarea, select or contenteditable, and when Ctrl, ⌘ or Alt is held, so typing and browser shortcuts are unaffected.
 - A `g` chord waits about 1.5 seconds for its second key. Any other key cancels it.

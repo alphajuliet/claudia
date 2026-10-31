@@ -1,6 +1,6 @@
 # Desktop daily driver: design
 
-Date: 2026-10-31. Status: approved; steps 1 and 2 built.
+Date: 2026-10-31. Status: approved; steps 1 to 3 built.
 
 The first real web UI. It replaces the signed-in placeholder with a three-pane desktop app that later phone and iPad layouts reuse. Godspeed is the reference for look and keys.
 
