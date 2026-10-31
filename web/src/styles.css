@@ -78,6 +78,11 @@ a:hover { text-decoration: underline; }
 /* Controls */
 
 input, button, select, textarea { font: inherit; color: inherit; }
+/* iOS zooms into any field with text under 16px when it's tapped, and often stays zoomed, leaving the page wider
+   than the screen. Touch screens get 16px fields (important, so smaller sizes set on field classes don't win). */
+@media (pointer: coarse) {
+  input, select, textarea { font-size: max(16px, 1em) !important; }
+}
 
 input {
   width: 100%;
@@ -699,8 +704,19 @@ input.task-title-input {
 
   .backdrop { display: block; position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.3); }
 
-  .content { padding: 1.25rem 1rem 3rem; }
+  .content { padding: 1.25rem 1rem 3rem; overflow-x: hidden; }
   .task-row { --indent: 1.1rem; }
+
+  /* On a phone, rows grow rather than spill: the title wraps, and the labels and date move under it when they
+     don't fit beside it. */
+  .task-row { flex-wrap: wrap; row-gap: 0.15rem; }
+  .task-title { flex: 1 1 60%; }
+  span.task-title { white-space: normal; overflow-wrap: anywhere; }
+  .task-meta { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; min-width: 0; }
+  .task-meta:empty { display: none; }
+  .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+  .screen-header { flex-wrap: wrap; row-gap: 0.25rem; }
+  .section-title-button { overflow-wrap: anywhere; text-align: left; }
 
   /* The detail panel becomes a full-height sheet over the content. */
   .detail {
