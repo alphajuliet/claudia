@@ -1,7 +1,8 @@
-import { useState, type KeyboardEvent } from "react";
+import { useRef, useState, type KeyboardEvent } from "react";
 import { useCreateTask, useTimeZone } from "../data/queries";
 import { todayIn } from "../lib/dates";
 import { parseQuickAdd } from "../lib/quickAdd";
+import { useCommand } from "./keyboard";
 import { useToast } from "./Toast";
 
 /** Where quick add puts a task: a list, with labels the screen implies, and due today (the day it's added) if set. */
@@ -21,6 +22,8 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
   const create = useCreateTask();
   const toast = useToast();
   const timeZone = useTimeZone();
+  const input = useRef<HTMLInputElement>(null);
+  useCommand("capture", target ? () => input.current?.focus() : undefined);
   if (!target) return null;
 
   const submit = () => {
@@ -61,6 +64,7 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
     <div className="quick-add">
       <span className="quick-add-plus" aria-hidden="true">+</span>
       <input
+        ref={input}
         type="text"
         className="quick-add-input"
         aria-label="Add a task"

@@ -78,18 +78,21 @@ function TaskTitle({ task, onRename }: { task: Task; onRename: (task: Task, titl
 /**
  * One task. While `pending` (a complete or reopen is running), its checkbox is disabled so a double click sends one.
  * `onSelect` is called for clicks on the row outside the checkbox and title (it opens the detail panel); `selected`
- * marks the row whose details are showing.
+ * marks the row whose details are showing. The row can take focus (the keyboard highlight), and focus anywhere in
+ * it calls `onHighlight`.
  */
-export function TaskRow({ task, depth, today, timeZone, pending, selected = false, onComplete, onRename, onSelect }: {
+export function TaskRow({ task, depth, today, timeZone, pending, selected = false, highlighted = false, onComplete, onRename, onSelect, onHighlight }: {
   task: Task;
   depth: number;
   today: string;
   timeZone: string;
   pending: boolean;
   selected?: boolean;
+  highlighted?: boolean;
   onComplete: (task: Task) => void;
   onRename: (task: Task, title: string) => void;
   onSelect?: (task: Task) => void;
+  onHighlight?: (task: Task) => void;
 }) {
   const due = dueDateOf(task, timeZone);
   const label = due ? formatDue(due, today) : null;
@@ -98,8 +101,11 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
   };
   return (
     <li
-      className={["task-row", pending && "pending", selected && "selected"].filter(Boolean).join(" ")}
+      className={["task-row", pending && "pending", selected && "selected", highlighted && "highlighted"].filter(Boolean).join(" ")}
       aria-current={selected ? "true" : undefined}
+      tabIndex={-1}
+      data-task-id={task.id}
+      onFocus={() => onHighlight?.(task)}
       data-depth={depth} style={{ "--depth": depth } as CSSProperties} onClick={onRowClick}>
       <input type="checkbox" className="task-check" aria-label={`Complete ${task.title}`} checked={false} disabled={pending} onChange={() => onComplete(task)} />
       <TaskTitle task={task} onRename={onRename} />

@@ -9,6 +9,7 @@ import { useSelectedTask } from "./selection";
 import { Shortcuts } from "./Shortcuts";
 import { Sidebar } from "./Sidebar";
 import { TaskDetail } from "./TaskDetail";
+import { focusTask } from "./TaskList";
 import { ToastProvider } from "./Toast";
 
 const GO: [CommandId, string][] = [
@@ -43,7 +44,13 @@ function Shell() {
 
   useCommand("search", () => navigate("/search"));
   useCommand("help", () => setHelpOpen(true));
-  useCommand("close", selectedId ? () => select(null) : undefined);
+  // Closing the panel puts focus back on the task's row, so the keyboard carries on from there.
+  const closePanel = () => {
+    const closed = selectedId;
+    select(null);
+    if (closed) focusTask(closed);
+  };
+  useCommand("close", selectedId ? closePanel : undefined);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -83,7 +90,7 @@ function Shell() {
               <Route><NotFound /></Route>
             </Switch>
           </main>
-          {selectedId && <TaskDetail key={selectedId} id={selectedId} onClose={() => select(null)} />}
+          {selectedId && <TaskDetail key={selectedId} id={selectedId} onClose={closePanel} />}
           {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
           {GO.map(([id, to]) => <GoCommand key={id} id={id} to={to} />)}
         </div>

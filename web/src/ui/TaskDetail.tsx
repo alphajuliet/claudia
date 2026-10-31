@@ -3,6 +3,7 @@ import type { Task } from "@claudia/shared";
 import { useCreateTask, useDeleteTask, usePendingCompletions, useTask, useTasks, useTimeZone } from "../data/queries";
 import { useComplete } from "./TaskList";
 import { DateFields, FieldStatus, LabelsField, ListField, NotesField, RepeatField, TitleField, useSave } from "./TaskFields";
+import { wasFollowed } from "./selection";
 import { useToast } from "./Toast";
 
 /** The task's open subtasks, each with a checkbox, and a field that adds one to the end. */
@@ -142,7 +143,10 @@ function Body({ id, onClose }: { id: string; onClose: () => void }) {
  */
 export function TaskDetail({ id, onClose }: { id: string; onClose: () => void }): ReactNode {
   const ref = useRef<HTMLElement>(null);
-  useEffect(() => ref.current?.focus({ preventScroll: true }), [id]);
+  // Opening takes focus, except when the panel follows the keyboard highlight: the row keeps it.
+  useEffect(() => {
+    if (!wasFollowed(id)) ref.current?.focus({ preventScroll: true });
+  }, [id]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key !== "Escape") return;

@@ -1,8 +1,11 @@
-import { useId } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { useLocation } from "wouter";
 import type { Task } from "@claudia/shared";
 import { usePendingCompletions, useSetCompleted, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
+import { wrapIndex } from "../lib/keymap";
 import type { Row } from "../lib/tasks";
+import { useCommand } from "./keyboard";
 import { dueDateOf, TaskRow } from "./TaskRow";
 import { useSelectedTask } from "./selection";
 import { useToast } from "./Toast";
@@ -57,18 +60,28 @@ interface RowProps {
   timeZone: string;
   pending: Set<string>;
   selectedId: string | null;
+  highlightId: string | null;
   onComplete: (task: Task) => void;
   onRename: (task: Task, title: string) => void;
   onSelect: (task: Task) => void;
+  onHighlight: (task: Task) => void;
 }
 
-function TaskSection({ section, pending, selectedId, ...rest }: RowProps & { section: Section }) {
+function TaskSection({ section, pending, selectedId, highlightId, ...rest }: RowProps & { section: Section }) {
   const { heading } = section;
   const id = useId();
   const rows = (
     <ul className="task-list">
       {section.rows.map((r) => (
-        <TaskRow key={r.task.id} task={r.task} depth={r.depth} pending={pending.has(r.task.id)} selected={r.task.id === selectedId} {...rest} />
+        <TaskRow
+          key={r.task.id}
+          task={r.task}
+          depth={r.depth}
+          pending={pending.has(r.task.id)}
+          selected={r.task.id === selectedId}
+          highlighted={r.task.id === highlightId}
+          {...rest}
+        />
       ))}
     </ul>
   );
@@ -79,8 +92,10 @@ function TaskSection({ section, pending, selectedId, ...rest }: RowProps & { sec
         {heading ? (
           <button
             type="button"
-            className={heading.id === selectedId ? "section-title-button selected" : "section-title-button"}
+            className={["section-title-button", heading.id === selectedId && "selected", heading.id === highlightId && "highlighted"].filter(Boolean).join(" ")}
             aria-current={heading.id === selectedId ? "true" : undefined}
+            data-task-id={heading.id}
+            onFocus={() => rest.onHighlight(heading)}
             onClick={() => rest.onSelect(heading)}
           >
             {section.title}
@@ -92,6 +107,59 @@ function TaskSection({ section, pending, selectedId, ...rest }: RowProps & { sec
   );
 }
 
+/** Focuses the row (or heading) showing a task, if it's on screen. */
+export function focusTask(id: string) {
+  document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: false });
+}
+
+/**
+ * The keyboard highlight: the row that last had focus, on this screen. j and k move it (wrapping at the ends) and,
+ * while the panel is open, the panel follows. When the highlighted task leaves the list, the row now in its place
+ * takes over.
+ */
+function useHighlight(order: Task[]) {
+  const [location] = useLocation();
+  const [state, setState] = useState<{ path: string; id: string } | null>(null);
+  const highlightId = state?.path === location ? state.id : null;
+  const { selectedId, select } = useSelectedTask();
+  const lastIndex = useRef(-1);
+  const ids = order.map((t) => t.id).join(" ");
+
+  const highlight = (t: Task) => setState({ path: location, id: t.id });
+
+  useEffect(() => {
+    if (!highlightId) return;
+    const i = order.findIndex((t) => t.id === highlightId);
+    if (i >= 0) {
+      lastIndex.current = i;
+      return;
+    }
+    const next = order[Math.min(lastIndex.current, order.length - 1)];
+    if (!next) {
+      setState(null);
+      return;
+    }
+    setState({ path: location, id: next.id });
+    // The old row took focus with it when it went: give it to the row now in its place.
+    if (document.activeElement === document.body || !document.activeElement) focusTask(next.id);
+  }, [ids, highlightId]); // when the rows or the highlight change
+
+  const move = (delta: 1 | -1) => {
+    if (order.length === 0) return false;
+    const i = highlightId ? order.findIndex((t) => t.id === highlightId) : -1;
+    // With no highlight yet, start at the task whose details are showing, if it's here.
+    const start = !highlightId && selectedId ? order.findIndex((t) => t.id === selectedId) : -1;
+    const t = order[start >= 0 ? start : wrapIndex(i, order.length, delta)]!;
+    highlight(t);
+    focusTask(t.id);
+    if (selectedId && selectedId !== t.id) select(t.id, { follow: true });
+    return true;
+  };
+  const current = highlightId ? order.find((t) => t.id === highlightId) : undefined;
+
+  return { highlightId, current, highlight, move };
+}
+
 /** Task rows in sections, with loading, error and empty states. */
 export function TaskList({ query, sections, empty }: { query: QueryState; sections: Section[]; empty: string }) {
   const timeZone = useTimeZone();
@@ -100,6 +168,27 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   const onRename = useRename();
   const pending = usePendingCompletions();
   const { selectedId, select } = useSelectedTask();
+  const shown = !query.error && !query.isPending;
+  const order = shown ? sections.flatMap((s) => [...(s.heading ? [s.heading] : []), ...s.rows.map((r) => r.task)]) : [];
+  const { highlightId, current, highlight, move } = useHighlight(order);
+
+  useCommand("next", () => move(1));
+  useCommand("previous", () => move(-1));
+  useCommand("open", () => {
+    // Enter on a button or link keeps its own meaning: open only from the row itself (or nothing focused).
+    const active = document.activeElement;
+    if (!current || !(active === document.body || active?.getAttribute("data-task-id") === current.id)) return false;
+    select(current.id);
+  });
+  useCommand("complete", () => {
+    if (!current || current.kind !== "task") return false;
+    if (!pending.has(current.id)) void onComplete(current);
+  });
+  useCommand("rename", () => {
+    const title = current?.kind === "task" && document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(current.id)}"] .task-title`);
+    if (!title) return false;
+    title.click();
+  });
 
   if (query.error) {
     return (
@@ -121,9 +210,11 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
           timeZone={timeZone}
           pending={pending}
           selectedId={selectedId}
+          highlightId={highlightId}
           onComplete={onComplete}
           onRename={onRename}
           onSelect={(t) => select(t.id)}
+          onHighlight={highlight}
         />
       ))}
     </div>
