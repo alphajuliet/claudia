@@ -33,7 +33,9 @@ describe("Markdown in titles", () => {
     expect(link.getAttribute("href")).toBe("https://example.com/docs");
     expect(link.getAttribute("target")).toBe("_blank");
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");
-    expect(main().getByText("this").closest("a")?.getAttribute("href") ?? "").not.toContain("javascript");
+    // The unsafe link is left as its text.
+    expect(main().queryByRole("link", { name: "this" })).toBeNull();
+    expect(link.closest(".task-title")!.textContent).toBe("Read the docs and this");
     link.addEventListener("click", (e) => e.preventDefault());
     await userEvent.click(link);
     expect(main().queryByRole("textbox", { name: "Title" })).toBeNull();
@@ -91,5 +93,27 @@ describe("Markdown in notes", () => {
     stubApi([t]);
     renderAt(`/list/${garden.id}?task=${t.id}`);
     expect(((await screen.findByRole("textbox", { name: "Notes" })) as HTMLTextAreaElement).placeholder).toBe("Notes");
+  });
+
+  it("keeps images, footnotes and tables out of titles", async () => {
+    stubApi([
+      task({ title: "See ![chart](https://example.com/c.png) now", listId: garden.id }),
+      task({ title: "[^1]: a footnote", listId: garden.id }),
+      task({ title: "a | b\n-|-", listId: garden.id }),
+    ]);
+    renderAt(`/list/${garden.id}`);
+    await main().findByText(/See/);
+    const titles = [...document.querySelectorAll("main .task-title")];
+    expect(titles.map((t) => t.querySelector("img, table, section"))).toEqual([null, null, null]);
+    expect(titles[1]!.textContent).toBe("[^1]: a footnote");
+  });
+
+  it("opens Enter on a link in a title as the link, not a rename", async () => {
+    stubApi([task({ title: "Read [spec](https://example.com/spec)", listId: garden.id })]);
+    renderAt(`/list/${garden.id}`);
+    const link = await main().findByRole("link", { name: "spec" });
+    link.focus();
+    await userEvent.keyboard("{Enter}");
+    expect(main().queryByRole("textbox", { name: "Title" })).toBeNull();
   });
 });

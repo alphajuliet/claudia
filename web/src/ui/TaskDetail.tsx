@@ -4,6 +4,7 @@ import { useCreateTask, useDeleteTask, usePendingCompletions, useTask, useTasks,
 import { useComplete } from "./TaskList";
 import { DateFields, FieldStatus, LabelsField, ListField, NotesField, RepeatField, TitleField, useSave } from "./TaskFields";
 import { wasFollowed } from "./selection";
+import { InlineMarkdown, plainText } from "./Markdown";
 import { useToast } from "./Toast";
 
 /** The task's open subtasks, each with a checkbox, and a field that adds one to the end. */
@@ -40,12 +41,12 @@ function Subtasks({ task }: { task: Task }) {
             <input
               type="checkbox"
               className="task-check"
-              aria-label={`Complete ${t.title}`}
+              aria-label={`Complete ${plainText(t.title)}`}
               checked={false}
               disabled={pending.has(t.id)}
               onChange={() => void complete(t)}
             />
-            <span className="detail-subtask-title">{t.title}</span>
+            <span className="detail-subtask-title"><InlineMarkdown text={t.title} /></span>
           </li>
         ))}
       </ul>

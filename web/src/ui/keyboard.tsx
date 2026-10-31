@@ -26,7 +26,9 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         matcher.reset();
         return;
       }
-      const id = matcher.match(e.key, Date.now());
+      // Caps Lock gives capitals without Shift: read them as the lower-case key (Shift+C stays C).
+      const key = e.key.length === 1 && !e.shiftKey ? e.key.toLowerCase() : e.key;
+      const id = matcher.match(key, Date.now());
       if (id === "pending") {
         e.preventDefault();
         return;

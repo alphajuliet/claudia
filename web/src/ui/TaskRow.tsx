@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import type { Task } from "@claudia/shared";
 import { formatDue, todayIn } from "../lib/dates";
-import { InlineMarkdown } from "./Markdown";
+import { InlineMarkdown, plainText } from "./Markdown";
 
 /** The task's due date (YYYY-MM-DD): its date, or the day of its due time in the user's time zone. */
 export const dueDateOf = (task: Task, timeZone: string) =>
@@ -47,6 +47,8 @@ function TaskTitle({ task, onRename }: { task: Task; onRename: (task: Task, titl
         className="task-title"
         onClick={edit}
         onKeyDown={(e) => {
+          // Keys on a link inside the title are the link's.
+          if (e.target !== e.currentTarget) return;
           if ((e.key === "Enter" || e.key === " ") && !e.nativeEvent.isComposing) {
             e.preventDefault();
             edit();
@@ -98,7 +100,7 @@ export function Disclosure({ title, collapsed, onToggle }: { title: string; coll
       type="button"
       className="disclosure"
       aria-expanded={!collapsed}
-      aria-label={`${collapsed ? "Expand" : "Collapse"} ${title}`}
+      aria-label={`${collapsed ? "Expand" : "Collapse"} ${plainText(title)}`}
       onClick={(e) => {
         e.stopPropagation();
         onToggle(!collapsed);
@@ -143,7 +145,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
       <input
         type="checkbox"
         className="task-check"
-        aria-label={`${task.completedAt ? "Reopen" : "Complete"} ${task.title}`}
+        aria-label={`${task.completedAt ? "Reopen" : "Complete"} ${plainText(task.title)}`}
         checked={task.completedAt !== null}
         disabled={pending}
         onChange={() => onComplete(task)}

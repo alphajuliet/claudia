@@ -43,9 +43,9 @@ describe("show completed", () => {
   it("toggles with Shift+C", async () => {
     garden3();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("C");
+    await userEvent.keyboard("{Shift>}C{/Shift}");
     expect(await main().findByText("Plan")).toBeTruthy();
-    await userEvent.keyboard("C");
+    await userEvent.keyboard("{Shift>}C{/Shift}");
     await waitFor(() => expect(main().queryByText("Plan")).toBeNull());
   });
 
@@ -72,5 +72,23 @@ describe("show completed", () => {
     // x again reopens it.
     await userEvent.keyboard("x");
     await waitFor(() => expect(row("Weed the beds").classList).not.toContain("completed"));
+  });
+
+  it("keeps the rows and the highlight while the list reloads with completed tasks", async () => {
+    garden3();
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("j");
+    await userEvent.keyboard("{Shift>}C{/Shift}");
+    expect(main().queryByText("Loading…")).toBeNull();
+    expect(await main().findByText("Plan")).toBeTruthy();
+    expect(row("Weed the beds").classList).toContain("highlighted");
+  });
+
+  it("reads C typed with Caps Lock as c (add a task)", async () => {
+    garden3();
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("C");
+    expect(document.activeElement).toBe(main().getByRole("textbox", { name: "Add a task" }));
+    expect(main().queryByText("Plan")).toBeNull();
   });
 });

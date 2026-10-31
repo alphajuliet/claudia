@@ -110,7 +110,7 @@ export function ListScreen({ id }: { id: string }) {
   const lists = useLists();
   const list: List | undefined = lists.data?.find((l) => l.id === id);
   const [showCompleted, setShowCompleted] = useShowCompleted();
-  const tasks = useTasks(new URLSearchParams({ listId: id, status: showCompleted ? "all" : "open", limit: "500" }).toString());
+  const tasks = useTasks(new URLSearchParams({ listId: id, status: showCompleted ? "all" : "open", limit: "500" }).toString(), { keepPrevious: true });
   useCommand("toggleCompleted", () => setShowCompleted(!showCompleted));
   if (lists.isSuccess && !list) return <NotFound />;
   return (

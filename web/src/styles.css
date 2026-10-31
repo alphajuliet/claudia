@@ -48,6 +48,7 @@
   }
 }
 :root[data-theme="dark"] {
+  /* The same values as the block above: keep the two in step. */
   --bg: #1b1c1f;
   --bg-sidebar: #161719;
   --bg-raised: #232428;
@@ -372,8 +373,10 @@ button.disclosure {
   line-height: 1;
 }
 button.disclosure:hover { color: var(--fg); filter: none; }
+/* A bigger target than the arrow, for touch. */
+button.disclosure::before { content: ""; position: absolute; inset: -0.35rem -0.2rem; }
 .section-title { position: relative; }
-.section-title button.disclosure { left: -1.1rem; top: 50%; transform: translateY(-50%); }
+.section-title button.disclosure { left: -1rem; top: 50%; transform: translateY(-50%); }
 .task-row.selected, .task-row.selected:hover { background: var(--accent-soft); }
 .task-row:focus { outline: none; }
 .task-row.highlighted { outline: 2px solid var(--focus); outline-offset: -2px; }

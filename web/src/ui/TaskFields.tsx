@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import type { Task } from "@claudia/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFolders, useLabels, useLists, useMoveTask, useUpdateTask, type TaskPatch } from "../data/queries";
@@ -140,23 +141,25 @@ export function NotesField({ task }: { task: Task }) {
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [value, editing]);
-  const finish = () => {
-    setEditing(false);
+  const save = () => {
     if (draft === null) return;
     const notes = draft.trim() ? draft : null;
     // A failure may come after the panel has closed, so the toast offers the text back.
     if (notes !== task.notes) void patch({ notes }, notes ? copyAction("Copy notes", notes) : undefined);
     setDraft(null);
   };
+  const onBlur = (e: { currentTarget: HTMLTextAreaElement }) => {
+    save();
+    // The whole window lost focus (another app or tab): the field keeps it, so stay in the editor.
+    if (document.activeElement !== e.currentTarget) setEditing(false);
+  };
   const edit = () => {
-    setEditing(true);
-    // After the textarea replaces the formatted notes: focus it with the caret at the end.
-    requestAnimationFrame(() => {
-      const el = ref.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(el.value.length, el.value.length);
-    });
+    // Synchronously, inside the click: iOS only brings up the keyboard for a focus made during the tap itself.
+    flushSync(() => setEditing(true));
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
   };
 
   // Notes show formatted until clicked (links still open); empty notes are the editor already.
@@ -189,7 +192,7 @@ export function NotesField({ task }: { task: Task }) {
           value={value}
           onChange={(e) => setDraft(e.target.value)}
           onFocus={() => setEditing(true)}
-          onBlur={finish}
+          onBlur={onBlur}
         />
       )}
       <FieldStatus state={state} />

@@ -7,7 +7,7 @@ import { wrapIndex } from "../lib/keymap";
 import { collapseRows, parentsIn, rowsUnder, type Row } from "../lib/tasks";
 import { setCollapsed, useCollapsed } from "./collapsed";
 import { useCommand } from "./keyboard";
-import { InlineMarkdown } from "./Markdown";
+import { InlineMarkdown, plainText } from "./Markdown";
 import { Disclosure, dueDateOf, TaskRow } from "./TaskRow";
 import { useSelectedTask } from "./selection";
 import { useToast } from "./Toast";
@@ -29,7 +29,7 @@ export function useComplete() {
     if (task.completedAt) {
       try {
         await setCompleted.mutateAsync({ task, done: false });
-        toast.show({ message: `Reopened “${task.title}”` });
+        toast.show({ message: `Reopened “${plainText(task.title)}”` });
       } catch (e) {
         toast.show({ message: (e as Error).message, error: true });
       }
@@ -43,7 +43,7 @@ export function useComplete() {
         return;
       }
       toast.show({
-        message: `Completed “${task.title}”${saved.subtasks > 0 ? ` and ${saved.subtasks} ${saved.subtasks === 1 ? "subtask" : "subtasks"}` : ""}`,
+        message: `Completed “${plainText(task.title)}”${saved.subtasks > 0 ? ` and ${saved.subtasks} ${saved.subtasks === 1 ? "subtask" : "subtasks"}` : ""}`,
         action: {
           label: "Undo",
           run: () => {
@@ -82,9 +82,24 @@ interface RowProps {
 /** A section as shown: `rows` without collapsed parts, `all` with them, and which tasks have subtasks. */
 interface ShownSection extends Section { all: Row[]; parents: Set<string>; collapsed: Set<string> }
 
-function TaskSection({ section, pending, selectedId, highlightId, ...rest }: RowProps & { section: ShownSection }) {
+/** Rows whose completion is running, or whose parent's is (a subtask is completed with its parent). */
+function pendingRows(rows: Row[], pending: Set<string>): Set<string> {
+  const out = new Set<string>();
+  let under = Infinity;
+  for (const r of rows) {
+    if (r.depth <= under) under = Infinity;
+    if (pending.has(r.task.id) || r.depth > under) {
+      out.add(r.task.id);
+      if (under === Infinity) under = r.depth;
+    }
+  }
+  return out;
+}
+
+function TaskSection({ section, pending: pendingIds, selectedId, highlightId, ...rest }: RowProps & { section: ShownSection }) {
   const { heading } = section;
   const id = useId();
+  const pending = pendingRows(section.all, pendingIds);
   const rows = (
     <ul className="task-list">
       {section.rows.map((r) => (
@@ -105,12 +120,13 @@ function TaskSection({ section, pending, selectedId, highlightId, ...rest }: Row
   if (!section.title) return rows;
   return (
     <section className="task-section" aria-labelledby={id}>
-      <h2 id={id} className="section-title">
+      <h2 className="section-title">
         {heading && section.all.length > 0 && (
           <Disclosure title={heading.title} collapsed={section.collapsed.has(heading.id)} onToggle={(c) => rest.onToggle(heading, c)} />
         )}
         {heading ? (
           <button
+            id={id}
             type="button"
             className={["section-title-button", heading.id === selectedId && "selected", heading.id === highlightId && "highlighted"].filter(Boolean).join(" ")}
             aria-current={heading.id === selectedId ? "true" : undefined}
@@ -120,7 +136,7 @@ function TaskSection({ section, pending, selectedId, highlightId, ...rest }: Row
           >
             <InlineMarkdown text={section.title} links={false} />
           </button>
-        ) : section.title}
+        ) : <span id={id}>{section.title}</span>}
       </h2>
       {section.rows.length > 0 && rows}
     </section>

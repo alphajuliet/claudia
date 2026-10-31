@@ -1,13 +1,13 @@
 # Markdown, theme, collapse and show completed: design
 
-Date: 2026-10-31. Status: approved.
+Date: 2026-10-31. Status: approved; built.
 
 Four cards from NEXT, built in this order, each with its own tests and commits.
 
 ## 1. Markdown in titles and notes
 
 - Rendering uses `react-markdown` with `remark-gfm`. It renders to React elements, never raw HTML, so stored text can't inject markup.
-- **Titles** render inline Markdown only (bold, italics, strikethrough, code, links), in rows, headings and the panel title. Links open in a new tab, and clicking one doesn't start a rename. Editing shows the raw text.
+- **Titles** render inline Markdown only (bold, italics, strikethrough, code, links), in rows, headings and the panel's subtasks; images, footnotes and tables are off. The panel's title field always shows the raw text. Links to other sites open in a new tab, and clicking one (or Enter on it) doesn't start a rename. Labels and messages use the plain text.
 - **Notes** in the panel render full GitHub-flavoured Markdown. Clicking them (or Enter when they have focus) switches to the textarea; leaving it saves and shows them formatted again. Empty notes show a "Notes" placeholder to click. Ticking `- [ ]` checkboxes in notes is not supported yet.
 - Storage, the API and MCP are unchanged: they keep the Markdown text.
 

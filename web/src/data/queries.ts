@@ -1,5 +1,5 @@
 import { FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, type Task } from "@claudia/shared";
-import { useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
 import { useSession } from "../session/SessionProvider";
 
@@ -18,12 +18,13 @@ const NoContent = { parse: () => undefined };
 const SettingsSchema = { parse: (data: unknown) => (data ?? {}) as Record<string, unknown> };
 
 /** A GET that waits for sign-in, because `api()` throws when signed out. */
-function useGet<T>(key: QueryKey, path: string | null, schema: { parse(data: unknown): T }) {
+function useGet<T>(key: QueryKey, path: string | null, schema: { parse(data: unknown): T }, opts: { keepPrevious?: boolean } = {}) {
   const { state, api } = useSession();
   return useQuery({
     queryKey: key,
     queryFn: async () => json(await api(path!), schema),
     enabled: state.status === "signedIn" && path !== null,
+    ...(opts.keepPrevious ? { placeholderData: keepPreviousData } : {}),
   });
 }
 
@@ -40,7 +41,9 @@ export function useTimeZone(): string {
 }
 
 /** Tasks matching a query string (without the "?"). Null waits. */
-export const useTasks = (query: string | null) => useGet(["tasks", query], query === null ? null : `/api/tasks?${query}`, TasksSchema);
+/** Tasks for a query. With `keepPrevious`, the rows shown stay while a changed query loads (no "Loading…"). */
+export const useTasks = (query: string | null, opts: { keepPrevious?: boolean } = {}) =>
+  useGet(["tasks", query], query === null ? null : `/api/tasks?${query}`, TasksSchema, opts);
 
 /**
  * One task, as a list of none or one so that it sits with the other task lists and every task change (at once, on
@@ -191,16 +194,22 @@ export function useSetCompleted() {
       }
       // Lists showing completed tasks (and the detail panel, so it can tell completed from deleted) keep them, marked.
       const completedAt = new Date().toISOString();
+      // Subtasks already completed keep their own time, as on the server.
       return {
-        changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), (t, key) => (keepsCompleted(key) ? { ...t, completedAt } : null)),
+        completedAt,
+        changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), (t, key) =>
+          keepsCompleted(key) ? (t.completedAt ? t : { ...t, completedAt }) : null),
       };
     },
     onError: (_error, _vars, context) => restoreCached(queryClient, context?.changed),
-    onSuccess: ({ subtasks: _subtasks, ...saved }) => {
+    onSuccess: ({ subtasks: _subtasks, ...saved }, _vars, context) => {
+      // Subtasks completed with it get the server's time, so reopening (or Undo) finds them before the refetch.
+      const stamped = (t: Task) =>
+        t.id === saved.id ? saved : context && "completedAt" in context && t.completedAt === context.completedAt ? { ...t, completedAt: saved.completedAt } : t;
       if (saved.completedAt)
         for (const [key, tasks] of queryClient.getQueriesData<Task[]>(tasksKey))
           if (tasks?.some((t) => t.id === saved.id))
-            queryClient.setQueryData<Task[]>(key, keepsCompleted(key) ? tasks.map((t) => (t.id === saved.id ? saved : t)) : tasks.filter((t) => t.id !== saved.id));
+            queryClient.setQueryData<Task[]>(key, keepsCompleted(key) ? tasks.map(stamped) : tasks.filter((t) => t.id !== saved.id));
       else writeCached(queryClient, saved);
     },
     onSettled: () => refetchWhenLast(queryClient),
