@@ -29,8 +29,9 @@
   -webkit-text-size-adjust: 100%;
 }
 
+/* Dark: from the system unless the theme is set to light, or always when it's set to dark (`data-theme` on <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1b1c1f;
     --bg-sidebar: #161719;
     --bg-raised: #232428;
@@ -46,6 +47,23 @@
     --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
   }
 }
+:root[data-theme="dark"] {
+  --bg: #1b1c1f;
+  --bg-sidebar: #161719;
+  --bg-raised: #232428;
+  --fg: #e4e5e8;
+  --muted: #979aa1;
+  --accent: #6fa0ff;
+  --accent-fg: #0f1420;
+  --accent-soft: rgba(111, 160, 255, 0.14);
+  --danger: #ff6b66;
+  --border: #2d2f34;
+  --row-hover: rgba(255, 255, 255, 0.05);
+  --focus: rgba(111, 160, 255, 0.6);
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); }
@@ -237,6 +255,8 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
   border-top: 1px solid var(--border);
   font-size: 0.88rem;
 }
+.sidebar-footer { flex-wrap: wrap; }
+.segmented.theme-switch { flex-basis: 100%; grid-template-columns: repeat(3, 1fr); margin: 0 0 0.25rem; }
 .who { display: grid; min-width: 0; }
 .who-name { font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .who-scopes { color: var(--muted); font-size: 0.8rem; }

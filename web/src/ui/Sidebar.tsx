@@ -5,6 +5,7 @@ import { sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox, VIEWS } from "../lib/views";
 import { useSession } from "../session/SessionProvider";
 import { CONTEXT_CHOICES, useContextFilter } from "./contextFilter";
+import { THEME_CHOICES, useTheme } from "./theme";
 
 function NavLink({ href, children, onNavigate }: { href: string; children: ReactNode; onNavigate: () => void }) {
   const [location] = useLocation();
@@ -67,6 +68,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   };
 
   const { state, signOut } = useSession();
+  const [theme, setTheme] = useTheme();
   const { context, setContext } = useContextFilter();
   const folders = useFolders().data ?? [];
   const lists = useLists().data ?? [];
@@ -118,6 +120,13 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
       </div>
 
       <footer className="sidebar-footer">
+        <div className="segmented theme-switch" role="group" aria-label="Theme">
+          {THEME_CHOICES.map((t) => (
+            <button key={t.id} type="button" aria-pressed={theme === t.id} onClick={() => setTheme(t.id)}>
+              {t.name}
+            </button>
+          ))}
+        </div>
         {state.status === "signedIn" && (
           <span className="who" title={`Signed in with the token “${state.me.name}”`}>
             <span className="who-name">{state.me.name}</span>

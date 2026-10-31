@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>Claudia</title>
+    <script>
+      // Apply the saved theme before the first paint, so a dark choice doesn't flash light.
+      try {
+        var theme = localStorage.getItem("claudia.theme");
+        if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
