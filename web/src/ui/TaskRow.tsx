@@ -6,18 +6,20 @@ import { formatDue, todayIn } from "../lib/dates";
 export const dueDateOf = (task: Task, timeZone: string) =>
   task.dueDate ?? (task.dueAt ? todayIn(timeZone, new Date(task.dueAt)) : null);
 
-export function TaskRow({ task, depth, today, timeZone, onComplete }: {
+/** One task. While `pending` (a complete or reopen is running), its checkbox is disabled so a double click sends one. */
+export function TaskRow({ task, depth, today, timeZone, pending, onComplete }: {
   task: Task;
   depth: number;
   today: string;
   timeZone: string;
+  pending: boolean;
   onComplete: (task: Task) => void;
 }) {
   const due = dueDateOf(task, timeZone);
   const label = due ? formatDue(due, today) : null;
   return (
-    <li className="task-row" data-depth={depth} style={{ "--depth": depth } as CSSProperties}>
-      <input type="checkbox" className="task-check" aria-label={`Complete ${task.title}`} checked={false} onChange={() => onComplete(task)} />
+    <li className={pending ? "task-row pending" : "task-row"} data-depth={depth} style={{ "--depth": depth } as CSSProperties}>
+      <input type="checkbox" className="task-check" aria-label={`Complete ${task.title}`} checked={false} disabled={pending} onChange={() => onComplete(task)} />
       <span className="task-title">{task.title}</span>
       <span className="task-meta">
         {task.labels.map((l) => <span key={l} className="chip">{l}</span>)}

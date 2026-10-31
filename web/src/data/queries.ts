@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { FilterSchema, FolderSchema, ListSchema, TaskSchema, type Task } from "@claudia/shared";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
 import { useSession } from "../session/SessionProvider";
@@ -40,31 +40,58 @@ export function useTimeZone(): string {
 /** Tasks matching a query string (without the "?"). Null waits. */
 export const useTasks = (query: string | null) => useGet(["tasks", query], query === null ? null : `/api/tasks?${query}`, TasksSchema);
 
-export const useFilterTasks = (id: string) => useGet(["tasks", "filter", id], `/api/filters/${id}/tasks`, TasksSchema);
+export const useFilterTasks = (id: string) => useGet(["tasks", "filter", id], `/api/filters/${id}/tasks?limit=500`, TasksSchema);
 
-/** Completes or reopens a task, updating every cached task list at once and rolling back on failure. */
+const setCompletedKey = ["setCompleted"];
+interface SetCompletedVars { task: Task; done: boolean }
+
+/** Ids of tasks with a complete or reopen still running. */
+export function usePendingCompletions(): Set<string> {
+  const ids = useMutationState({
+    filters: { mutationKey: setCompletedKey, status: "pending" },
+    select: (m) => (m.state.variables as SetCompletedVars).task.id,
+  });
+  return new Set(ids);
+}
+
+/**
+ * Completes or reopens a task, updating every cached task list at once. On failure only that task is put back,
+ * so others completed meanwhile stay gone. Lists are refetched once the last running change settles.
+ */
 export function useSetCompleted() {
   const { api } = useSession();
   const queryClient = useQueryClient();
   const tasksKey = { queryKey: ["tasks"] };
   return useMutation({
-    mutationFn: async ({ task, done }: { task: Task; done: boolean }) =>
+    mutationKey: setCompletedKey,
+    mutationFn: async ({ task, done }: SetCompletedVars) =>
       json(await api(`/api/tasks/${task.id}/${done ? "complete" : "uncomplete"}`, { method: "POST" }), TaskSchema),
     onMutate: async ({ task, done }) => {
       await queryClient.cancelQueries(tasksKey);
-      const snapshots = queryClient.getQueriesData<Task[]>(tasksKey);
       // A repeating task stays: it comes back open with its next due date.
-      if (done && !task.recurRule) queryClient.setQueriesData<Task[]>(tasksKey, (tasks) => tasks?.filter((t) => t.id !== task.id));
-      return { snapshots };
+      if (!done || task.recurRule) return { removedFrom: [] };
+      const removedFrom: { key: QueryKey; index: number }[] = [];
+      for (const [key, tasks] of queryClient.getQueriesData<Task[]>(tasksKey)) {
+        const index = tasks?.findIndex((t) => t.id === task.id) ?? -1;
+        if (index < 0) continue;
+        removedFrom.push({ key, index });
+        queryClient.setQueryData<Task[]>(key, tasks!.filter((t) => t.id !== task.id));
+      }
+      return { removedFrom };
     },
-    onError: (_error, _vars, context) => {
-      for (const [key, data] of context?.snapshots ?? []) queryClient.setQueryData(key, data);
+    onError: (_error, { task }, context) => {
+      // Back where it was, near enough: the refetch puts everything in order.
+      for (const { key, index } of context?.removedFrom ?? [])
+        queryClient.setQueryData<Task[]>(key, (tasks) =>
+          !tasks || tasks.some((t) => t.id === task.id) ? tasks : [...tasks.slice(0, index), task, ...tasks.slice(index)]);
     },
     onSuccess: (saved) => {
       queryClient.setQueriesData<Task[]>(tasksKey, (tasks) =>
         saved.completedAt ? tasks?.filter((t) => t.id !== saved.id) : tasks?.map((t) => (t.id === saved.id ? saved : t)),
       );
     },
-    onSettled: () => queryClient.invalidateQueries(tasksKey),
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey: setCompletedKey }) === 1) return queryClient.invalidateQueries(tasksKey);
+    },
   });
 }

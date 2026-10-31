@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Redirect, Route, Switch } from "wouter";
+import { Route, Switch } from "wouter";
 import { ContextFilterProvider } from "./contextFilter";
-import { FilterScreen, ListScreen, NotFound, ViewScreen } from "./screens";
+import { FilterScreen, Home, ListScreen, NotFound, ViewScreen } from "./screens";
 import { Sidebar } from "./Sidebar";
 import { ToastProvider } from "./Toast";
 
@@ -17,6 +17,15 @@ export function AppShell() {
     return () => window.removeEventListener("keydown", onKey);
   }, [drawerOpen]);
 
+  // The drawer is for narrow screens: close it when the window widens to the desktop layout.
+  useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
+    const desktop = window.matchMedia("(min-width: 900px)");
+    const onChange = (e: { matches: boolean }) => { if (e.matches) setDrawerOpen(false); };
+    desktop.addEventListener("change", onChange);
+    return () => desktop.removeEventListener("change", onChange);
+  }, []);
+
   return (
     <ContextFilterProvider>
       <ToastProvider>
@@ -31,7 +40,7 @@ export function AppShell() {
           {drawerOpen && <div className="backdrop" aria-hidden="true" onClick={close} />}
           <main className="content">
             <Switch>
-              <Route path="/"><Redirect to="/inbox" replace /></Route>
+              <Route path="/"><Home /></Route>
               <Route path="/list/:id">{(p) => <ListScreen id={p.id} />}</Route>
               <Route path="/filter/:id">{(p) => <FilterScreen id={p.id} />}</Route>
               <Route path="/:view">{(p) => <ViewScreen id={p.view} />}</Route>

@@ -4,7 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
-import type { Folder, List, Task } from "@claudia/shared";
+import type { Filter, Folder, List, Task } from "@claudia/shared";
 import { formatDue, todayIn } from "../lib/dates";
 import { SessionProvider } from "../session/SessionProvider";
 import { tokenStore } from "../session/store";
@@ -34,13 +34,13 @@ const task = (fields: Partial<Task> & Pick<Task, "title" | "listId">): Task => (
 });
 
 /** A small fake of the API: tasks are filtered by listId, label and status, and complete/uncomplete change them. */
-function stubApi(tasks: Task[], opts: { failComplete?: boolean } = {}) {
+function stubApi(tasks: Task[], opts: { failComplete?: boolean; holdComplete?: Promise<void>; filters?: Filter[] } = {}) {
   const store = new Map(tasks.map((t) => [t.id, t]));
   const bodies: Record<string, unknown> = {
     "/api/me": me,
     "/api/folders": [work, personal],
     "/api/lists": [inbox, errands, projects, garden],
-    "/api/filters": [],
+    "/api/filters": opts.filters ?? [],
     "/api/settings": {},
   };
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
@@ -54,10 +54,13 @@ function stubApi(tasks: Task[], opts: { failComplete?: boolean } = {}) {
         && (!q.get("label") || t.labels.includes(q.get("label")!)));
       return json(out);
     }
+    // A saved filter here matches every task, completed ones included.
+    if (/^\/api\/filters\/\w+\/tasks$/.test(pathname!)) return json([...store.values()]);
     const m = pathname!.match(/^\/api\/tasks\/(\w+)\/(complete|uncomplete)$/);
     if (m && init?.method === "POST") {
       const t = store.get(m[1]!)!;
       if (m[2] === "complete") {
+        await opts.holdComplete;
         if (opts.failComplete) return json({ error: { code: "internal", message: "Boom" } }, 500);
         const saved = t.recurRule ? { ...t, dueDate: addDays(t.dueDate!, 7) } : { ...t, completedAt: at };
         store.set(t.id, saved);
@@ -203,7 +206,39 @@ describe("task lists", () => {
     stubApi([task({ title: "Buy stamps", listId: errands.id, labels: ["next"] })], { failComplete: true });
     renderAt("/next");
     await userEvent.click(await main().findByRole("checkbox", { name: "Complete Buy stamps" }));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Boom"));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Boom"));
+    expect(screen.getByRole("status").textContent).toBe("");
     expect(main().getByRole("checkbox", { name: "Complete Buy stamps" })).toBeTruthy();
+  });
+
+  it("sends one completion for a double click and disables the checkbox while it runs", async () => {
+    let release!: () => void;
+    const fetchMock = stubApi(
+      [task({ title: "Water the plants", listId: garden.id, labels: ["next"], dueDate: today, recurRule: "FREQ=WEEKLY" })],
+      { holdComplete: new Promise((resolve) => { release = resolve; }) },
+    );
+    renderAt("/next");
+    const box = await main().findByRole("checkbox", { name: "Complete Water the plants" });
+    await userEvent.dblClick(box);
+    expect((box as HTMLInputElement).disabled).toBe(true);
+    expect(box.closest("li")!.classList.contains("pending")).toBe(true);
+
+    release();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Next due"));
+    const posts = fetchMock.mock.calls.filter(([path]) => String(path).endsWith("/complete"));
+    expect(posts).toHaveLength(1);
+    await waitFor(() => expect((main().getByRole("checkbox", { name: "Complete Water the plants" }) as HTMLInputElement).disabled).toBe(false));
+  });
+
+  it("shows a saved filter's open tasks, asking for up to 500", async () => {
+    const errand: Filter = { id: "01JD0000000000000000000001", name: "Errands", query: "label=errand", position: "a0", createdAt: at, updatedAt: at };
+    const fetchMock = stubApi([
+      task({ title: "Buy stamps", listId: errands.id }),
+      task({ title: "Post the parcel", listId: errands.id, completedAt: at }),
+    ], { filters: [errand] });
+    renderAt(`/filter/${errand.id}`);
+    expect(await main().findByText("Buy stamps")).toBeTruthy();
+    expect(main().queryByText("Post the parcel")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(`/api/filters/${errand.id}/tasks?limit=500`, expect.anything());
   });
 });

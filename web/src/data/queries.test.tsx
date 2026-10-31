@@ -73,4 +73,42 @@ describe("queries", () => {
     await waitFor(() => expect(result.current.setCompleted.error?.message).toBe("Boom"));
     expect(result.current.tasks.data).toEqual([task]);
   });
+
+  it("useSetCompleted keeps overlapping completions and puts back only the one that fails", async () => {
+    const a = task;
+    const b: Task = { ...task, id: "01JB0000000000000000000002", title: "Feed the cat", position: "a1" };
+    let server = [a, b];
+    let heldGets: Promise<void> | null = null;
+    const pending: Record<string, (res: Response) => void> = {};
+    stubApi((path) => {
+      if (path.startsWith("/api/tasks?")) return Promise.resolve(heldGets).then(() => json(server));
+      const m = path.match(/^\/api\/tasks\/(\w+)\/complete$/);
+      if (m) return new Promise<Response>((resolve) => { pending[m[1]!] = resolve; });
+      return Promise.resolve(json({}, 404));
+    });
+    const { wrapper } = signedIn();
+    const { result } = renderHook(() => ({ tasks: useTasks("view=next"), a: useSetCompleted(), b: useSetCompleted() }), { wrapper });
+    await waitFor(() => expect(result.current.tasks.data).toEqual([a, b]));
+
+    act(() => result.current.a.mutate({ task: a, done: true }));
+    act(() => result.current.b.mutate({ task: b, done: true }));
+    await waitFor(() => expect(result.current.tasks.data).toEqual([]));
+    await waitFor(() => expect(Object.keys(pending)).toHaveLength(2));
+
+    // B succeeds while A is still running: no refetch yet, so A doesn't flicker back.
+    server = [a];
+    act(() => pending[b.id]!(json({ ...b, completedAt: at })));
+    await waitFor(() => expect(result.current.b.isSuccess).toBe(true));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(result.current.tasks.data).toEqual([]);
+
+    // A fails: only A comes back, before the refetch answers.
+    let releaseGets!: () => void;
+    heldGets = new Promise((resolve) => { releaseGets = resolve; });
+    act(() => pending[a.id]!(json({ error: { code: "internal", message: "Boom" } }, 500)));
+    await waitFor(() => expect(result.current.tasks.data).toEqual([a]));
+    act(() => releaseGets());
+    await waitFor(() => expect(result.current.a.error?.message).toBe("Boom"));
+    expect(result.current.tasks.data).toEqual([a]);
+  });
 });

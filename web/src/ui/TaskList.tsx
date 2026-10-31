@@ -1,6 +1,6 @@
 import { useId } from "react";
 import type { Task } from "@claudia/shared";
-import { useSetCompleted, useTimeZone } from "../data/queries";
+import { usePendingCompletions, useSetCompleted, useTimeZone } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import type { Row } from "../lib/tasks";
 import { dueDateOf, TaskRow } from "./TaskRow";
@@ -29,26 +29,27 @@ function useComplete() {
         action: {
           label: "Undo",
           run: () => {
-            setCompleted.mutateAsync({ task: saved, done: false }).catch((e: Error) => toast.show({ message: e.message }));
+            setCompleted.mutateAsync({ task: saved, done: false }).catch((e: Error) => toast.show({ message: e.message, error: true }));
           },
         },
       });
     } catch (e) {
-      toast.show({ message: (e as Error).message });
+      toast.show({ message: (e as Error).message, error: true });
     }
   };
 }
 
-function TaskSection({ section, today, timeZone, onComplete }: {
+function TaskSection({ section, today, timeZone, pending, onComplete }: {
   section: Section;
   today: string;
   timeZone: string;
+  pending: Set<string>;
   onComplete: (task: Task) => void;
 }) {
   const id = useId();
   const rows = (
     <ul className="task-list">
-      {section.rows.map((r) => <TaskRow key={r.task.id} task={r.task} depth={r.depth} today={today} timeZone={timeZone} onComplete={onComplete} />)}
+      {section.rows.map((r) => <TaskRow key={r.task.id} task={r.task} depth={r.depth} today={today} timeZone={timeZone} pending={pending.has(r.task.id)} onComplete={onComplete} />)}
     </ul>
   );
   if (!section.title) return rows;
@@ -65,6 +66,7 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   const timeZone = useTimeZone();
   const today = todayIn(timeZone);
   const onComplete = useComplete();
+  const pending = usePendingCompletions();
 
   if (query.error) {
     return (
@@ -78,7 +80,7 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   if (sections.every((s) => s.rows.length === 0 && !s.title)) return <p className="list-state muted">{empty}</p>;
   return (
     <div className="task-sections">
-      {sections.map((s) => <TaskSection key={s.key} section={s} today={today} timeZone={timeZone} onComplete={onComplete} />)}
+      {sections.map((s) => <TaskSection key={s.key} section={s} today={today} timeZone={timeZone} pending={pending} onComplete={onComplete} />)}
     </div>
   );
 }

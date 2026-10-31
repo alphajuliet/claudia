@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Router } from "wouter";
@@ -72,6 +72,13 @@ describe("AppShell", () => {
     expect(sidebar().getByRole("link", { name: "Today" }).getAttribute("aria-current")).toBeNull();
   });
 
+  it("redirects / to Today when there is no list called Inbox", async () => {
+    stubApi({ lists: [projects] });
+    const { location } = renderShell("/");
+    expect(await screen.findByRole("heading", { level: 1, name: "Today" })).toBeTruthy();
+    expect(location.history.at(-1)).toBe("/today");
+  });
+
   it("hides Inbox when there is no list called Inbox", async () => {
     stubApi({ lists: [projects] });
     renderShell("/today");
@@ -134,6 +141,23 @@ describe("AppShell", () => {
     expect(shell.classList.contains("drawer-open")).toBe(true);
     expect(screen.getByRole("button", { name: "Menu" }).getAttribute("aria-expanded")).toBe("true");
     await userEvent.click(sidebar().getByRole("link", { name: "Today" }));
+    expect(shell.classList.contains("drawer-open")).toBe(false);
+  });
+
+  it("closes the drawer when the window widens to the desktop layout", async () => {
+    let onChange!: (e: { matches: boolean }) => void;
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      media: query,
+      matches: false,
+      addEventListener: (_type: string, listener: typeof onChange) => { onChange = listener; },
+      removeEventListener: () => {},
+    }));
+    stubApi();
+    const { container } = renderShell();
+    const shell = container.querySelector(".shell")!;
+    await userEvent.click(screen.getByRole("button", { name: "Menu" }));
+    expect(shell.classList.contains("drawer-open")).toBe(true);
+    act(() => onChange({ matches: true }));
     expect(shell.classList.contains("drawer-open")).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import type { List, Task } from "@claudia/shared";
-import { Link } from "wouter";
+import { Link, Redirect } from "wouter";
 import { useFilters, useFilterTasks, useFolders, useLists, useTasks, useTimeZone } from "../data/queries";
 import { todayIn } from "../lib/dates";
 import { listOrder, sidebarTree } from "../lib/sidebar";
@@ -16,6 +16,13 @@ export function NotFound() {
       <p><Link href="/inbox">Go to Inbox</Link></p>
     </>
   );
+}
+
+/** The home address: the Inbox, or Today when there's no list called Inbox. */
+export function Home() {
+  const lists = useLists();
+  if (lists.isPending) return null;
+  return <Redirect to={lists.isSuccess && !findInbox(lists.data) ? "/today" : "/inbox"} replace />;
 }
 
 /**
@@ -103,7 +110,8 @@ export function FilterScreen({ id }: { id: string }) {
   const filters = useFilters();
   const filter = filters.data?.find((f) => f.id === id);
   const tasks = useFilterTasks(id);
-  const sections = useGroupedSections(tasks.data);
+  // A filter's query may match completed tasks, but the screen shows open ones only.
+  const sections = useGroupedSections(tasks.data?.filter((t) => t.completedAt === null));
   if (filters.isSuccess && !filter) return <NotFound />;
   return (
     <>

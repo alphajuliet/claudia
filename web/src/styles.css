@@ -126,6 +126,7 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 }
 
 .topbar { display: none; }
+.backdrop { display: none; }
 
 .sidebar {
   display: flex;
@@ -296,6 +297,9 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 }
 .task-check:hover { border-color: var(--accent); background: var(--accent-soft); }
 .task-check:focus-visible { outline-offset: 2px; border-radius: 50%; }
+.task-row.pending { opacity: 0.55; }
+.task-row.pending .task-check { cursor: progress; }
+.task-row.pending .task-check:hover { border-color: var(--muted); background: transparent; }
 
 .task-title {
   flex: 1;
@@ -388,7 +392,7 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
   }
   .drawer-open .sidebar { transform: none; visibility: visible; transition: transform 0.18s ease; }
 
-  .backdrop { position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.3); }
+  .backdrop { display: block; position: fixed; inset: 0; z-index: 10; background: rgba(0, 0, 0, 0.3); }
 
   .content { padding: 1.25rem 1rem 3rem; }
   .task-row { --indent: 1.1rem; }
