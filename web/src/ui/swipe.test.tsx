@@ -1,7 +1,8 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { at, garden, main, renderAt, stubApi, task } from "./testApi";
+import { zonedToUtc } from "../lib/dates";
+import { addDays, at, garden, main, renderAt, sentBodies, stubApi, task, today } from "./testApi";
 
 const row = (title: string) => main().getByText(title).closest("li")!;
 const posts = (fetchMock: ReturnType<typeof stubApi>) =>
@@ -90,15 +91,108 @@ describe("swiping a task right on a touch screen", () => {
     expect(row("Weed the beds").dataset.swipe).toBeUndefined();
     expect(posts(fetchMock)).toEqual([]);
   });
+});
 
-  it("doesn't swipe a left drag on a task", async () => {
-    const fetchMock = stubApi([task({ title: "Weed the beds", listId: garden.id })]);
+const tz = "Australia/Sydney";
+const sheet = (name: string) => screen.queryByRole("dialog", { name });
+
+describe("swiping a task left on a touch screen", () => {
+  it("reveals Date and Snooze past half their width, and not short of it", async () => {
+    stubApi([task({ title: "Weed the beds", listId: garden.id }), task({ title: "Mow", listId: garden.id })]);
     renderAt(`/list/${garden.id}`);
-    const title = await main().findByText("Weed the beds");
-    fireEvent.pointerDown(title, { pointerType: "touch", pointerId: 1, clientX: 200, clientY: 100 });
-    fireEvent.pointerMove(title, { pointerType: "touch", pointerId: 1, clientX: 50, clientY: 100 });
-    expect(row("Weed the beds").style.getPropertyValue("--swipe-x")).toBe("0px");
-    fireEvent.pointerUp(title, { pointerType: "touch", pointerId: 1, clientX: 50, clientY: 100 });
+    drag(await main().findByText("Mow"), -30, 0);
+    expect(main().queryByRole("button", { name: "Date for Mow" })).toBeNull();
+    expect(row("Mow").dataset.swipe).not.toBe("open");
+
+    drag(main().getByText("Weed the beds"), -100, 0);
+    const li = row("Weed the beds");
+    expect(li.dataset.swipe).toBe("open");
+    expect(li.style.getPropertyValue("--swipe-x")).toBe("-144px");
+    expect(main().getByRole("button", { name: "Date for Weed the beds" })).toBeTruthy();
+    expect(main().getByRole("button", { name: "Snooze Weed the beds" })).toBeTruthy();
+  });
+
+  it("Date opens the Due sheet, and a quick choice saves and closes it", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    const fetchMock = stubApi([weed]);
+    const { href } = renderAt(`/list/${garden.id}`);
+    drag(await main().findByText("Weed the beds"), -100, 0);
+    await userEvent.click(main().getByRole("button", { name: "Date for Weed the beds" }));
+    const dialog = await screen.findByRole("dialog", { name: "Due" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(href()).toBe(`/list/${garden.id}`);
+    expect(row("Weed the beds").dataset.swipe).not.toBe("open");
+    await userEvent.click(within(dialog).getByRole("button", { name: "Due: Tomorrow" }));
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: addDays(today, 1), dueAt: null }]));
+    expect(sheet("Due")).toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(row("Weed the beds")));
+  });
+
+  it("Snooze opens the Snooze sheet, and a quick choice snoozes, closes it and hides the row, with Undo", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    const fetchMock = stubApi([weed]);
+    renderAt(`/list/${garden.id}`);
+    drag(await main().findByText("Weed the beds"), -100, 0);
+    await userEvent.click(main().getByRole("button", { name: "Snooze Weed the beds" }));
+    const dialog = await screen.findByRole("dialog", { name: "Snooze" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Snooze: Tomorrow" }));
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ snoozedUntil: zonedToUtc(addDays(today, 1), "00:00", tz) }]));
+    expect(sheet("Snooze")).toBeNull();
+    await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
+    const toast = screen.getByRole("status");
+    await waitFor(() => expect(toast.textContent).toContain("Snoozed until Tomorrow"));
+    await userEvent.click(within(toast).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ snoozedUntil: null }));
+    expect(await main().findByText("Weed the beds")).toBeTruthy();
+  });
+
+  it("keeps one row open at a time, and closes it on a tap elsewhere, a scroll or a swipe right", async () => {
+    const fetchMock = stubApi([task({ title: "Weed the beds", listId: garden.id }), task({ title: "Mow", listId: garden.id })]);
+    renderAt(`/list/${garden.id}`);
+    drag(await main().findByText("Weed the beds"), -100, 0);
+    drag(main().getByText("Mow"), -100, 0);
+    expect(row("Mow").dataset.swipe).toBe("open");
+    expect(row("Weed the beds").dataset.swipe).not.toBe("open");
+    expect(main().queryByRole("button", { name: "Date for Weed the beds" })).toBeNull();
+
+    fireEvent.pointerDown(document.body, { pointerType: "touch", pointerId: 3 });
+    expect(row("Mow").dataset.swipe).not.toBe("open");
+
+    drag(main().getByText("Mow"), -100, 0);
+    fireEvent.scroll(screen.getByRole("main"));
+    expect(row("Mow").dataset.swipe).not.toBe("open");
+
+    drag(main().getByText("Mow"), -100, 0);
+    drag(main().getByText("Mow"), 200, 0);
+    expect(row("Mow").dataset.swipe).not.toBe("open");
     expect(posts(fetchMock)).toEqual([]);
+  });
+
+  it("Escape and Done close the sheet, and keys stay in it", async () => {
+    stubApi([task({ title: "Weed the beds", listId: garden.id }), task({ title: "Mow", listId: garden.id })]);
+    renderAt(`/list/${garden.id}`);
+    drag(await main().findByText("Weed the beds"), -100, 0);
+    await userEvent.click(main().getByRole("button", { name: "Date for Weed the beds" }));
+    const dialog = await screen.findByRole("dialog", { name: "Due" });
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    await userEvent.keyboard("j");
+    // j would move the highlight on to Mow.
+    expect(row("Mow").classList.contains("highlighted")).toBe(false);
+    await userEvent.keyboard("{Escape}");
+    expect(sheet("Due")).toBeNull();
+
+    drag(main().getByText("Weed the beds"), -100, 0);
+    await userEvent.click(main().getByRole("button", { name: "Snooze Weed the beds" }));
+    await userEvent.click(within(await screen.findByRole("dialog", { name: "Snooze" })).getByRole("button", { name: "Done" }));
+    expect(sheet("Snooze")).toBeNull();
+  });
+
+  it("doesn't reveal on a completed task", async () => {
+    stubApi([task({ title: "Plan", listId: garden.id, completedAt: at })]);
+    renderAt(`/list/${garden.id}`);
+    await userEvent.click(await main().findByRole("button", { name: "Show completed" }));
+    drag(await main().findByText("Plan"), -100, 0);
+    expect(row("Plan").dataset.swipe).not.toBe("open");
+    expect(row("Plan").querySelector(".swipe-actions")).toBeNull();
   });
 });

@@ -165,9 +165,10 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
 
 /**
  * Due: a date alone or a date with a time, never both. Repeating tasks can't take a time yet: recurrence ignores
- * `dueAt`, so the next completion would be the last.
+ * `dueAt`, so the next completion would be the last. `onQuick` runs once a quick choice's save has started (a sheet
+ * closes then; the panel stays open).
  */
-function DueField({ task, timeZone }: { task: Task; timeZone: string }) {
+export function DueField({ task, timeZone, onQuick }: { task: Task; timeZone: string; onQuick?: () => void }) {
   const { state, patch } = usePatch(task);
   const { date: today, time: nowTime } = nowIn(timeZone);
   const quick = quickDates(today);
@@ -188,7 +189,10 @@ function DueField({ task, timeZone }: { task: Task; timeZone: string }) {
       timeDisabled={Boolean(task.recurRule)}
       showOverdue
       status={state}
-      onSave={(when) => void patch(dueFields(when, timeZone))}
+      onSave={(when, quick) => {
+        void patch(dueFields(when, timeZone));
+        if (quick) onQuick?.();
+      }}
     />
   );
 }
@@ -202,10 +206,10 @@ function snoozeWhen(task: Task, timeZone: string): When | null {
 
 /**
  * Snooze: a day alone is the start of that day, and one already passed isn't saved. Views hide snoozed tasks, so a
- * quick choice closes the panel at once; a typed date leaves it open for a time to follow. Either way the toast then
+ * quick choice closes the panel (or sheet) at once; a typed date leaves it open for a time to follow. Either way the toast then
  * says until when, with Undo.
  */
-function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone: string; onClose: () => void }) {
+export function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone: string; onClose: () => void }) {
   const { state, patch } = usePatch(task);
   const update = useUpdateTask();
   const queryClient = useQueryClient();

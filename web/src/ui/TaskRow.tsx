@@ -103,7 +103,9 @@ function TaskTitle({ task, onRename, onOpen, pointerType }: {
  * One task. While `pending` (a complete or reopen is running), its checkbox is disabled so a double click sends one.
  * `onSelect` is called for clicks on the row outside the checkbox and title, and for taps on the title (it opens the detail panel); `selected`
  * marks the row whose details are showing. The row can take focus (the keyboard highlight), and focus anywhere in
- * it calls `onHighlight`. On touch, a swipe right completes or reopens it, as the checkbox does (`useSwipe`).
+ * it calls `onHighlight`. On touch, a swipe right completes or reopens it, as the checkbox does (`useSwipe`); on an
+ * open task, a swipe left calls `onReveal`, and while `open` the row shows Date and Snooze (`onDate`, `onSnooze`).
+ * Keyboard and screen-reader users have the panel for those, so the buttons are hidden from them while closed.
  */
 /** The ▸/▾ toggle of a heading or a task with subtasks. */
 export function Disclosure({ title, collapsed, onToggle }: { title: string; collapsed: boolean; onToggle: (collapsed: boolean) => void }) {
@@ -123,7 +125,7 @@ export function Disclosure({ title, collapsed, onToggle }: { title: string; coll
   );
 }
 
-export function TaskRow({ task, depth, today, timeZone, pending, selected = false, highlighted = false, expandable = false, collapsed = false, onComplete, onRename, onSelect, onHighlight, onToggle }: {
+export function TaskRow({ task, depth, today, timeZone, pending, selected = false, highlighted = false, expandable = false, collapsed = false, open = false, onComplete, onRename, onSelect, onHighlight, onToggle, onReveal, onCloseActions, onDate, onSnooze }: {
   task: Task;
   depth: number;
   today: string;
@@ -139,12 +141,28 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
   onSelect?: (task: Task) => void;
   onHighlight?: (task: Task) => void;
   onToggle?: (task: Task, collapsed: boolean) => void;
+  /** Date and Snooze are showing (swiped left). */
+  open?: boolean;
+  onReveal?: (task: Task) => void;
+  onCloseActions?: () => void;
+  onDate?: (task: Task) => void;
+  onSnooze?: (task: Task) => void;
 }) {
   const due = dueDateOf(task, timeZone);
   const label = due ? formatDue(due, today) : null;
   // The pointer type of the last press in the row: a tap on the title opens the task instead of renaming it.
   const pointerType = useRef<string | null>(null);
-  const swipe = useSwipe<HTMLLIElement>({ onComplete: () => onComplete(task), disabled: pending });
+  const allowLeft = Boolean(onDate && onSnooze) && task.kind === "task" && !task.completedAt;
+  const swipe = useSwipe<HTMLLIElement>({
+    onComplete: () => onComplete(task),
+    onReveal: onReveal && (() => onReveal(task)),
+    onCloseActions,
+    open: open && allowLeft,
+    allowLeft,
+    disabled: pending,
+  });
+  const shown = open && allowLeft;
+  const title = plainText(task.title);
   const onRowClick = (e: MouseEvent<HTMLLIElement>) => {
     if (onSelect && !(e.target as Element).closest(".task-check, .task-title, .disclosure")) onSelect(task);
   };
@@ -163,12 +181,21 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
       data-depth={depth} style={{ "--depth": depth } as CSSProperties} onClick={onRowClick}>
       {/* Behind the row, shown as it's swiped right. The checkbox does the same, so it's hidden from assistive tech. */}
       <span className="swipe-complete" aria-hidden="true">{task.completedAt ? "Reopen" : "Complete"}</span>
+      {/* On the right, shown as it's swiped left. */}
+      {allowLeft && (
+        <span className="swipe-actions" aria-hidden={shown ? undefined : "true"}>
+          <button type="button" className="swipe-date" tabIndex={shown ? undefined : -1} aria-label={`Date for ${title}`}
+            onClick={(e) => { e.stopPropagation(); onDate?.(task); }}>Date</button>
+          <button type="button" className="swipe-snooze" tabIndex={shown ? undefined : -1} aria-label={`Snooze ${title}`}
+            onClick={(e) => { e.stopPropagation(); onSnooze?.(task); }}>Snooze</button>
+        </span>
+      )}
       <div className="task-row-body">
         {expandable && <Disclosure title={task.title} collapsed={collapsed} onToggle={(c) => onToggle?.(task, c)} />}
         <input
           type="checkbox"
           className="task-check"
-          aria-label={`${task.completedAt ? "Reopen" : "Complete"} ${plainText(task.title)}`}
+          aria-label={`${task.completedAt ? "Reopen" : "Complete"} ${title}`}
           checked={task.completedAt !== null}
           disabled={pending}
           onChange={() => onComplete(task)}

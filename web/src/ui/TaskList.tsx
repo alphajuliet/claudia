@@ -1,11 +1,13 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import type { Task } from "@claudia/shared";
-import { useDeleteTask, usePendingCompletions, useSetCompleted, useTimeZone, useUpdateTask } from "../data/queries";
+import { useDeleteTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
 import { collapseRows, parentsIn, rowsUnder, type Row } from "../lib/tasks";
 import { setCollapsed, useCollapsed } from "./collapsed";
+import { BottomSheet } from "./BottomSheet";
+import { DueField, SnoozeField } from "./DateFields";
 import { useCommand } from "./keyboard";
 import { InlineMarkdown, plainText } from "./Markdown";
 import { Disclosure, dueDateOf, TaskRow } from "./TaskRow";
@@ -96,6 +98,12 @@ interface RowProps {
   onSelect: (task: Task) => void;
   onHighlight: (task: Task) => void;
   onToggle: (task: Task, collapsed: boolean) => void;
+  /** The row swiped open to show Date and Snooze. */
+  openId: string | null;
+  onReveal: (task: Task) => void;
+  onCloseActions: () => void;
+  onDate: (task: Task) => void;
+  onSnooze: (task: Task) => void;
 }
 
 /** A section as shown: `rows` without collapsed parts, `all` with them, and which tasks have subtasks. */
@@ -115,7 +123,7 @@ function pendingRows(rows: Row[], pending: Set<string>): Set<string> {
   return out;
 }
 
-function TaskSection({ section, pending: pendingIds, selectedId, highlightId, ...rest }: RowProps & { section: ShownSection }) {
+function TaskSection({ section, pending: pendingIds, selectedId, highlightId, openId, ...rest }: RowProps & { section: ShownSection }) {
   const { heading } = section;
   const id = useId();
   const pending = pendingRows(section.all, pendingIds);
@@ -131,6 +139,7 @@ function TaskSection({ section, pending: pendingIds, selectedId, highlightId, ..
           highlighted={r.task.id === highlightId}
           expandable={section.parents.has(r.task.id)}
           collapsed={section.collapsed.has(r.task.id)}
+          open={r.task.id === openId}
           {...rest}
         />
       ))}
@@ -231,6 +240,47 @@ function useHighlight(order: Task[]) {
   return { highlightId, current, highlight, move, goTo };
 }
 
+/** Which sheet is up, for which task. */
+interface Sheet { kind: "due" | "snooze"; id: string }
+
+/**
+ * The Due or Snooze sheet from a row's swipe. It shows the task as cached now, so a change shows at once; a quick
+ * choice closes it.
+ */
+function RowSheet({ sheet, timeZone, onClose }: { sheet: Sheet; timeZone: string; onClose: () => void }) {
+  const task = useTask(sheet.id).data?.[0];
+  return (
+    <BottomSheet title={sheet.kind === "due" ? "Due" : "Snooze"} onClose={onClose}>
+      {task && (sheet.kind === "due"
+        ? <DueField task={task} timeZone={timeZone} onQuick={onClose} />
+        : <SnoozeField task={task} timeZone={timeZone} onClose={onClose} />)}
+    </BottomSheet>
+  );
+}
+
+/**
+ * The row swiped open to show Date and Snooze: one at a time. A press outside it or a scroll anywhere closes it.
+ */
+function useOpenRow() {
+  const [openId, setOpenId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!openId) return;
+    const close = () => setOpenId(null);
+    const onPress = (e: PointerEvent) => {
+      const inside = e.target instanceof Element && e.target.closest(`[data-task-id="${CSS.escape(openId)}"]`);
+      if (!inside) close();
+    };
+    document.addEventListener("pointerdown", onPress, true);
+    // Scroll events don't bubble: listen in the capture phase to hear any scroller.
+    document.addEventListener("scroll", close, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPress, true);
+      document.removeEventListener("scroll", close, true);
+    };
+  }, [openId]);
+  return { openId, setOpenId };
+}
+
 /** Task rows in sections, with loading, error and empty states. */
 export function TaskList({ query, sections, empty }: { query: QueryState; sections: Section[]; empty: string }) {
   const timeZone = useTimeZone();
@@ -250,6 +300,17 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   }));
   const order = shown ? shownSections.flatMap((s) => [...(s.heading ? [s.heading] : []), ...s.rows.map((r) => r.task)]) : [];
   const { highlightId, current, highlight, move, goTo } = useHighlight(order);
+  const { openId, setOpenId } = useOpenRow();
+  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const openSheet = (kind: Sheet["kind"]) => (t: Task) => {
+    setOpenId(null);
+    setSheet({ kind, id: t.id });
+  };
+  // Focus goes back to the row (if it's still there: a snooze takes it away).
+  const closeSheet = () => {
+    if (sheet) focusTask(sheet.id, true);
+    setSheet(null);
+  };
 
   /** The section a task shows in (as its heading or a row). */
   const sectionOf = (t: Task) => shownSections.find((s) => s.heading?.id === t.id || s.rows.some((r) => r.task.id === t.id));
@@ -324,6 +385,7 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   if (sections.every((s) => s.rows.length === 0 && !s.title)) return <p className="list-state muted">{empty}</p>;
   return (
     <div className="task-sections">
+      {sheet && <RowSheet sheet={sheet} timeZone={timeZone} onClose={closeSheet} />}
       {shownSections.map((s) => (
         <TaskSection
           key={s.key}
@@ -338,6 +400,11 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
           onSelect={(t) => select(t.id)}
           onHighlight={highlight}
           onToggle={toggle}
+          openId={openId}
+          onReveal={(t) => setOpenId(t.id)}
+          onCloseActions={() => setOpenId(null)}
+          onDate={openSheet("due")}
+          onSnooze={openSheet("snooze")}
         />
       ))}
     </div>

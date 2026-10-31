@@ -1,5 +1,5 @@
-import { useRef, type MouseEvent, type PointerEvent } from "react";
-import { end, move, start, type SwipeState } from "../lib/swipe";
+import { useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
+import { end, move, REVEAL_WIDTH, start, type SwipeState } from "../lib/swipe";
 
 /** Presses on these are theirs, not the row's. */
 const IGNORE = ".task-check, button, input, textarea, select, a";
@@ -8,48 +8,93 @@ const FALLBACK_WIDTH = 320;
 /** How long the spring back runs (the CSS transition). */
 const SPRING_MS = 180;
 
+type Mode = "drag" | "spring" | "open" | null;
+
 /**
- * Touch swipes on a task row: right past COMPLETE_AT of the width calls `onComplete`; anything shorter springs back.
- * While swiping it sets `--swipe-x` and `data-swipe` ("drag", then "spring" on the way back) on the row, and the click
- * the browser sends after a swipe is swallowed so the row doesn't also open. Mouse and pen presses, and presses on the
- * row's controls, are left alone. Spread the returned handlers on the row element.
+ * Touch swipes on a task row: right past COMPLETE_AT of the width calls `onComplete`; left past REVEAL_AT of the
+ * buttons' width (when `allowLeft`) calls `onReveal`, and the row stays `open` at -REVEAL_WIDTH until `open` turns
+ * false. On an open row, a swipe right or a tap calls `onCloseActions` instead. Anything shorter springs back.
+ * While swiping it sets `--swipe-x` and `data-swipe` ("drag", then "spring" on the way back or "open" while open; both animate) on
+ * the row, and the click the browser sends after a swipe is swallowed so the row doesn't also open. Mouse and pen
+ * presses, and presses on the row's controls, are left alone. Spread the returned handlers (and `ref`) on the row.
  */
-export function useSwipe<T extends HTMLElement>({ onComplete, disabled = false }: { onComplete: () => void; disabled?: boolean }) {
+export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseActions, open = false, allowLeft = false, disabled = false }: {
+  onComplete: () => void;
+  onReveal?: () => void;
+  onCloseActions?: () => void;
+  open?: boolean;
+  allowLeft?: boolean;
+  disabled?: boolean;
+}) {
+  const ref = useRef<T>(null);
   const state = useRef<SwipeState | null>(null);
   const pointer = useRef<number | null>(null);
   const swallow = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const isOpen = useRef(open);
+  isOpen.current = open;
 
-  const set = (el: T, dx: number, mode: "drag" | "spring" | null) => {
+  const set = (el: T, dx: number, mode: Mode) => {
     el.style.setProperty("--swipe-x", `${dx}px`);
     if (mode) el.dataset.swipe = mode;
     else delete el.dataset.swipe;
   };
+
+  /** Moves to `dx` with the transition: open there, or back to no swipe at 0. */
+  const settle = (el: T, dx: number) => {
+    clearTimeout(timer.current);
+    if (dx !== 0) return set(el, dx, "open");
+    set(el, 0, "spring");
+    timer.current = setTimeout(() => {
+      if (!state.current) delete el.dataset.swipe;
+    }, SPRING_MS);
+  };
+
+  // Opening and closing come from the list (one row open at a time).
+  const wasOpen = useRef(open);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || wasOpen.current === open) return;
+    wasOpen.current = open;
+    settle(el, open ? -REVEAL_WIDTH : 0);
+  }, [open]);
+  useEffect(() => () => clearTimeout(timer.current), []);
 
   const finish = (e: PointerEvent<T>, cancelled: boolean) => {
     if (e.pointerId !== pointer.current) return;
     const s = state.current;
     state.current = null;
     pointer.current = null;
-    if (!s || s.phase !== "swiping") return;
+    if (!s) return;
     const el = e.currentTarget;
+    if (isOpen.current) {
+      // A tap or a swipe right on an open row closes it; a swipe further left leaves it open.
+      if (s.phase === "scrolling") return;
+      swallow.current = true;
+      el.releasePointerCapture?.(e.pointerId);
+      if (!cancelled && (s.phase === "pending" || s.dx > 0)) onCloseActions?.();
+      else settle(el, -REVEAL_WIDTH);
+      return;
+    }
+    if (s.phase !== "swiping") return;
     swallow.current = true;
     el.releasePointerCapture?.(e.pointerId);
-    // `reveal` (the Date and Snooze buttons) comes later; until then it springs back like `cancel`.
     const outcome = cancelled ? "cancel" : end(s, el.clientWidth || FALLBACK_WIDTH);
     if (outcome === "complete") {
       set(el, 0, null);
       onComplete();
       return;
     }
-    set(el, 0, "spring");
-    clearTimeout(timer.current);
-    timer.current = setTimeout(() => {
-      if (!state.current) delete el.dataset.swipe;
-    }, SPRING_MS);
+    if (outcome === "reveal" && onReveal) {
+      // The `open` effect springs it the rest of the way.
+      onReveal();
+      return;
+    }
+    settle(el, 0);
   };
 
   return {
+    ref,
     onPointerDown: (e: PointerEvent<T>) => {
       // A second finger doesn't restart the swipe.
       if (state.current) return;
@@ -61,7 +106,8 @@ export function useSwipe<T extends HTMLElement>({ onComplete, disabled = false }
     onPointerMove: (e: PointerEvent<T>) => {
       const s = state.current;
       if (!s || e.pointerId !== pointer.current) return;
-      const next = move(s, e.clientX, e.clientY, false);
+      const opened = isOpen.current;
+      const next = move(s, e.clientX, e.clientY, allowLeft || opened);
       state.current = next;
       if (next.phase !== "swiping") {
         if (next.phase === "scrolling") {
@@ -74,7 +120,9 @@ export function useSwipe<T extends HTMLElement>({ onComplete, disabled = false }
         clearTimeout(timer.current);
         e.currentTarget.setPointerCapture?.(e.pointerId);
       }
-      set(e.currentTarget, next.dx, "drag");
+      // An open row moves from where it sits, between open and closed.
+      const dx = opened ? Math.min(0, Math.max(-REVEAL_WIDTH, next.dx - REVEAL_WIDTH)) : next.dx;
+      set(e.currentTarget, dx, "drag");
     },
     onPointerUp: (e: PointerEvent<T>) => finish(e, false),
     onPointerCancel: (e: PointerEvent<T>) => finish(e, true),

@@ -439,7 +439,27 @@ button.section-title-button.selected { color: var(--accent); }
 .task-row[data-swipe] { overflow: hidden; }
 .task-row[data-swipe] .swipe-complete { display: flex; }
 .task-row[data-swipe] .task-row-body { background: var(--bg); transform: translateX(var(--swipe-x, 0px)); }
-.task-row[data-swipe="spring"] .task-row-body { transition: transform 0.18s ease; }
+.task-row[data-swipe="spring"] .task-row-body,
+.task-row[data-swipe="open"] .task-row-body { transition: transform 0.18s ease; }
+/* Date and Snooze, on the right under the body: a swipe left uncovers them, and an open row stays at -144px. */
+.swipe-actions {
+  position: absolute;
+  inset: 0 0 0 auto;
+  display: none;
+  width: 144px;
+  border-radius: inherit;
+}
+.task-row[data-swipe] .swipe-actions { display: flex; }
+.swipe-actions button {
+  flex: 1 1 0;
+  min-height: var(--touch);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  font-weight: 600;
+}
+.swipe-actions .swipe-date { background: var(--accent); color: var(--accent-fg); }
+.swipe-actions .swipe-snooze { background: var(--muted); color: var(--bg); border-radius: 0 var(--radius) var(--radius) 0; }
 /* The ▸/▾ toggle sits in the gutter left of the checkbox, so rows line up with or without one. */
 button.disclosure {
   position: absolute;
@@ -890,3 +910,34 @@ kbd {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; }
 }
+
+/* Bottom sheet: a field or two from a row's swipe, over the app and under the toast. */
+
+.sheet-layer { position: fixed; inset: 0; z-index: 28; }
+.sheet-backdrop { position: absolute; inset: 0; background: rgba(10, 12, 16, 0.35); }
+.bottom-sheet {
+  position: absolute;
+  inset: auto 0 0 0;
+  max-height: 80dvh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0 1rem env(safe-area-inset-bottom);
+  border-radius: 12px 12px 0 0;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+}
+.bottom-sheet:focus { outline: none; }
+.bottom-sheet-header {
+  position: sticky;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  background: var(--bg-raised);
+}
+.bottom-sheet-header h2 { font-size: 1.05rem; font-weight: 650; }
+.bottom-sheet-done { min-width: var(--touch); min-height: var(--touch); font-weight: 600; }
+/* The sheet's title names the field. */
+.bottom-sheet .detail-label { display: none; }
+.bottom-sheet-body { padding-bottom: 1rem; }
