@@ -6,6 +6,7 @@ import { todayIn } from "../lib/dates";
 import { PRESETS, presetFor, ruleFor, type Preset } from "../lib/repeat";
 import { sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox } from "../lib/views";
+import { BlockMarkdown } from "./Markdown";
 import { useToast, type ToastMessage } from "./Toast";
 
 /*
@@ -130,6 +131,7 @@ export function TitleField({ task }: { task: Task }) {
 export function NotesField({ task }: { task: Task }) {
   const { state, patch } = usePatch(task);
   const [draft, setDraft] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
   const value = draft ?? task.notes ?? "";
   useLayoutEffect(() => {
@@ -137,26 +139,59 @@ export function NotesField({ task }: { task: Task }) {
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
+  }, [value, editing]);
   const finish = () => {
+    setEditing(false);
     if (draft === null) return;
     const notes = draft.trim() ? draft : null;
     // A failure may come after the panel has closed, so the toast offers the text back.
     if (notes !== task.notes) void patch({ notes }, notes ? copyAction("Copy notes", notes) : undefined);
     setDraft(null);
   };
+  const edit = () => {
+    setEditing(true);
+    // After the textarea replaces the formatted notes: focus it with the caret at the end.
+    requestAnimationFrame(() => {
+      const el = ref.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+    });
+  };
+
+  // Notes show formatted until clicked (links still open); empty notes are the editor already.
+  const formatted = !editing && value.trim() !== "";
   return (
     <div className="detail-notes">
-      <textarea
-        ref={ref}
-        className="detail-notes-input"
-        aria-label="Notes"
-        placeholder="Notes"
-        rows={2}
-        value={value}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={finish}
-      />
+      {formatted ? (
+        <div
+          className="detail-notes-view"
+          role="group"
+          tabIndex={0}
+          aria-label="Notes (click or press Enter to edit)"
+          onClick={(e) => { if (!(e.target as Element).closest("a")) edit(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && e.target === e.currentTarget) {
+              e.preventDefault();
+              edit();
+            }
+          }}
+        >
+          <BlockMarkdown text={value} />
+        </div>
+      ) : (
+        <textarea
+          ref={ref}
+          className="detail-notes-input"
+          aria-label="Notes"
+          placeholder="Notes"
+          rows={2}
+          value={value}
+          onChange={(e) => setDraft(e.target.value)}
+          onFocus={() => setEditing(true)}
+          onBlur={finish}
+        />
+      )}
       <FieldStatus state={state} />
     </div>
   );

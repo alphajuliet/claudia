@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import type { Task } from "@claudia/shared";
 import { formatDue, todayIn } from "../lib/dates";
+import { InlineMarkdown } from "./Markdown";
 
 /** The task's due date (YYYY-MM-DD): its date, or the day of its due time in the user's time zone. */
 export const dueDateOf = (task: Task, timeZone: string) =>
   task.dueDate ?? (task.dueAt ? todayIn(timeZone, new Date(task.dueAt)) : null);
 
 /**
- * The title, as a button that turns into a text input in place. Enter or leaving the field saves a changed,
+ * The title (inline Markdown), as a button that turns into a text input showing the raw text. Enter or leaving the field saves a changed,
  * non-empty title through `onRename`; Escape cancels. After a keyboard save or cancel, focus returns to the title.
  */
 function TaskTitle({ task, onRename }: { task: Task; onRename: (task: Task, title: string) => void }) {
   const [draft, setDraft] = useState<string | null>(null);
   const done = useRef(false);
   const refocus = useRef(false);
-  const button = useRef<HTMLButtonElement>(null);
+  const button = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (draft === null && refocus.current) {
@@ -33,18 +34,27 @@ function TaskTitle({ task, onRename }: { task: Task; onRename: (task: Task, titl
   };
 
   if (draft === null) {
+    const edit = () => {
+      done.current = false;
+      setDraft(task.title);
+    };
+    // A span acting as a button rather than a <button>, so links in the title can be clicked.
     return (
-      <button
+      <span
         ref={button}
-        type="button"
+        role="button"
+        tabIndex={0}
         className="task-title"
-        onClick={() => {
-          done.current = false;
-          setDraft(task.title);
+        onClick={edit}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            edit();
+          }
         }}
       >
-        {task.title}
-      </button>
+        <InlineMarkdown text={task.title} />
+      </span>
     );
   }
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {

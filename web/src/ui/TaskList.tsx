@@ -6,6 +6,7 @@ import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
 import type { Row } from "../lib/tasks";
 import { useCommand } from "./keyboard";
+import { InlineMarkdown } from "./Markdown";
 import { dueDateOf, TaskRow } from "./TaskRow";
 import { useSelectedTask } from "./selection";
 import { useToast } from "./Toast";
@@ -98,7 +99,7 @@ function TaskSection({ section, pending, selectedId, highlightId, ...rest }: Row
             onFocus={() => rest.onHighlight(heading)}
             onClick={() => rest.onSelect(heading)}
           >
-            {section.title}
+            <InlineMarkdown text={section.title} links={false} />
           </button>
         ) : section.title}
       </h2>

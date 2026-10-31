@@ -367,19 +367,18 @@ button.section-title-button.highlighted { outline: 2px solid var(--focus); outli
   white-space: nowrap;
 }
 
-/* The title is a button that becomes a text input in place: same box, font and line, so the row doesn't move. */
-button.task-title {
+/* The title acts as a button that becomes a text input in place: same box, font and line, so the row doesn't move. */
+span.task-title {
   display: block;
-  padding: 0;
-  border: 0;
   border-radius: 2px;
-  background: transparent;
-  color: inherit;
-  font-weight: inherit;
-  text-align: left;
   cursor: text;
 }
-button.task-title:hover { filter: none; }
+.task-title code, .section-title code {
+  padding: 0 0.25em;
+  font-size: 0.9em;
+  background: var(--row-hover);
+  border-radius: 3px;
+}
 input.task-title-input {
   height: auto;
   padding: 0;
@@ -467,6 +466,29 @@ input.task-title-input {
   line-height: 1.5;
 }
 .detail-notes-input::placeholder { color: var(--muted); }
+.detail-notes-view {
+  margin: 0 -0.5rem;
+  padding: 0.3rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+.detail-notes-view:hover { border-color: var(--border); }
+.detail-notes-view > :first-child { margin-top: 0; }
+.detail-notes-view > :last-child { margin-bottom: 0; }
+.detail-notes-view :is(p, ul, ol, pre, blockquote, table) { margin: 0 0 0.6em; }
+.detail-notes-view :is(ul, ol) { padding-left: 1.4em; }
+.detail-notes-view ul { list-style: disc; }
+.detail-notes-view ul.contains-task-list { list-style: none; padding-left: 0.2em; }
+.detail-notes-view h1, .detail-notes-view h2, .detail-notes-view h3 { margin: 0.4em 0 0.3em; font-size: 1.05em; font-weight: 650; }
+.detail-notes-view code { padding: 0 0.25em; font-size: 0.9em; background: var(--row-hover); border-radius: 3px; }
+.detail-notes-view pre { padding: 0.5em 0.7em; overflow-x: auto; background: var(--row-hover); border-radius: var(--radius); }
+.detail-notes-view pre code { padding: 0; background: none; }
+.detail-notes-view blockquote { padding-left: 0.8em; border-left: 3px solid var(--border); color: var(--muted); }
+.detail-notes-view table { border-collapse: collapse; }
+.detail-notes-view :is(th, td) { padding: 0.2em 0.6em; border: 1px solid var(--border); }
 .detail-title-input:hover, .detail-notes-input:hover { border-color: var(--border); }
 .detail-title-input:focus, .detail-notes-input:focus { outline: none; border-color: var(--accent); background: var(--bg-raised); }
 
