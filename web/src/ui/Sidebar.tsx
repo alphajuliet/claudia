@@ -54,6 +54,7 @@ export function Sidebar({ onNavigate }: { onNavigate: () => void }) {
 
       <div className="sidebar-scroll">
         <ul className="nav-list">
+          <li><NavLink href="/search" onNavigate={onNavigate}>Search</NavLink></li>
           {VIEWS.filter((v) => v.id !== "inbox" || inboxId).map((v) => (
             <li key={v.id}><NavLink href={`/${v.id}`} onNavigate={onNavigate}>{v.name}</NavLink></li>
           ))}

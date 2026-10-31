@@ -38,8 +38,7 @@ describe("createMatcher", () => {
 describe("ignoresKeys", () => {
   const press = (target: EventTarget | null, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean }> = {}) =>
     ignoresKeys({ ctrlKey: false, metaKey: false, altKey: false, target, ...mods });
-  const el = <K extends keyof HTMLElementTagNameMap>(tag: K, props: Partial<HTMLElementTagNameMap[K]> = {}) =>
-    Object.assign(document.createElement(tag), props);
+  const el = (tag: string, props: { type?: string } = {}): HTMLElement => Object.assign(document.createElement(tag), props);
 
   it("ignores keys with Ctrl, ⌘ or Alt", () => {
     expect(press(document.body, { metaKey: true })).toBe(true);

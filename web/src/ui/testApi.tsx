@@ -48,7 +48,7 @@ export interface StubOptions {
 }
 
 /**
- * A small fake of the API: tasks are filtered by listId, parentId, label, dueBefore and status; complete/uncomplete
+ * A small fake of the API: tasks are filtered by listId, parentId, label, dueBefore, q (title or notes) and status; complete/uncomplete
  * change them along with their subtasks; POST /api/tasks creates, GET /api/tasks/{id} reads, PATCH updates (a
  * recurRule not starting "FREQ=" is refused with a 422, as is a rule without recurFrom), move changes list (to the
  * top level, taking subtasks along, as the server does) and DELETE removes a task and its subtasks. `holdRefetch`
@@ -90,7 +90,8 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
         && (!q.get("listId") || t.listId === q.get("listId"))
         && (!q.get("parentId") || t.parentId === q.get("parentId"))
         && (!q.get("label") || t.labels.includes(q.get("label")!))
-        && (!q.get("dueBefore") || (t.dueDate !== null && t.dueDate <= q.get("dueBefore")!)));
+        && (!q.get("dueBefore") || (t.dueDate !== null && t.dueDate <= q.get("dueBefore")!))
+        && (!q.get("q") || `${t.title}\n${t.notes ?? ""}`.toLowerCase().includes(q.get("q")!.toLowerCase())));
       return json(out);
     }
     // A saved filter here matches every task, completed ones included.

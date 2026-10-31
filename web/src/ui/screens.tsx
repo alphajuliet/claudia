@@ -30,7 +30,7 @@ export function Home() {
  * Sections for a view or filter: open, unsnoozed tasks (headings left out) grouped by list in sidebar order,
  * narrowed to the current context. The Inbox list is not in the sidebar tree, so it is put first.
  */
-function useGroupedSections(tasks: Task[] | undefined): Section[] {
+export function useGroupedSections(tasks: Task[] | undefined): Section[] {
   const { context } = useContextFilter();
   const folders = useFolders().data ?? [];
   const lists = useLists().data ?? [];
