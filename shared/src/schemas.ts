@@ -238,6 +238,7 @@ export const FilterCreateSchema = z
 export const FilterUpdateSchema = FilterCreateSchema.partial().openapi("FilterUpdate");
 export const FilterMoveSchema = PlacementSchema.openapi("FilterMove");
 export const FilterRunQuerySchema = z.object({
+  status: z.enum(["open", "completed", "all"]).optional().openapi({ description: "Overrides the saved query's status (e.g. its completed matches)" }),
   limit: TaskQuerySchema.shape.limit.optional(),
   offset: TaskQuerySchema.shape.offset.optional(),
 });

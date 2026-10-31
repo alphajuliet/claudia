@@ -68,7 +68,12 @@ export const TOOLS: ToolDef[] = [
     name: "run_filter",
     description: "Run a saved filter (smart list) and return its matching tasks.",
     access: "read",
-    input: strict({ id: id("filter"), limit: z.number().int().min(1).max(500).optional(), offset: z.number().int().min(0).optional() }),
+    input: strict({
+      id: id("filter"),
+      status: z.enum(["open", "completed", "all"]).optional().describe("Overrides the filter's own status, e.g. completed for its done tasks"),
+      limit: z.number().int().min(1).max(500).optional(),
+      offset: z.number().int().min(0).optional(),
+    }),
     request: (a) => ({ method: "GET", path: `/api/filters/${a.id}/tasks`, query: noId(a) }),
   }),
   tool({

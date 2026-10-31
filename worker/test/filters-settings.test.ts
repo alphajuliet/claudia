@@ -41,6 +41,17 @@ describe("filters", () => {
     expect(await run(all.id, "?limit=1&offset=1")).toEqual(["B"]);
   });
 
+  it("lets the run override the status", async () => {
+    const next = await filter("Next", "label=next");
+    await task("Open", { labels: ["next"] });
+    const done = await task("Done", { labels: ["next"] });
+    await api("POST", `/api/tasks/${done.id}/complete`);
+    expect(await run(next.id)).toEqual(["Open"]);
+    expect(await run(next.id, "?status=completed")).toEqual(["Done"]);
+    expect(await run(next.id, "?status=all")).toEqual(["Open", "Done"]);
+    expect((await api("GET", `/api/filters/${next.id}/tasks?status=nope`)).status).toBe(400);
+  });
+
   it("rejects an invalid query on create and update", async () => {
     const bad = await api("POST", "/api/filters", { name: "Bad", query: "status=nope" });
     expect(bad).toMatchObject({ status: 422, body: { error: { code: "invalid_query" } } });

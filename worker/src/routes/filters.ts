@@ -122,10 +122,10 @@ export const filterRoutes = newRouter()
       responses: { 200: jsonResponse(z.array(TaskSchema), "Matching tasks"), ...commonErrors, ...notFoundError },
     }),
     async (c) => {
-      const { limit, offset } = c.req.valid("query");
+      const { status, limit, offset } = c.req.valid("query");
       const filter = await getFilter(c.var.db, c.req.valid("param").id);
       const q = parseQuery(filter.query);
-      return c.json(await findTasks(c.var.db, { ...q, limit: limit ?? q.limit, offset: offset ?? q.offset }), 200);
+      return c.json(await findTasks(c.var.db, { ...q, status: status ?? q.status, limit: limit ?? q.limit, offset: offset ?? q.offset }), 200);
     },
   )
   .openapi(
