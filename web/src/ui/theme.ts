@@ -10,6 +10,17 @@ export const THEME_CHOICES: { id: Theme; name: string }[] = [
 
 const KEY = "claudia.theme";
 
+/** The page background of each theme (`--bg` in styles.css), for the browser's and the status bar's colour. */
+export const THEME_COLOURS = { light: "#ffffff", dark: "#1b1c1f" } as const;
+
+/** Points the `theme-color` metas at the theme: both at its colour, or for System each at its own scheme's. */
+function applyThemeColour(theme: Theme) {
+  for (const meta of document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')) {
+    const own = meta.media.includes("dark") ? THEME_COLOURS.dark : THEME_COLOURS.light;
+    meta.content = theme === "system" ? own : THEME_COLOURS[theme];
+  }
+}
+
 /** The theme saved in this browser; System when none is saved or storage is blocked. */
 export function savedTheme(): Theme {
   try {
@@ -26,6 +37,7 @@ export function applyTheme(theme: Theme) {
   const root = document.documentElement;
   if (theme === "system") delete root.dataset.theme;
   else root.dataset.theme = theme;
+  applyThemeColour(theme);
   try {
     if (theme === "system") localStorage.removeItem(KEY);
     else localStorage.setItem(KEY, theme);

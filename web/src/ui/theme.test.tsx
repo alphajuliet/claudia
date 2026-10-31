@@ -7,6 +7,26 @@ import { renderAt, stubApi } from "./testApi";
 afterEach(() => applyTheme("system"));
 
 describe("theme", () => {
+  it("points the theme-color metas at the chosen theme, and each back at its own scheme for System", () => {
+    const metas = (["light", "dark"] as const).map((scheme) => {
+      const meta = document.createElement("meta");
+      meta.name = "theme-color";
+      meta.media = `(prefers-color-scheme: ${scheme})`;
+      document.head.append(meta);
+      return meta;
+    });
+    try {
+      applyTheme("dark");
+      expect(metas.map((m) => m.content)).toEqual(["#1b1c1f", "#1b1c1f"]);
+      applyTheme("light");
+      expect(metas.map((m) => m.content)).toEqual(["#ffffff", "#ffffff"]);
+      applyTheme("system");
+      expect(metas.map((m) => m.content)).toEqual(["#ffffff", "#1b1c1f"]);
+    } finally {
+      metas.forEach((m) => m.remove());
+    }
+  });
+
   it("saves light and dark, and System forgets the choice", () => {
     expect(savedTheme()).toBe("system");
     applyTheme("dark");

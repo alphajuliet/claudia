@@ -164,6 +164,12 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
   height: 100dvh;
 }
 
+/* Full screen from an iPad's home screen, the status bar sits over the page: start below it. (Narrow screens pad the
+   top bar, the drawer and the sheet instead.) */
+@media (min-width: 900px) {
+  .shell { padding-top: env(safe-area-inset-top); }
+}
+
 .topbar { display: none; }
 .backdrop { display: none; }
 
