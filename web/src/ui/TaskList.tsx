@@ -25,7 +25,7 @@ function useComplete() {
         return;
       }
       toast.show({
-        message: `Completed “${task.title}”`,
+        message: `Completed “${task.title}”${saved.subtasks > 0 ? ` and ${saved.subtasks} ${saved.subtasks === 1 ? "subtask" : "subtasks"}` : ""}`,
         action: {
           label: "Undo",
           run: () => {

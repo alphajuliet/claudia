@@ -1,5 +1,5 @@
 import { useMutation, useMutationState, useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
-import { FilterSchema, FolderSchema, ListSchema, TaskSchema, type Task } from "@claudia/shared";
+import { FilterSchema, FolderSchema, ListSchema, TaskCompletionSchema, TaskSchema, type Task } from "@claudia/shared";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
 import { useSession } from "../session/SessionProvider";
 
@@ -54,9 +54,20 @@ export function usePendingCompletions(): Set<string> {
   return new Set(ids);
 }
 
+/** A task and its subtasks at every level among `tasks`. */
+function withSubtasks(tasks: Task[], id: string): Set<string> {
+  const ids = new Set([id]);
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const t of tasks) if (t.parentId && ids.has(t.parentId) && !ids.has(t.id)) { ids.add(t.id); grew = true; }
+  }
+  return ids;
+}
+
 /**
- * Completes or reopens a task, updating every cached task list at once. On failure only that task is put back,
- * so others completed meanwhile stay gone. Lists are refetched once the last running change settles.
+ * Completes or reopens a task, updating every cached task list at once. Completing a plain task takes its subtasks
+ * with it, as the server does. On failure only those tasks are put back, so others completed meanwhile stay gone.
+ * Lists are refetched once the last running change settles, without holding up the result.
  */
 export function useSetCompleted() {
   const { api } = useSession();
@@ -65,33 +76,39 @@ export function useSetCompleted() {
   return useMutation({
     mutationKey: setCompletedKey,
     mutationFn: async ({ task, done }: SetCompletedVars) =>
-      json(await api(`/api/tasks/${task.id}/${done ? "complete" : "uncomplete"}`, { method: "POST" }), TaskSchema),
+      json(await api(`/api/tasks/${task.id}/${done ? "complete" : "uncomplete"}`, { method: "POST" }), TaskCompletionSchema),
     onMutate: async ({ task, done }) => {
       await queryClient.cancelQueries(tasksKey);
       // A repeating task stays: it comes back open with its next due date.
       if (!done || task.recurRule) return { removedFrom: [] };
-      const removedFrom: { key: QueryKey; index: number }[] = [];
+      const removedFrom: { key: QueryKey; removed: { task: Task; index: number }[] }[] = [];
       for (const [key, tasks] of queryClient.getQueriesData<Task[]>(tasksKey)) {
-        const index = tasks?.findIndex((t) => t.id === task.id) ?? -1;
-        if (index < 0) continue;
-        removedFrom.push({ key, index });
-        queryClient.setQueryData<Task[]>(key, tasks!.filter((t) => t.id !== task.id));
+        if (!tasks) continue;
+        const ids = withSubtasks(tasks, task.id);
+        const removed = tasks.flatMap((t, index) => (ids.has(t.id) ? [{ task: t, index }] : []));
+        if (!removed.length) continue;
+        removedFrom.push({ key, removed });
+        queryClient.setQueryData<Task[]>(key, tasks.filter((t) => !ids.has(t.id)));
       }
       return { removedFrom };
     },
-    onError: (_error, { task }, context) => {
-      // Back where it was, near enough: the refetch puts everything in order.
-      for (const { key, index } of context?.removedFrom ?? [])
-        queryClient.setQueryData<Task[]>(key, (tasks) =>
-          !tasks || tasks.some((t) => t.id === task.id) ? tasks : [...tasks.slice(0, index), task, ...tasks.slice(index)]);
+    onError: (_error, _vars, context) => {
+      // Back where they were, near enough: the refetch puts everything in order.
+      for (const { key, removed } of context?.removedFrom ?? [])
+        queryClient.setQueryData<Task[]>(key, (tasks) => {
+          if (!tasks) return tasks;
+          const out = [...tasks];
+          for (const { task, index } of removed) if (!out.some((t) => t.id === task.id)) out.splice(index, 0, task);
+          return out;
+        });
     },
-    onSuccess: (saved) => {
+    onSuccess: ({ subtasks: _subtasks, ...saved }) => {
       queryClient.setQueriesData<Task[]>(tasksKey, (tasks) =>
         saved.completedAt ? tasks?.filter((t) => t.id !== saved.id) : tasks?.map((t) => (t.id === saved.id ? saved : t)),
       );
     },
     onSettled: () => {
-      if (queryClient.isMutating({ mutationKey: setCompletedKey }) === 1) return queryClient.invalidateQueries(tasksKey);
+      if (queryClient.isMutating({ mutationKey: setCompletedKey }) === 1) void queryClient.invalidateQueries(tasksKey);
     },
   });
 }

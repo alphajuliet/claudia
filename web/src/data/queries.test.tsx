@@ -97,7 +97,7 @@ describe("queries", () => {
 
     // B succeeds while A is still running: no refetch yet, so A doesn't flicker back.
     server = [a];
-    act(() => pending[b.id]!(json({ ...b, completedAt: at })));
+    act(() => pending[b.id]!(json({ ...b, completedAt: at, subtasks: 0 })));
     await waitFor(() => expect(result.current.b.isSuccess).toBe(true));
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(result.current.tasks.data).toEqual([]);

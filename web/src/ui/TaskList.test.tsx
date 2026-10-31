@@ -33,8 +33,11 @@ const task = (fields: Partial<Task> & Pick<Task, "title" | "listId">): Task => (
   completedAt: null, labels: [], metadata: null, createdAt: at, updatedAt: at, ...fields,
 });
 
-/** A small fake of the API: tasks are filtered by listId, label and status, and complete/uncomplete change them. */
-function stubApi(tasks: Task[], opts: { failComplete?: boolean; holdComplete?: Promise<void>; filters?: Filter[] } = {}) {
+/**
+ * A small fake of the API: tasks are filtered by listId, label and status, and complete/uncomplete change them
+ * along with their subtasks. `holdRefetch` holds task GETs made after the first complete or uncomplete.
+ */
+function stubApi(tasks: Task[], opts: { failComplete?: boolean; holdComplete?: Promise<void>; holdRefetch?: Promise<void>; filters?: Filter[] } = {}) {
   const store = new Map(tasks.map((t) => [t.id, t]));
   const bodies: Record<string, unknown> = {
     "/api/me": me,
@@ -43,10 +46,14 @@ function stubApi(tasks: Task[], opts: { failComplete?: boolean; holdComplete?: P
     "/api/filters": opts.filters ?? [],
     "/api/settings": {},
   };
+  const descendants = (id: string): Task[] =>
+    [...store.values()].filter((t) => t.parentId === id).flatMap((t) => [t, ...descendants(t.id)]);
+  let changed = false;
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     if (path in bodies) return json(bodies[path]);
     const [pathname, search = ""] = path.split("?");
     if (pathname === "/api/tasks") {
+      if (changed) await opts.holdRefetch;
       const q = new URLSearchParams(search);
       const out = [...store.values()].filter((t) =>
         (q.get("status") !== "open" || t.completedAt === null)
@@ -58,17 +65,23 @@ function stubApi(tasks: Task[], opts: { failComplete?: boolean; holdComplete?: P
     if (/^\/api\/filters\/\w+\/tasks$/.test(pathname!)) return json([...store.values()]);
     const m = pathname!.match(/^\/api\/tasks\/(\w+)\/(complete|uncomplete)$/);
     if (m && init?.method === "POST") {
+      changed = true;
       const t = store.get(m[1]!)!;
       if (m[2] === "complete") {
         await opts.holdComplete;
         if (opts.failComplete) return json({ error: { code: "internal", message: "Boom" } }, 500);
-        const saved = t.recurRule ? { ...t, dueDate: addDays(t.dueDate!, 7) } : { ...t, completedAt: at };
-        store.set(t.id, saved);
-        return json(saved);
+        if (t.recurRule) {
+          const saved = { ...t, dueDate: addDays(t.dueDate!, 7) };
+          store.set(t.id, saved);
+          return json({ ...saved, subtasks: 0 });
+        }
+        const subtasks = descendants(t.id).filter((d) => d.completedAt === null);
+        for (const x of [t, ...subtasks]) store.set(x.id, { ...x, completedAt: at });
+        return json({ ...store.get(t.id), subtasks: subtasks.length });
       }
-      const saved = { ...t, completedAt: null };
-      store.set(t.id, saved);
-      return json(saved);
+      const subtasks = descendants(t.id).filter((d) => d.completedAt !== null && d.completedAt === t.completedAt);
+      for (const x of [t, ...subtasks]) store.set(x.id, { ...x, completedAt: null });
+      return json({ ...store.get(t.id), subtasks: subtasks.length });
     }
     return json({ error: { code: "not_found", message: "Not found" } }, 404);
   });
@@ -190,6 +203,60 @@ describe("task lists", () => {
     await userEvent.click(within(toast).getByRole("button", { name: "Undo" }));
     expect(fetchMock).toHaveBeenCalledWith(`/api/tasks/${plain.id}/uncomplete`, expect.objectContaining({ method: "POST" }));
     expect(await main().findByText("Buy stamps")).toBeTruthy();
+  });
+
+  it("completes a task with its subtasks, says how many and offers Undo", async () => {
+    const parent = task({ title: "Plan the trip", listId: garden.id });
+    const child = task({ title: "Book flights", listId: garden.id, parentId: parent.id });
+    const grandchild = task({ title: "Choose seats", listId: garden.id, parentId: child.id });
+    let release!: () => void;
+    const fetchMock = stubApi([parent, child, grandchild, task({ title: "Plant tomatoes", listId: garden.id })],
+      { holdComplete: new Promise((resolve) => { release = resolve; }) });
+    renderAt(`/list/${garden.id}`);
+    await userEvent.click(await main().findByRole("checkbox", { name: "Complete Plan the trip" }));
+    expect(main().queryByText("Plan the trip")).toBeNull();
+    expect(main().queryByText("Book flights")).toBeNull();
+    expect(main().queryByText("Choose seats")).toBeNull();
+    expect(main().getByText("Plant tomatoes")).toBeTruthy();
+
+    release();
+    const toast = await screen.findByRole("status");
+    await waitFor(() => expect(toast.textContent).toContain("Completed “Plan the trip” and 2 subtasks"));
+    await userEvent.click(within(toast).getByRole("button", { name: "Undo" }));
+    expect(fetchMock).toHaveBeenCalledWith(`/api/tasks/${parent.id}/uncomplete`, expect.objectContaining({ method: "POST" }));
+    expect(await main().findByText("Choose seats")).toBeTruthy();
+    expect(main().getByText("Book flights")).toBeTruthy();
+  });
+
+  it("says subtask for just one", async () => {
+    const parent = task({ title: "Plan the trip", listId: garden.id });
+    stubApi([parent, task({ title: "Book flights", listId: garden.id, parentId: parent.id })]);
+    renderAt(`/list/${garden.id}`);
+    await userEvent.click(await main().findByRole("checkbox", { name: "Complete Plan the trip" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Completed “Plan the trip” and 1 subtask"));
+    expect(screen.getByRole("status").textContent).not.toContain("subtasks");
+  });
+
+  it("restores a task and its subtasks when completing fails", async () => {
+    const parent = task({ title: "Plan the trip", listId: garden.id });
+    stubApi([parent, task({ title: "Book flights", listId: garden.id, parentId: parent.id })], { failComplete: true });
+    renderAt(`/list/${garden.id}`);
+    await userEvent.click(await main().findByRole("checkbox", { name: "Complete Plan the trip" }));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Boom"));
+    expect(main().getByText("Plan the trip")).toBeTruthy();
+    expect(main().getByText("Book flights")).toBeTruthy();
+    const rows = main().getAllByRole("listitem");
+    expect(rows.map((r) => r.getAttribute("data-depth"))).toEqual(["0", "1"]);
+  });
+
+  it("shows the toast as soon as the server answers, without waiting for the refetch", async () => {
+    let release!: () => void;
+    stubApi([task({ title: "Buy stamps", listId: errands.id, labels: ["next"] })],
+      { holdRefetch: new Promise((resolve) => { release = resolve; }) });
+    renderAt("/next");
+    await userEvent.click(await main().findByRole("checkbox", { name: "Complete Buy stamps" }));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Completed “Buy stamps”"));
+    release();
   });
 
   it("completes a repeating task, keeps it and shows its next due date", async () => {
