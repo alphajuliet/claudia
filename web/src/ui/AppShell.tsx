@@ -2,12 +2,18 @@ import { useEffect, useState } from "react";
 import { Route, Switch } from "wouter";
 import { ContextFilterProvider } from "./contextFilter";
 import { FilterScreen, Home, ListScreen, NotFound, ViewScreen } from "./screens";
+import { useSelectedTask } from "./selection";
 import { Sidebar } from "./Sidebar";
+import { TaskDetail } from "./TaskDetail";
 import { ToastProvider } from "./Toast";
 
-/** The signed-in app: sidebar on the left, the current route's content beside it. */
+/**
+ * The signed-in app: sidebar on the left, the current route's content beside it, and the selected task's details
+ * (`?task=<id>`) on the right.
+ */
 export function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const { selectedId, select } = useSelectedTask();
   const close = () => setDrawerOpen(false);
 
   useEffect(() => {
@@ -29,7 +35,7 @@ export function AppShell() {
   return (
     <ContextFilterProvider>
       <ToastProvider>
-        <div className={drawerOpen ? "shell drawer-open" : "shell"}>
+        <div className={["shell", drawerOpen && "drawer-open", selectedId && "detail-open"].filter(Boolean).join(" ")}>
           <header className="topbar">
             <button type="button" className="quiet" aria-expanded={drawerOpen} aria-controls="sidebar" onClick={() => setDrawerOpen((o) => !o)}>
               Menu
@@ -47,6 +53,7 @@ export function AppShell() {
               <Route><NotFound /></Route>
             </Switch>
           </main>
+          {selectedId && <TaskDetail key={selectedId} id={selectedId} onClose={() => select(null)} />}
         </div>
       </ToastProvider>
     </ContextFilterProvider>

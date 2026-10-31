@@ -77,14 +77,16 @@ function TaskTitle({ task, onRename }: { task: Task; onRename: (task: Task, titl
 
 /**
  * One task. While `pending` (a complete or reopen is running), its checkbox is disabled so a double click sends one.
- * `onSelect` is called for clicks on the row outside the checkbox and title (the detail panel's hook).
+ * `onSelect` is called for clicks on the row outside the checkbox and title (it opens the detail panel); `selected`
+ * marks the row whose details are showing.
  */
-export function TaskRow({ task, depth, today, timeZone, pending, onComplete, onRename, onSelect }: {
+export function TaskRow({ task, depth, today, timeZone, pending, selected = false, onComplete, onRename, onSelect }: {
   task: Task;
   depth: number;
   today: string;
   timeZone: string;
   pending: boolean;
+  selected?: boolean;
   onComplete: (task: Task) => void;
   onRename: (task: Task, title: string) => void;
   onSelect?: (task: Task) => void;
@@ -95,7 +97,10 @@ export function TaskRow({ task, depth, today, timeZone, pending, onComplete, onR
     if (onSelect && !(e.target as Element).closest(".task-check, .task-title")) onSelect(task);
   };
   return (
-    <li className={pending ? "task-row pending" : "task-row"} data-depth={depth} style={{ "--depth": depth } as CSSProperties} onClick={onRowClick}>
+    <li
+      className={["task-row", pending && "pending", selected && "selected"].filter(Boolean).join(" ")}
+      aria-current={selected ? "true" : undefined}
+      data-depth={depth} style={{ "--depth": depth } as CSSProperties} onClick={onRowClick}>
       <input type="checkbox" className="task-check" aria-label={`Complete ${task.title}`} checked={false} disabled={pending} onChange={() => onComplete(task)} />
       <TaskTitle task={task} onRename={onRename} />
       <span className="task-meta">

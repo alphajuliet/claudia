@@ -38,6 +38,7 @@ export interface StubOptions {
   failComplete?: boolean;
   failCreate?: boolean;
   failUpdate?: boolean;
+  failMove?: boolean;
   holdComplete?: Promise<void>;
   holdRefetch?: Promise<void>;
   filters?: Filter[];
@@ -45,9 +46,11 @@ export interface StubOptions {
 }
 
 /**
- * A small fake of the API: tasks are filtered by listId, label, dueBefore and status; complete/uncomplete change
- * them along with their subtasks; POST /api/tasks creates and PATCH /api/tasks/{id} updates. `holdRefetch` holds
- * task GETs made after the first complete or uncomplete.
+ * A small fake of the API: tasks are filtered by listId, parentId, label, dueBefore and status; complete/uncomplete
+ * change them along with their subtasks; POST /api/tasks creates, GET /api/tasks/{id} reads, PATCH updates (a
+ * recurRule not starting "FREQ=" is refused with a 422, as is a rule without recurFrom), move changes list (to the
+ * top level, taking subtasks along, as the server does) and DELETE removes a task and its subtasks. `holdRefetch`
+ * holds task GETs made after the first complete or uncomplete.
  */
 export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   const store = new Map(tasks.map((t) => [t.id, t]));
@@ -79,6 +82,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
       const out = [...store.values()].filter((t) =>
         (q.get("status") !== "open" || t.completedAt === null)
         && (!q.get("listId") || t.listId === q.get("listId"))
+        && (!q.get("parentId") || t.parentId === q.get("parentId"))
         && (!q.get("label") || t.labels.includes(q.get("label")!))
         && (!q.get("dueBefore") || (t.dueDate !== null && t.dueDate <= q.get("dueBefore")!)));
       return json(out);
@@ -86,10 +90,31 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     // A saved filter here matches every task, completed ones included.
     if (/^\/api\/filters\/\w+\/tasks$/.test(pathname!)) return json([...store.values()]);
     const one = pathname!.match(/^\/api\/tasks\/(\w+)$/);
+    if (one && !store.has(one[1]!)) return json({ error: { code: "not_found", message: "Task not found" } }, 404);
+    if (one && (!init?.method || init.method === "GET")) return json(store.get(one[1]!));
     if (one && init?.method === "PATCH") {
       if (opts.failUpdate) return fail("Boom");
       const saved = { ...store.get(one[1]!)!, ...(JSON.parse(String(init.body)) as Partial<Task>) };
+      if ((saved.recurRule === null) !== (saved.recurFrom === null))
+        return json({ error: { code: "invalid_recurrence", message: "recurRule and recurFrom must be set together" } }, 422);
+      if (saved.recurRule !== null && !saved.recurRule.startsWith("FREQ="))
+        return json({ error: { code: "invalid_recurrence", message: "recurRule must be a daily or longer RRULE such as FREQ=WEEKLY;BYDAY=MO" } }, 422);
       store.set(saved.id, saved);
+      return json(saved);
+    }
+    if (one && init?.method === "DELETE") {
+      for (const x of [store.get(one[1]!)!, ...descendants(one[1]!)]) store.delete(x.id);
+      return new Response(null, { status: 204 });
+    }
+    const move = pathname!.match(/^\/api\/tasks\/(\w+)\/move$/);
+    if (move && init?.method === "POST") {
+      if (opts.failMove) return fail("Boom");
+      const t = store.get(move[1]!);
+      if (!t) return json({ error: { code: "not_found", message: "Task not found" } }, 404);
+      const { listId = t.listId } = JSON.parse(String(init.body)) as { listId?: string };
+      if (listId !== t.listId) for (const d of descendants(t.id)) store.set(d.id, { ...d, listId });
+      const saved = { ...t, listId, parentId: listId === t.listId ? t.parentId : null };
+      store.set(t.id, saved);
       return json(saved);
     }
     const m = pathname!.match(/^\/api\/tasks\/(\w+)\/(complete|uncomplete)$/);
@@ -126,9 +151,9 @@ export const sentBodies = (fetchMock: ReturnType<typeof stubApi>, method: string
 
 export function renderAt(path: string) {
   tokenStore.set("cl_test");
-  const location = memoryLocation({ path });
+  const location = memoryLocation({ path, record: true });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const view = render(
     <QueryClientProvider client={client}>
       <SessionProvider>
         <Router hook={location.hook}>
@@ -137,6 +162,9 @@ export function renderAt(path: string) {
       </SessionProvider>
     </QueryClientProvider>,
   );
+  /** The current address, path and search. */
+  const href = () => location.history!.at(-1)!;
+  return { ...view, location, href };
 }
 
 export const main = () => within(screen.getByRole("main"));

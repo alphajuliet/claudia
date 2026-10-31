@@ -42,6 +42,32 @@ export function useTimeZone(): string {
 /** Tasks matching a query string (without the "?"). Null waits. */
 export const useTasks = (query: string | null) => useGet(["tasks", query], query === null ? null : `/api/tasks?${query}`, TasksSchema);
 
+/**
+ * One task, as a list of none or one so that it sits with the other task lists and every task change (at once, on
+ * failure, on refetch) reaches it too. Empty when the task doesn't exist (404). Starts from any cached copy.
+ */
+export function useTask(id: string) {
+  const { state, api } = useSession();
+  const queryClient = useQueryClient();
+  return useQuery({
+    queryKey: ["tasks", "one", id],
+    queryFn: async () => {
+      const res = await api(`/api/tasks/${id}`);
+      return res.status === 404 ? [] : [await json(res, TaskSchema)];
+    },
+    initialData: () => {
+      for (const [, tasks] of queryClient.getQueriesData<Task[]>(tasksKey)) {
+        const found = tasks?.find((t) => t.id === id);
+        if (found) return [found];
+      }
+      return undefined;
+    },
+    // A cached copy shows at once, but is checked with the server.
+    initialDataUpdatedAt: 0,
+    enabled: state.status === "signedIn",
+  });
+}
+
 export const useFilterTasks = (id: string) => useGet(["tasks", "filter", id], `/api/filters/${id}/tasks?limit=500`, TasksSchema);
 
 /** A JSON request body. */
@@ -213,13 +239,18 @@ export function useUpdateTask() {
 
 export interface TaskMove { id: string; listId?: string; parentId?: string | null; afterId?: string; beforeId?: string }
 
-/** Moves a task (and its subtasks) to another list or parent, or reorders it. Lists are refetched, not changed at once. */
+/**
+ * Moves a task (and its subtasks) to another list or parent, or reorders it. Changing list without a parent puts it at
+ * the top level there. Lists are refetched rather than changed at once.
+ */
 export function useMoveTask() {
   const { api } = useSession();
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: taskWriteKey("move"),
     mutationFn: async ({ id, ...to }: TaskMove) => json(await api(`/api/tasks/${id}/move`, send("POST", to)), TaskSchema),
+    // Where it now sits is shown in any list that has it (such as the detail panel's) until the refetch sorts the rest.
+    onSuccess: (saved) => writeCached(queryClient, saved),
     onSettled: () => refetchWhenLast(queryClient),
   });
 }

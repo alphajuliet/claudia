@@ -4,6 +4,7 @@ import { usePendingCompletions, useSetCompleted, useTimeZone, useUpdateTask } fr
 import { formatDue, todayIn } from "../lib/dates";
 import type { Row } from "../lib/tasks";
 import { dueDateOf, TaskRow } from "./TaskRow";
+import { useSelectedTask } from "./selection";
 import { useToast } from "./Toast";
 
 /** A run of rows, under a title (a list name in a view, a heading in a list) or none. */
@@ -12,7 +13,7 @@ export interface Section { key: string; title?: string; rows: Row[] }
 interface QueryState { isPending: boolean; error: Error | null; refetch: () => unknown }
 
 /** Completes a task from its checkbox and reports the outcome in the toast. */
-function useComplete() {
+export function useComplete() {
   const setCompleted = useSetCompleted();
   const toast = useToast();
   const timeZone = useTimeZone();
@@ -48,18 +49,23 @@ function useRename() {
   };
 }
 
-function TaskSection({ section, today, timeZone, pending, onComplete, onRename }: {
-  section: Section;
+interface RowProps {
   today: string;
   timeZone: string;
   pending: Set<string>;
+  selectedId: string | null;
   onComplete: (task: Task) => void;
   onRename: (task: Task, title: string) => void;
-}) {
+  onSelect: (task: Task) => void;
+}
+
+function TaskSection({ section, pending, selectedId, ...rest }: RowProps & { section: Section }) {
   const id = useId();
   const rows = (
     <ul className="task-list">
-      {section.rows.map((r) => <TaskRow key={r.task.id} task={r.task} depth={r.depth} today={today} timeZone={timeZone} pending={pending.has(r.task.id)} onComplete={onComplete} onRename={onRename} />)}
+      {section.rows.map((r) => (
+        <TaskRow key={r.task.id} task={r.task} depth={r.depth} pending={pending.has(r.task.id)} selected={r.task.id === selectedId} {...rest} />
+      ))}
     </ul>
   );
   if (!section.title) return rows;
@@ -78,6 +84,7 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   const onComplete = useComplete();
   const onRename = useRename();
   const pending = usePendingCompletions();
+  const { selectedId, select } = useSelectedTask();
 
   if (query.error) {
     return (
@@ -91,7 +98,19 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   if (sections.every((s) => s.rows.length === 0 && !s.title)) return <p className="list-state muted">{empty}</p>;
   return (
     <div className="task-sections">
-      {sections.map((s) => <TaskSection key={s.key} section={s} today={today} timeZone={timeZone} pending={pending} onComplete={onComplete} onRename={onRename} />)}
+      {sections.map((s) => (
+        <TaskSection
+          key={s.key}
+          section={s}
+          today={today}
+          timeZone={timeZone}
+          pending={pending}
+          selectedId={selectedId}
+          onComplete={onComplete}
+          onRename={onRename}
+          onSelect={(t) => select(t.id)}
+        />
+      ))}
     </div>
   );
 }
