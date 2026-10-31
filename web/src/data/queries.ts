@@ -216,20 +216,37 @@ export function useCreateTask() {
   });
 }
 
-/** Changes a task's fields, in every cached list at once. On failure only that task is put back. */
+const updateKey = taskWriteKey("update");
+
+/** Whether another change to the same task is still running besides this one. */
+const updatingAgain = (queryClient: QueryClient, id: string) =>
+  queryClient.isMutating({
+    mutationKey: updateKey,
+    predicate: (m) => (m.state.variables as { id?: string } | undefined)?.id === id,
+  }) > 1;
+
+/**
+ * Changes a task's fields, in every cached list at once. On failure only that task is put back. While a later change
+ * to the same task is still running, an earlier one's answer or failure leaves the task as it is shown (the latest
+ * change), and the refetch after the last change settles puts it right.
+ */
 export function useUpdateTask() {
   const { api } = useSession();
   const queryClient = useQueryClient();
   return useMutation({
-    mutationKey: taskWriteKey("update"),
+    mutationKey: updateKey,
     mutationFn: async ({ id, patch }: { id: string; patch: TaskPatch }) =>
       json(await api(`/api/tasks/${id}`, send("PATCH", patch)), TaskSchema),
     onMutate: async ({ id, patch }) => {
       await queryClient.cancelQueries(tasksKey);
       return { changed: changeCached(queryClient, () => new Set([id]), (task) => ({ ...task, ...patch })) };
     },
-    onError: (_error, _vars, context) => restoreCached(queryClient, context?.changed),
-    onSuccess: (saved) => writeCached(queryClient, saved),
+    onError: (_error, { id }, context) => {
+      if (!updatingAgain(queryClient, id)) restoreCached(queryClient, context?.changed);
+    },
+    onSuccess: (saved) => {
+      if (!updatingAgain(queryClient, saved.id)) writeCached(queryClient, saved);
+    },
     onSettled: (_saved, _error, { patch }) => {
       if (patch.labels) void queryClient.invalidateQueries({ queryKey: ["labels"] });
       refetchWhenLast(queryClient);

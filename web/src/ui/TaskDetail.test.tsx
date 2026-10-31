@@ -4,6 +4,21 @@ import { describe, expect, it, vi } from "vitest";
 import type { Task } from "@claudia/shared";
 import { errands, garden, inbox, main, projects, renderAt, sentBodies, stubApi, task } from "./testApi";
 
+/** A promise to settle later, for holding a request. */
+function deferred() {
+  let resolve!: () => void;
+  let reject!: () => void;
+  const promise = new Promise<void>((res, rej) => { resolve = res; reject = () => rej(new Error("held")); });
+  return { promise, resolve, reject };
+}
+
+/** Holds each request the gate sees, in order; `held[i]` settles the i-th. */
+function holdAll() {
+  const held: ReturnType<typeof deferred>[] = [];
+  const gate = () => { const d = deferred(); held.push(d); return d.promise; };
+  return { held, gate };
+}
+
 const panel = () => screen.findByRole("complementary", { name: "Task details" });
 const inPanel = async () => within(await panel());
 
@@ -233,5 +248,107 @@ describe("the detail panel", () => {
     await userEvent.click((await main().findByText("Mow the lawn")).closest("li")!);
     expect(href()).toBe(`/inbox?task=${mow.id}`);
     expect(await (await inPanel()).findByDisplayValue("Mow the lawn")).toBeTruthy();
+  });
+
+  it("keeps a newer label change when an older save answers first", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id, labels: ["next", "outside", "quick"] });
+    const { held, gate } = holdAll();
+    const { fetchMock, p } = await openOn(weed, [weed], { gate });
+    await userEvent.click(p.getByRole("button", { name: "Remove label next" }));
+    await userEvent.click(await p.findByRole("button", { name: "Remove label outside" }));
+    await waitFor(() => expect(held).toHaveLength(2));
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ labels: ["outside", "quick"] }, { labels: ["quick"] }]);
+
+    held[0]!.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(p.queryByRole("button", { name: "Remove label outside" })).toBeNull();
+
+    held[1]!.resolve();
+    await waitFor(() => expect(p.getAllByRole("button", { name: /^Remove label/ }).map((b) => b.getAttribute("aria-label")))
+      .toEqual(["Remove label quick"]));
+    // The refetch after the last save agrees.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(p.getAllByRole("button", { name: /^Remove label/ })).toHaveLength(1);
+  });
+
+  it("doesn't let a failed older save wipe a newer pending change", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id, labels: ["next", "outside", "quick"] });
+    const { held, gate } = holdAll();
+    const { p } = await openOn(weed, [weed], { gate });
+    await userEvent.click(p.getByRole("button", { name: "Remove label next" }));
+    await userEvent.click(await p.findByRole("button", { name: "Remove label outside" }));
+    await waitFor(() => expect(held).toHaveLength(2));
+
+    held[0]!.reject();
+    await waitFor(() => expect(document.querySelector(".toast")?.textContent).toContain("Boom"));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(p.queryByRole("button", { name: "Remove label next" })).toBeNull();
+    expect(p.queryByRole("button", { name: "Remove label outside" })).toBeNull();
+
+    held[1]!.resolve();
+    await waitFor(() => expect(p.getAllByRole("button", { name: /^Remove label/ })).toHaveLength(1));
+    expect(p.getByRole("button", { name: "Remove label quick" })).toBeTruthy();
+  });
+
+  it("saves a changed date once, after a pause or on leaving the field", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    const { fetchMock, p } = await openOn(weed);
+    const due = p.getByLabelText("Due");
+    fireEvent.change(due, { target: { value: "2026-11-05" } });
+    fireEvent.change(due, { target: { value: "2026-11-15" } });
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([]);
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: "2026-11-15" }]));
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toHaveLength(1);
+
+    fireEvent.change(due, { target: { value: "2026-11-20" } });
+    fireEvent.blur(due);
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toHaveLength(2), { timeout: 300 });
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ dueDate: "2026-11-20" });
+  });
+
+  it("shows a failed save in the toast after the panel has closed, offering to copy the notes", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+    try {
+      const { view, p } = await openOn(weed, [weed], { failUpdate: true });
+      await userEvent.type(p.getByRole("textbox", { name: "Notes" }), "Start with the roses");
+      await userEvent.keyboard("{Escape}");
+      expect(view.href()).toBe(`/list/${garden.id}`);
+      await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
+      const toast = await screen.findByText("Boom");
+      await userEvent.click(within(toast.closest(".toast")! as HTMLElement).getByRole("button", { name: "Copy notes" }));
+      expect(writeText).toHaveBeenCalledWith("Start with the roses");
+    } finally {
+      Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
+  it("adds a typed label on leaving the field or Escape", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    const { fetchMock, p } = await openOn(weed);
+    await userEvent.type(p.getByRole("combobox", { name: "Add a label" }), "outside");
+    await userEvent.tab();
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ labels: ["outside"] }]);
+    await userEvent.type(p.getByRole("combobox", { name: "Add a label" }), "quick");
+    await userEvent.keyboard("{Escape}");
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ labels: ["outside", "quick"] });
+  });
+
+  it("shows the latest list chosen while earlier moves finish", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    const { held, gate } = holdAll();
+    const { p } = await openOn(weed, [weed], { gate });
+    const select = p.getByRole("combobox", { name: "List" }) as HTMLSelectElement;
+    await userEvent.selectOptions(select, errands.id);
+    await userEvent.selectOptions(select, projects.id);
+    await waitFor(() => expect(held).toHaveLength(2));
+    held[0]!.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(select.value).toBe(projects.id);
+    held[1]!.resolve();
+    await waitFor(() => expect(p.getByText("Saved")).toBeTruthy());
+    expect(select.value).toBe(projects.id);
   });
 });

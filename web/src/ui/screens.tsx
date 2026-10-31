@@ -58,7 +58,7 @@ function BuiltInView({ id, name }: { id: ViewId; name: string }) {
     listId: inbox.id,
     listName: inbox.name,
     ...(label ? { labels: [label] } : {}),
-    ...(id === "today" ? { dueDate: today } : {}),
+    ...(id === "today" ? { dueToday: true } : {}),
   };
   const tasks = useTasks(query);
   const sections = useGroupedSections(tasks.data);

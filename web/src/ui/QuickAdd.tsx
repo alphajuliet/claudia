@@ -1,10 +1,11 @@
 import { useState, type KeyboardEvent } from "react";
-import { useCreateTask } from "../data/queries";
+import { useCreateTask, useTimeZone } from "../data/queries";
+import { todayIn } from "../lib/dates";
 import { parseQuickAdd } from "../lib/quickAdd";
 import { useToast } from "./Toast";
 
-/** Where quick add puts a task: a list, with labels and a due date the screen implies. */
-export interface QuickAddTarget { listId: string; listName: string; labels?: string[]; dueDate?: string }
+/** Where quick add puts a task: a list, with labels the screen implies, and due today (the day it's added) if set. */
+export interface QuickAddTarget { listId: string; listName: string; labels?: string[]; dueToday?: boolean }
 
 /** Labels in order, without repeats ignoring case (the first spelling wins). */
 const mergeLabels = (labels: string[]) =>
@@ -19,6 +20,7 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
   const [text, setText] = useState("");
   const create = useCreateTask();
   const toast = useToast();
+  const timeZone = useTimeZone();
   if (!target) return null;
 
   const submit = () => {
@@ -33,7 +35,7 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
         listId: target.listId,
         title: parsed.title,
         ...(labels.length ? { labels } : {}),
-        ...(target.dueDate ? { dueDate: target.dueDate } : {}),
+        ...(target.dueToday ? { dueDate: todayIn(timeZone) } : {}),
       })
       .then(
         () => { if (announce) toast.show({ message: `Added to ${target.listName}` }); },

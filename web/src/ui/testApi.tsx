@@ -41,6 +41,8 @@ export interface StubOptions {
   failMove?: boolean;
   holdComplete?: Promise<void>;
   holdRefetch?: Promise<void>;
+  /** Called for each PATCH and move before it is applied: it may hold the request, and a rejection fails it. */
+  gate?: (method: string, path: string, body: unknown) => Promise<void> | undefined;
   filters?: Filter[];
   lists?: List[];
 }
@@ -65,6 +67,10 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   const descendants = (id: string): Task[] =>
     [...store.values()].filter((t) => t.parentId === id).flatMap((t) => [t, ...descendants(t.id)]);
   const fail = (message: string) => json({ error: { code: "internal", message } }, 500);
+  /** False when the gate fails the request. */
+  const pass = async (method: string, path: string, body: unknown) => {
+    try { await opts.gate?.(method, path, body); return true; } catch { return false; }
+  };
   let changed = false;
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     if (path in bodies) return json(bodies[path]);
@@ -93,7 +99,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     if (one && !store.has(one[1]!)) return json({ error: { code: "not_found", message: "Task not found" } }, 404);
     if (one && (!init?.method || init.method === "GET")) return json(store.get(one[1]!));
     if (one && init?.method === "PATCH") {
-      if (opts.failUpdate) return fail("Boom");
+      if (opts.failUpdate || !(await pass("PATCH", pathname!, JSON.parse(String(init.body))))) return fail("Boom");
       const saved = { ...store.get(one[1]!)!, ...(JSON.parse(String(init.body)) as Partial<Task>) };
       if ((saved.recurRule === null) !== (saved.recurFrom === null))
         return json({ error: { code: "invalid_recurrence", message: "recurRule and recurFrom must be set together" } }, 422);
@@ -108,7 +114,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     }
     const move = pathname!.match(/^\/api\/tasks\/(\w+)\/move$/);
     if (move && init?.method === "POST") {
-      if (opts.failMove) return fail("Boom");
+      if (opts.failMove || !(await pass("POST", pathname!, JSON.parse(String(init.body))))) return fail("Boom");
       const t = store.get(move[1]!);
       if (!t) return json({ error: { code: "not_found", message: "Task not found" } }, 404);
       const { listId = t.listId } = JSON.parse(String(init.body)) as { listId?: string };

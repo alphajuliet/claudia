@@ -1,12 +1,17 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import type { Task } from "@claudia/shared";
+import { useQueryClient } from "@tanstack/react-query";
 import { useFolders, useLabels, useLists, useMoveTask, useUpdateTask, type TaskPatch } from "../data/queries";
 import { todayIn } from "../lib/dates";
 import { PRESETS, presetFor, ruleFor, type Preset } from "../lib/repeat";
 import { sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox } from "../lib/views";
+import { useToast, type ToastMessage } from "./Toast";
 
-/* Fields of the detail panel. Each saves on its own and says how that went beside itself. */
+/*
+ * Fields of the detail panel. Each saves on its own and says how that went beside itself. A failure also shows in the
+ * toast, which is still there when the panel has closed.
+ */
 
 type SaveState = { kind: "idle" | "saving" | "saved" } | { kind: "error"; message: string };
 
@@ -14,6 +19,7 @@ const SAVED_MS = 2500;
 
 /** Tracks one field's saves: only the latest one counts, and "Saved" fades after a moment. */
 export function useSave() {
+  const toast = useToast();
   const [state, setState] = useState<SaveState>({ kind: "idle" });
   const latest = useRef(0);
   useEffect(() => {
@@ -21,8 +27,11 @@ export function useSave() {
     const timer = setTimeout(() => setState((s) => (s.kind === "saved" ? { kind: "idle" } : s)), SAVED_MS);
     return () => clearTimeout(timer);
   }, [state]);
-  /** Resolves true when the save worked; a failure shows beside the field rather than rejecting. */
-  const run = (save: Promise<unknown>): Promise<boolean> => {
+  /**
+   * Resolves true when the save worked; a failure shows beside the field and in the toast (with `action`, such as a way
+   * to recover what was typed) rather than rejecting.
+   */
+  const run = (save: Promise<unknown>, action?: ToastMessage["action"]): Promise<boolean> => {
     const mine = ++latest.current;
     setState({ kind: "saving" });
     return save.then(
@@ -32,6 +41,7 @@ export function useSave() {
       },
       (e: Error) => {
         if (mine === latest.current) setState({ kind: "error", message: e.message });
+        toast.show({ message: e.message, error: true, ...(action ? { action } : {}) });
         return false;
       },
     );
@@ -52,8 +62,15 @@ export function FieldStatus({ state }: { state: SaveState }) {
 function usePatch(task: Task) {
   const update = useUpdateTask();
   const save = useSave();
-  return { state: save.state, patch: (patch: TaskPatch) => save.run(update.mutateAsync({ id: task.id, patch })) };
+  return {
+    state: save.state,
+    patch: (patch: TaskPatch, action?: ToastMessage["action"]) => save.run(update.mutateAsync({ id: task.id, patch }), action),
+  };
 }
+
+/** A toast action that copies `text`, where the browser allows it. */
+const copyAction = (label: string, text: string): ToastMessage["action"] =>
+  navigator.clipboard ? { label, run: () => void navigator.clipboard.writeText(text).catch(() => {}) } : undefined;
 
 /** A labelled row: a small muted label on the left, the value beside it. */
 function Field({ label, htmlFor, children, group = false }: { label: string; htmlFor?: string; children: ReactNode; group?: boolean }) {
@@ -124,7 +141,8 @@ export function NotesField({ task }: { task: Task }) {
   const finish = () => {
     if (draft === null) return;
     const notes = draft.trim() ? draft : null;
-    if (notes !== task.notes) void patch({ notes });
+    // A failure may come after the panel has closed, so the toast offers the text back.
+    if (notes !== task.notes) void patch({ notes }, notes ? copyAction("Copy notes", notes) : undefined);
     setDraft(null);
   };
   return (
@@ -146,9 +164,12 @@ export function NotesField({ task }: { task: Task }) {
 
 const DATE = /^(\d{4})-\d{2}-\d{2}$/;
 
+const DATE_IDLE_MS = 600;
+
 /**
- * A date picker with Clear. A complete date saves at once, unless its year is still being typed (a browser's
- * date field shows 0002, 0020, 0202 on the way to 2026), which waits until leaving the field.
+ * A date picker with Clear. A complete date saves after a moment without changes, or on leaving the field, so
+ * retyping a day sends one save. One whose year is still being typed (a browser's date field shows 0002, 0020, 0202
+ * on the way to 2026) waits until leaving the field.
  */
 function DateInput({ label, name, value, onSave, status }: {
   label: string;
@@ -159,10 +180,32 @@ function DateInput({ label, name, value, onSave, status }: {
 }) {
   const id = useId();
   const [draft, setDraft] = useState<string | null>(null);
+  // The waiting save, bound to the task it was typed for.
+  const pending = useRef<(() => void) | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const cancel = () => {
+    clearTimeout(timer.current);
+    pending.current = null;
+  };
+  const flush = () => {
+    const run = pending.current;
+    cancel();
+    run?.();
+  };
   const save = (date: string) => {
     const next = date === "" ? null : date;
     if (next !== value) onSave(next);
   };
+  const later = (date: string) => {
+    cancel();
+    pending.current = () => {
+      save(date);
+      setDraft(null);
+    };
+    timer.current = setTimeout(flush, DATE_IDLE_MS);
+  };
+  // Closing the panel doesn't drop a date waiting to save.
+  useEffect(() => flush, []);
   return (
     <Field label={label} htmlFor={id}>
       <input
@@ -173,18 +216,18 @@ function DateInput({ label, name, value, onSave, status }: {
         onChange={(e) => {
           const date = e.target.value;
           const year = DATE.exec(date)?.[1];
-          if (year && Number(year) >= 1900) {
-            setDraft(null);
-            save(date);
-          } else setDraft(date);
+          setDraft(date);
+          if (year && Number(year) >= 1900) later(date);
+          else cancel();
         }}
         onBlur={() => {
+          cancel();
           if (draft !== null && (draft === "" || DATE.test(draft))) save(draft);
           setDraft(null);
         }}
       />
       {value && (
-        <button type="button" className="quiet small" aria-label={`Clear ${name}`} onClick={() => { setDraft(null); onSave(null); }}>
+        <button type="button" className="quiet small" aria-label={`Clear ${name}`} onClick={() => { cancel(); setDraft(null); onSave(null); }}>
           Clear
         </button>
       )}
@@ -224,19 +267,25 @@ export function DateFields({ task, timeZone }: { task: Task; timeZone: string })
   );
 }
 
-/** Label chips with remove buttons, and a field that adds one on Enter (suggesting existing labels). */
+/**
+ * Label chips with remove buttons, and a field that adds one on Enter or on leaving it (suggesting existing labels).
+ * Each change sends the whole set, worked out from the task as cached now, so quick changes build on each other.
+ */
 export function LabelsField({ task }: { task: Task }) {
   const { state, patch } = usePatch(task);
+  const queryClient = useQueryClient();
   const [text, setText] = useState("");
   const listId = useId();
-  const has = (name: string) => task.labels.some((l) => l.toLowerCase() === name.toLowerCase());
-  const suggestions = (useLabels().data ?? []).filter((l) => !has(l.name));
+  const has = (labels: string[], name: string) => labels.some((l) => l.toLowerCase() === name.toLowerCase());
+  const suggestions = (useLabels().data ?? []).filter((l) => !has(task.labels, l.name));
+  const current = () => queryClient.getQueryData<Task[]>(["tasks", "one", task.id])?.[0]?.labels ?? task.labels;
   const add = () => {
     const name = text.trim().replace(/^#/, "");
     if (!name) return;
     setText("");
-    if (has(name)) return;
-    void patch({ labels: [...task.labels, name] }).then((ok) => { if (!ok) setText((now) => now || name); });
+    const labels = current();
+    if (has(labels, name)) return;
+    void patch({ labels: [...labels, name] }).then((ok) => { if (!ok) setText((now) => now || name); });
   };
   return (
     <Field label="Labels" group>
@@ -249,7 +298,7 @@ export function LabelsField({ task }: { task: Task }) {
                 type="button"
                 className="chip-remove"
                 aria-label={`Remove label ${l}`}
-                onClick={() => void patch({ labels: task.labels.filter((x) => x !== l) })}
+                onClick={() => void patch({ labels: current().filter((x) => x !== l) })}
               >
                 <span aria-hidden="true">×</span>
               </button>
@@ -273,6 +322,7 @@ export function LabelsField({ task }: { task: Task }) {
             add();
           }
         }}
+        onBlur={add}
       />
       <datalist id={listId}>
         {suggestions.map((l) => <option key={l.id} value={l.name} />)}
@@ -301,6 +351,7 @@ export function ListField({ task }: { task: Task }) {
   const move = useMoveTask();
   const save = useSave();
   const [moving, setMoving] = useState<string | null>(null);
+  const latestMove = useRef(0);
   const inbox = findInbox(lists);
   const tree = sidebarTree(folders, lists.filter((l) => l.id !== inbox?.id), "all");
   const top = [...(inbox ? [inbox] : []), ...tree.lists];
@@ -310,8 +361,10 @@ export function ListField({ task }: { task: Task }) {
   const current = live.has(task.listId) ? null : lists.find((l) => l.id === task.listId);
   const onChange = (listId: string) => {
     if (listId === task.listId) return;
+    const mine = ++latestMove.current;
     setMoving(listId);
-    void save.run(move.mutateAsync({ id: task.id, listId })).finally(() => setMoving(null));
+    // Only the latest move settling shows the task's list again, so an earlier one doesn't flash its list.
+    void save.run(move.mutateAsync({ id: task.id, listId })).finally(() => { if (mine === latestMove.current) setMoving(null); });
   };
   return (
     <Field label="List" htmlFor={id}>

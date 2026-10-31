@@ -1,6 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Filter } from "@claudia/shared";
 import { at, errands, garden, inbox, main, projects, renderAt, sentBodies, stubApi, task, today } from "./testApi";
 
@@ -50,6 +50,22 @@ describe("quick add", () => {
     await userEvent.type(await quickAdd(), "Pay the rent{Enter}");
     expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: inbox.id, title: "Pay the rent", dueDate: today }]);
     expect(await main().findByText("Pay the rent")).toBeTruthy();
+  });
+
+  it("uses the day it is when the task is added, not when the screen was shown", async () => {
+    // 11 pm in Sydney on 2 November, then just past midnight.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      vi.setSystemTime(new Date("2026-11-02T12:00:00.000Z"));
+      const fetchMock = stubApi([]);
+      renderAt("/today");
+      const field = await quickAdd();
+      vi.setSystemTime(new Date("2026-11-02T13:30:00.000Z"));
+      await userEvent.type(field, "Pay the rent{Enter}");
+      expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: inbox.id, title: "Pay the rent", dueDate: "2026-11-03" }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("adds to the Inbox from a saved filter, with nothing extra", async () => {
