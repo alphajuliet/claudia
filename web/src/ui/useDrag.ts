@@ -13,8 +13,8 @@ const MAX_SCROLL = 12;
 /** The indent per depth when the row has no `--indent` to read (jsdom). */
 const FALLBACK_INDENT = 20;
 
-/** Where a drag ends. */
-export type DragTarget = Drop;
+/** Where a drag ends: a drop in the list, or another list in the sidebar. */
+export type DragTarget = Drop | { kind: "list"; listId: string };
 
 interface Measured { item: Item; el: Element; rect: DOMRect; dragged: boolean }
 
@@ -30,7 +30,7 @@ interface Active extends Pending {
   scroller: HTMLElement | null;
   ghost: HTMLElement;
   line: HTMLElement;
-  /** Where it would land now, and the row outlined for it. */
+  /** Where it would land now, and the element marked for it (a row outlined, a sidebar list). */
   target: DragTarget | null;
   marked: Element | null;
   lastX: number;
@@ -104,13 +104,21 @@ function dropAt(d: Active, x: number, y: number): { drop: Drop; lineY: number | 
   return { drop: { kind: "gap", index: gap, depth }, lineY: gapY(gap) };
 }
 
+/** The sidebar list under the pointer (`data-drop-list`), unless it is this one. */
+function listAt(x: number, y: number, listId: string): Element | null {
+  if (typeof document.elementFromPoint !== "function") return null;
+  const el = document.elementFromPoint(x, y)?.closest("[data-drop-list]");
+  return el && el.getAttribute("data-drop-list") !== listId ? el : null;
+}
+
 /**
  * Dragging rows and headings with the mouse to reorder a list (`listId`, or none to turn it off). Spread the
  * returned `onPointerDown` and `ref` on the element holding the rows. A press on a row or a heading's title that
  * moves THRESHOLD px starts a drag: a ghost follows the pointer, the dragged rows (or a heading's section) fade and
  * a line, indented to the depth, shows where it lands (or the row it would go under is outlined). A drop calls
  * `onDrop` with the dragged task, the target and the items as they were; Escape cancels. The click after a drag is
- * swallowed, so the title doesn't rename and the row doesn't select. Touch is left to the swipes.
+ * swallowed, so the title doesn't rename and the row doesn't select. Over another list in the sidebar (an element
+ * with `data-drop-list`), that list is the target and gets `data-drop-target`. Touch is left to the swipes.
  */
 export function useDrag({ listId, items, onDrop }: {
   listId: string | undefined;
@@ -127,10 +135,13 @@ export function useDrag({ listId, items, onDrop }: {
   // Removes the click swallower left by the last drag.
   const unswallow = useRef<() => void>(() => {});
 
-  /** Marks `el` (or nothing) as the row a drop goes into. */
-  const mark = (d: Active, el: Element | null) => {
-    if (d.marked && d.marked !== el) delete (d.marked as HTMLElement).dataset.dropInto;
-    if (el) (el as HTMLElement).dataset.dropInto = "";
+  /** Marks `el` (or nothing) as where the drop goes: a row outlined for `into`, or a sidebar list. */
+  const mark = (d: Active, el: Element | null, attr: "dropInto" | "dropTarget" = "dropInto") => {
+    if (d.marked && d.marked !== el) {
+      delete (d.marked as HTMLElement).dataset.dropInto;
+      delete (d.marked as HTMLElement).dataset.dropTarget;
+    }
+    if (el) (el as HTMLElement).dataset[attr] = "";
     d.marked = el;
   };
 
@@ -139,6 +150,13 @@ export function useDrag({ listId, items, onDrop }: {
     d.lastX = x;
     d.lastY = y;
     d.ghost.style.transform = `translate(${x + 12}px, ${y + 8}px)`;
+    const list = listAt(x, y, latest.current.listId ?? "");
+    if (list) {
+      d.target = { kind: "list", listId: list.getAttribute("data-drop-list")! };
+      d.line.hidden = true;
+      mark(d, list, "dropTarget");
+      return;
+    }
     const at = dropAt(d, x, y);
     d.target = at?.drop ?? null;
     if (at?.drop.kind === "into") {

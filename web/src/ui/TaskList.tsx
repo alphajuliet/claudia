@@ -1,10 +1,10 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import type { Task } from "@claudia/shared";
-import { useDeleteTask, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
+import { useDeleteTask, useLists, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
-import { displayItems, moveFor, stepMove, withoutDragged, type Item } from "../lib/reorder";
+import { displayItems, moveFor, placeOf, stepMove, withoutDragged, type Item } from "../lib/reorder";
 import { collapseRows, parentsIn, rowsUnder, type Row } from "../lib/tasks";
 import { setCollapsed, useCollapsed } from "./collapsed";
 import { BottomSheet } from "./BottomSheet";
@@ -313,13 +313,27 @@ function useStepMove(sections: ShownSection[], current: Task | undefined, order:
   useCommand("moveDown", step(1));
 }
 
-/** Moves a dragged task to where it was dropped. A drop where it already was sends nothing. */
-function useDropMove() {
+/**
+ * Moves a dragged task to where it was dropped. A drop where it already was sends nothing. Dropped on another list,
+ * it goes to the end there at the top level (a heading with its section), and the toast's Undo puts it back.
+ */
+function useDropMove(listId: string | undefined) {
   const move = useMoveTask();
   const toast = useToast();
+  const lists = useLists().data;
   return (task: Task, target: DragTarget, items: Item[]) => {
+    const fail = (e: Error) => toast.show({ message: e.message, error: true });
+    if (target.kind === "list") {
+      if (!listId) return;
+      const section = task.kind === "heading" ? { withSection: true as const } : {};
+      const back = { ...placeOf(items, task), listId, ...section };
+      const name = lists?.find((l) => l.id === target.listId)?.name ?? "another list";
+      move.mutateAsync({ id: task.id, listId: target.listId, parentId: null, ...section }).catch(fail);
+      toast.show({ message: `Moved to ${name}`, action: { label: "Undo", run: () => { move.mutateAsync({ id: task.id, ...back }).catch(fail); } } });
+      return;
+    }
     const request = moveFor(withoutDragged(items, task), task, target, items);
-    if (request) move.mutateAsync({ id: task.id, ...request }).catch((e: Error) => toast.show({ message: e.message, error: true }));
+    if (request) move.mutateAsync({ id: task.id, ...request }).catch(fail);
   };
 }
 
@@ -402,7 +416,7 @@ export function TaskList({ query, sections, empty, reorder }: { query: QueryStat
   useCommand("next", (e) => arrowsHere(e) && move(1));
   useCommand("previous", (e) => arrowsHere(e) && move(-1));
   useStepMove(shownSections, current, order, reorder !== undefined, arrowsHere);
-  const drag = useDrag({ listId: shown ? reorder?.listId : undefined, items: displayItems(shownSections), onDrop: useDropMove() });
+  const drag = useDrag({ listId: shown ? reorder?.listId : undefined, items: displayItems(shownSections), onDrop: useDropMove(reorder?.listId) });
   useCommand("open", (e) => {
     if (!current) return false;
     // Enter on a button or link keeps its own meaning: it opens only from the row itself (or nothing focused).

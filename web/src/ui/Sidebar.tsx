@@ -10,8 +10,10 @@ import { InlineRename, useRenameReported } from "./InlineRename";
 import { THEME_CHOICES, useTheme } from "./theme";
 
 /** A sidebar link, with its count of open tasks when there are any. */
-function NavLink({ href, children, count, onNavigate, onDoubleClick }: {
+function NavLink({ href, children, count, onNavigate, onDoubleClick, dropList }: {
   href: string;
+  /** The list a dragged task dropped here moves to. */
+  dropList?: string;
   children: ReactNode;
   count?: number;
   onNavigate: () => void;
@@ -27,6 +29,7 @@ function NavLink({ href, children, count, onNavigate, onDoubleClick }: {
       onClick={onNavigate}
       onDoubleClick={onDoubleClick}
       title={onDoubleClick ? "Double-click to rename" : undefined}
+      data-drop-list={dropList}
     >
       <span className="nav-name">{children}</span>
       {count ? <span className="nav-count">{count}</span> : null}
@@ -40,7 +43,7 @@ function ListLink({ list, counts, onNavigate }: { list: List; counts: Counts | u
   return (
     <InlineRename name={list.name} label="List name" className="nav-rename" onRename={(name) => rename(list.id, name)}>
       {(start) => (
-        <NavLink href={`/list/${list.id}`} count={listCount(counts, list.id)} onNavigate={onNavigate} onDoubleClick={start}>
+        <NavLink href={`/list/${list.id}`} count={listCount(counts, list.id)} onNavigate={onNavigate} onDoubleClick={start} dropList={list.id}>
           {list.name}
         </NavLink>
       )}
@@ -138,7 +141,8 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
           <li><NavLink href="/search" onNavigate={onNavigate}>Search</NavLink></li>
           {VIEWS.filter((v) => v.id !== "inbox" || inboxId).map((v) => (
             <li key={v.id}>
-              <NavLink href={`/${v.id}`} count={counts && viewCount(v.id, counts, shown, inboxId)} onNavigate={onNavigate}>{v.name}</NavLink>
+              <NavLink href={`/${v.id}`} count={counts && viewCount(v.id, counts, shown, inboxId)} onNavigate={onNavigate}
+                dropList={v.id === "inbox" ? inboxId : undefined}>{v.name}</NavLink>
             </li>
           ))}
         </ul>

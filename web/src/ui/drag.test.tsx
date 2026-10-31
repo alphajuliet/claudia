@@ -212,3 +212,46 @@ describe("dragging in a list", () => {
     expect(titles()).toEqual(["Weed the beds", "Plant tomatoes"]);
   });
 });
+
+describe("dropping on a sidebar list", () => {
+  /** The sidebar link under the pointer at x < 0, as `document.elementFromPoint` would find it. */
+  function overLink(name: string) {
+    Object.defineProperty(document, "elementFromPoint", {
+      configurable: true,
+      value: (x: number) => (x < 0 ? sidebarLink(name).querySelector(".nav-name") : null),
+    });
+  }
+
+  it("moves the task to the end of that list, with Undo", async () => {
+    const { tasks: [, b, c], fetchMock } = threeTasks();
+    await main().findByText("Plant tomatoes");
+    overLink("Errands");
+    start(main().getByText("Plant tomatoes"), 1);
+    moveTo(-100, 150);
+    expect(sidebarLink("Errands").dataset.dropTarget).toBeDefined();
+    expect(document.querySelector<HTMLElement>(".drop-line")?.hidden).toBe(true);
+    release(-100, 150);
+    expectCleared();
+    await waitFor(() => expect(moves(fetchMock, b!)).toEqual([{ listId: errands.id, parentId: null }]));
+    await waitFor(() => expect(titles()).toEqual(["Weed the beds", "Mulch the roses"]));
+    const toast = await screen.findByRole("status");
+    await waitFor(() => expect(toast.textContent).toContain("Moved to Errands"));
+    fireEvent.click(within(toast).getByRole("button", { name: "Undo" }));
+    await waitFor(() => expect(moves(fetchMock, b!).at(-1)).toEqual({ listId: garden.id, parentId: null, beforeId: c!.id }));
+    await waitFor(() => expect(titles()).toEqual(["Weed the beds", "Plant tomatoes", "Mulch the roses"]));
+  });
+
+  it("doesn't take a drop on the list's own link", async () => {
+    const { fetchMock } = threeTasks();
+    await main().findByText("Plant tomatoes");
+    overLink("Garden");
+    start(main().getByText("Plant tomatoes"), 1);
+    moveTo(-100, yOf(1));
+    expect(sidebarLink("Garden").dataset.dropTarget).toBeUndefined();
+    release(-100, yOf(1));
+    expectCleared();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
+    expect(titles()).toEqual(["Weed the beds", "Plant tomatoes", "Mulch the roses"]);
+  });
+});
