@@ -94,6 +94,14 @@ function Body({ id, onClose }: { id: string; onClose: () => void }) {
   const timeZone = useTimeZone();
   const task = query.data?.[0];
 
+  // Completing the task while it shows (from its row, say) closes the panel; opening a completed one doesn't.
+  const shownOpen = useRef(false);
+  const completed = Boolean(task?.completedAt);
+  useEffect(() => {
+    if (completed && shownOpen.current) onClose();
+    shownOpen.current = Boolean(task) && !completed;
+  });
+
   if (query.error) {
     return (
       <div className="detail-state" role="alert">

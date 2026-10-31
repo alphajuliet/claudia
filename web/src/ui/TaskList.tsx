@@ -7,8 +7,11 @@ import { dueDateOf, TaskRow } from "./TaskRow";
 import { useSelectedTask } from "./selection";
 import { useToast } from "./Toast";
 
-/** A run of rows, under a title (a list name in a view, a heading in a list) or none. */
-export interface Section { key: string; title?: string; rows: Row[] }
+/**
+ * A run of rows, under a title (a list name in a view, a heading in a list) or none. A heading's title selects it,
+ * as a row would.
+ */
+export interface Section { key: string; title?: string; heading?: Task; rows: Row[] }
 
 interface QueryState { isPending: boolean; error: Error | null; refetch: () => unknown }
 
@@ -60,6 +63,7 @@ interface RowProps {
 }
 
 function TaskSection({ section, pending, selectedId, ...rest }: RowProps & { section: Section }) {
+  const { heading } = section;
   const id = useId();
   const rows = (
     <ul className="task-list">
@@ -71,7 +75,18 @@ function TaskSection({ section, pending, selectedId, ...rest }: RowProps & { sec
   if (!section.title) return rows;
   return (
     <section className="task-section" aria-labelledby={id}>
-      <h2 id={id} className="section-title">{section.title}</h2>
+      <h2 id={id} className="section-title">
+        {heading ? (
+          <button
+            type="button"
+            className={heading.id === selectedId ? "section-title-button selected" : "section-title-button"}
+            aria-current={heading.id === selectedId ? "true" : undefined}
+            onClick={() => rest.onSelect(heading)}
+          >
+            {section.title}
+          </button>
+        ) : section.title}
+      </h2>
       {section.rows.length > 0 && rows}
     </section>
   );

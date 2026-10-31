@@ -98,7 +98,7 @@ function visibleRows(tasks: Task[]): Row[] {
 function listSections(rows: Row[]): Section[] {
   const sections: Section[] = [{ key: "top", rows: [] }];
   for (const row of rows) {
-    if (row.task.kind === "heading") sections.push({ key: row.task.id, title: row.task.title, rows: [] });
+    if (row.task.kind === "heading") sections.push({ key: row.task.id, title: row.task.title, heading: row.task, rows: [] });
     else sections.at(-1)!.rows.push(row);
   }
   return sections;

@@ -89,14 +89,17 @@ function refetchWhenLast(queryClient: QueryClient) {
 /** Tasks changed or removed in one cached list, with where they were, so a failure can put back just those. */
 type Changed = { key: QueryKey; before: { task: Task; index: number; removed: boolean }[] }[];
 
+/** The detail panel's entry for one task (see `useTask`), as opposed to a list of tasks. */
+const isOne = (key: QueryKey) => key[1] === "one";
+
 /**
- * In every cached task list, replaces the tasks picked by `pick` with `change(task)`, or removes them where it gives
- * null. Returns what they were.
+ * In every cached task list, replaces the tasks picked by `pick` with `change(task, one)`, or removes them where it
+ * gives null (`one` is true in the detail panel's entry). Returns what they were.
  */
 function changeCached(
   queryClient: QueryClient,
   pick: (tasks: Task[]) => Set<string>,
-  change: (task: Task) => Task | null,
+  change: (task: Task, one: boolean) => Task | null,
 ): Changed {
   const changed: Changed = [];
   for (const [key, tasks] of queryClient.getQueriesData<Task[]>(tasksKey)) {
@@ -105,7 +108,8 @@ function changeCached(
     const before: Changed[number]["before"] = [];
     const after = tasks.flatMap((task, index) => {
       if (!ids.has(task.id)) return [task];
-      const next = change(task);
+      const next = change(task, isOne(key));
+      if (next === task) return [task];
       before.push({ task, index, removed: next === null });
       return next ? [next] : [];
     });
@@ -174,11 +178,18 @@ export function useSetCompleted() {
       await queryClient.cancelQueries(tasksKey);
       // A repeating task stays: it comes back open with its next due date.
       if (!done || task.recurRule) return { changed: [] };
-      return { changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), () => null) };
+      // The detail panel's copy stays, marked completed, so the panel can tell it was completed rather than deleted.
+      const completedAt = new Date().toISOString();
+      return {
+        changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), (t, one) => (one ? { ...t, completedAt } : null)),
+      };
     },
     onError: (_error, _vars, context) => restoreCached(queryClient, context?.changed),
     onSuccess: ({ subtasks: _subtasks, ...saved }) => {
-      if (saved.completedAt) queryClient.setQueriesData<Task[]>(tasksKey, (tasks) => tasks?.filter((t) => t.id !== saved.id));
+      if (saved.completedAt)
+        for (const [key, tasks] of queryClient.getQueriesData<Task[]>(tasksKey))
+          if (tasks?.some((t) => t.id === saved.id))
+            queryClient.setQueryData<Task[]>(key, isOne(key) ? tasks.map((t) => (t.id === saved.id ? saved : t)) : tasks.filter((t) => t.id !== saved.id));
       else writeCached(queryClient, saved);
     },
     onSettled: () => refetchWhenLast(queryClient),
@@ -272,7 +283,10 @@ export function useMoveTask() {
   });
 }
 
-/** Deletes a task and its subtasks, taking them out of every cached list at once. On failure they are put back. */
+/**
+ * Deletes a task and its subtasks, taking them out of every cached list at once (but the detail panel's copy, which
+ * the panel closes over). On failure they are put back.
+ */
 export function useDeleteTask() {
   const { api } = useSession();
   const queryClient = useQueryClient();
@@ -281,7 +295,7 @@ export function useDeleteTask() {
     mutationFn: async ({ task }: { task: Task }) => json(await api(`/api/tasks/${task.id}`, { method: "DELETE" }), NoContent),
     onMutate: async ({ task }) => {
       await queryClient.cancelQueries(tasksKey);
-      return { changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), () => null) };
+      return { changed: changeCached(queryClient, (tasks) => withSubtasks(tasks, task.id), (t, one) => (one ? t : null)) };
     },
     onError: (_error, _vars, context) => restoreCached(queryClient, context?.changed),
     onSettled: () => refetchWhenLast(queryClient),

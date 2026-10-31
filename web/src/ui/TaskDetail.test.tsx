@@ -351,4 +351,29 @@ describe("the detail panel", () => {
     await waitFor(() => expect(p.getByText("Saved")).toBeTruthy());
     expect(select.value).toBe(projects.id);
   });
+
+  it("closes when the selected task is completed, without saying it no longer exists", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    let release!: () => void;
+    const { view } = await openOn(weed, [weed], { holdComplete: new Promise<void>((resolve) => { release = resolve; }) });
+    await userEvent.click(main().getByRole("checkbox", { name: "Complete Weed the beds" }));
+    expect(screen.queryByText("This task no longer exists.")).toBeNull();
+    await waitFor(() => expect(view.href()).toBe(`/list/${garden.id}`));
+    release();
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Completed “Weed the beds”"));
+    expect(screen.queryByRole("complementary")).toBeNull();
+  });
+
+  it("selects a heading from its section title", async () => {
+    const heading = task({ title: "Spring", listId: garden.id, kind: "heading" });
+    stubApi([heading, task({ title: "Plant tomatoes", listId: garden.id })]);
+    const { href } = renderAt(`/list/${garden.id}`);
+    const title = await main().findByRole("button", { name: "Spring" });
+    expect(title.closest("h2")).toBeTruthy();
+    await userEvent.click(title);
+    expect(href()).toBe(`/list/${garden.id}?task=${heading.id}`);
+    const p = await inPanel();
+    expect(await p.findByDisplayValue("Spring")).toBeTruthy();
+    expect(p.getByRole("button", { name: "Delete heading" })).toBeTruthy();
+  });
 });

@@ -310,6 +310,21 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
   color: var(--muted);
 }
 
+/* A heading's title selects it, but still looks like a section title. */
+button.section-title-button {
+  padding: 0;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+button.section-title-button:hover { filter: none; color: var(--fg); }
+button.section-title-button.selected { color: var(--accent); }
+
 .task-row {
   --indent: 1.6rem;
   display: flex;
