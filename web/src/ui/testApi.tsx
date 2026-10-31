@@ -39,6 +39,7 @@ export interface StubOptions {
   failCreate?: boolean;
   failUpdate?: boolean;
   failMove?: boolean;
+  failRename?: boolean;
   holdComplete?: Promise<void>;
   holdRefetch?: Promise<void>;
   /** Called for each PATCH and move before it is applied: it may hold the request, and a rejection fails it. */
@@ -73,6 +74,14 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   };
   let changed = false;
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
+    const renamed = path.match(/^\/api\/(lists|folders)\/(\w+)$/);
+    if (renamed && init?.method === "PATCH") {
+      if (opts.failRename) return fail("Boom");
+      const items = bodies[`/api/${renamed[1]}`] as { id: string; name: string }[];
+      const { name } = JSON.parse(String(init.body)) as { name: string };
+      bodies[`/api/${renamed[1]}`] = items.map((x) => (x.id === renamed[2] ? { ...x, name } : x));
+      return json((bodies[`/api/${renamed[1]}`] as { id: string }[]).find((x) => x.id === renamed[2]));
+    }
     if (path in bodies) return json(bodies[path]);
     if (path === "/api/counts") return json(countsOf([...store.values()]));
     const [pathname, search = ""] = path.split("?");

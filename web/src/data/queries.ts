@@ -346,3 +346,27 @@ export function useDeleteTask() {
     onSettled: () => refetchWhenLast(queryClient),
   });
 }
+
+/**
+ * Renames a list or folder, in the cache at once; on failure the old name comes back and the promise rejects.
+ * Lists and folders are refetched afterwards.
+ */
+export function useRename(kind: "lists" | "folders") {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  // Only the name matters here: the refetch brings the rest.
+  const schema: { parse(data: unknown): { id: string; name: string } } = kind === "lists" ? ListSchema : FolderSchema;
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => json(await api(`/api/${kind}/${id}`, send("PATCH", { name })), schema),
+    onMutate: async ({ id, name }) => {
+      await queryClient.cancelQueries({ queryKey: [kind] });
+      const before = queryClient.getQueryData<{ id: string; name: string }[]>([kind]);
+      queryClient.setQueryData<{ id: string; name: string }[]>([kind], (items) => items?.map((x) => (x.id === id ? { ...x, name } : x)));
+      return { before };
+    },
+    onError: (_e, _vars, context) => {
+      if (context?.before) queryClient.setQueryData([kind], context.before);
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: [kind] }),
+  });
+}

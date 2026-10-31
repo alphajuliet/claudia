@@ -278,6 +278,20 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 .content > h1 { margin-bottom: 1rem; }
 .screen-header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
 .screen-header button[aria-pressed="true"] { color: var(--accent); }
+/* A list's title renames in place: a button that looks like the heading, and a field with the same font. */
+button.screen-title-button {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+button.screen-title-button:hover { filter: none; }
+input.screen-title-input { flex: 1; font-size: 1.45rem; font-weight: 650; letter-spacing: -0.01em; padding: 0 0.25rem; margin: 0 -0.25rem; }
+input.nav-rename { height: var(--row-height); padding: 0 0.5rem; font-size: inherit; }
+.folder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .content > p + p { margin-top: 0.5rem; }
 
 /* Task lists: calm rows with the checkbox, title, chips and due date on one line. */

@@ -1,22 +1,50 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import type { Counts } from "@claudia/shared";
+import type { Counts, List } from "@claudia/shared";
 import { useCounts, useFilters, useFolders, useLists } from "../data/queries";
 import { listOrder, sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox, viewCount, VIEWS } from "../lib/views";
 import { useSession } from "../session/SessionProvider";
 import { CONTEXT_CHOICES, useContextFilter } from "./contextFilter";
+import { InlineRename, useRenameReported } from "./InlineRename";
 import { THEME_CHOICES, useTheme } from "./theme";
 
 /** A sidebar link, with its count of open tasks when there are any. */
-function NavLink({ href, children, count, onNavigate }: { href: string; children: ReactNode; count?: number; onNavigate: () => void }) {
+function NavLink({ href, children, count, onNavigate, onDoubleClick }: {
+  href: string;
+  children: ReactNode;
+  count?: number;
+  onNavigate: () => void;
+  onDoubleClick?: () => void;
+}) {
   const [location] = useLocation();
   const current = location === href;
   return (
-    <Link href={href} className="nav-link" aria-current={current ? "page" : undefined} onClick={onNavigate}>
+    <Link
+      href={href}
+      className="nav-link"
+      aria-current={current ? "page" : undefined}
+      onClick={onNavigate}
+      onDoubleClick={onDoubleClick}
+      title={onDoubleClick ? "Double-click to rename" : undefined}
+    >
       <span className="nav-name">{children}</span>
       {count ? <span className="nav-count">{count}</span> : null}
     </Link>
+  );
+}
+
+/** A list's link, renamed in place on double-click. */
+function ListLink({ list, counts, onNavigate }: { list: List; counts: Counts | undefined; onNavigate: () => void }) {
+  const rename = useRenameReported("lists");
+  return (
+    <InlineRename name={list.name} label="List name" className="nav-rename" onRename={(name) => rename(list.id, name)}>
+      {(start) => (
+        <NavLink href={`/list/${list.id}`} count={listCount(counts, list.id)} onNavigate={onNavigate} onDoubleClick={start}>
+          {list.name}
+        </NavLink>
+      )}
+    </InlineRename>
   );
 }
 
@@ -24,13 +52,22 @@ function NavLink({ href, children, count, onNavigate }: { href: string; children
 const listCount = (counts: Counts | undefined, id: string) => counts?.lists[id]?.open;
 
 function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Counts | undefined; onNavigate: () => void }) {
+  const rename = useRenameReported("folders");
   return (
     <li>
       <details open className="folder">
-        <summary>{node.folder.name}</summary>
+        <summary>
+          <InlineRename name={node.folder.name} label="Folder name" className="nav-rename" onRename={(name) => rename(node.folder.id, name)}>
+            {(start) => (
+              <span className="folder-name" title="Double-click to rename" onDoubleClick={(e) => { e.preventDefault(); start(); }}>
+                {node.folder.name}
+              </span>
+            )}
+          </InlineRename>
+        </summary>
         <ul className="nav-list">
           {node.lists.map((l) => (
-            <li key={l.id}><NavLink href={`/list/${l.id}`} count={listCount(counts, l.id)} onNavigate={onNavigate}>{l.name}</NavLink></li>
+            <li key={l.id}><ListLink list={l} counts={counts} onNavigate={onNavigate} /></li>
           ))}
           {node.folders.map((f) => <FolderItem key={f.folder.id} node={f} counts={counts} onNavigate={onNavigate} />)}
         </ul>
@@ -122,7 +159,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
             <h2 id="sidebar-lists" className="nav-heading">Lists</h2>
             <ul className="nav-list">
               {tree.lists.map((l) => (
-                <li key={l.id}><NavLink href={`/list/${l.id}`} count={listCount(counts, l.id)} onNavigate={onNavigate}>{l.name}</NavLink></li>
+                <li key={l.id}><ListLink list={l} counts={counts} onNavigate={onNavigate} /></li>
               ))}
               {tree.folders.map((f) => <FolderItem key={f.folder.id} node={f} counts={counts} onNavigate={onNavigate} />)}
             </ul>

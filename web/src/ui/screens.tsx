@@ -6,6 +6,7 @@ import { listOrder, sidebarTree } from "../lib/sidebar";
 import { groupByList, isSnoozed, treeRows, type Row } from "../lib/tasks";
 import { findInbox, viewLabel, viewQuery, VIEWS, type ViewId } from "../lib/views";
 import { useContextFilter } from "./contextFilter";
+import { InlineRename, useRenameReported } from "./InlineRename";
 import { useCommand } from "./keyboard";
 import { QuickAdd, type QuickAddTarget } from "./QuickAdd";
 import { useShowCompleted } from "./showCompleted";
@@ -70,10 +71,21 @@ function ShowCompletedButton() {
   );
 }
 
-function ScreenHeader({ title }: { title: string }) {
+/** A screen's title (click to rename, when `onRename` is given) and its Show completed toggle. */
+function ScreenHeader({ title, onRename }: { title: string; onRename?: (name: string) => void }) {
   return (
     <header className="screen-header">
-      <h1>{title}</h1>
+      {onRename ? (
+        <InlineRename name={title} label="List name" className="screen-title-input" onRename={onRename}>
+          {(start) => (
+            <h1>
+              <button type="button" className="screen-title-button" title="Click to rename" onClick={start}>{title}</button>
+            </h1>
+          )}
+        </InlineRename>
+      ) : (
+        <h1>{title}</h1>
+      )}
       <ShowCompletedButton />
     </header>
   );
@@ -166,6 +178,7 @@ export function ListScreen({ id }: { id: string }) {
   const lists = useLists();
   const list: List | undefined = lists.data?.find((l) => l.id === id);
   const [show] = useShowCompleted();
+  const rename = useRenameReported("lists");
   const query = new URLSearchParams({ listId: id, status: "open", limit: "500" }).toString();
   const open = useTasks(query, { keepPrevious: true, keepsCompleted: show });
   const done = useTasks(show ? withStatus(query, "completed") : null, { keepPrevious: true });
@@ -173,7 +186,7 @@ export function ListScreen({ id }: { id: string }) {
   if (lists.isSuccess && !list) return <NotFound />;
   return (
     <>
-      <ScreenHeader title={list?.name ?? "List"} />
+      <ScreenHeader title={list?.name ?? "List"} onRename={list ? (name) => rename(list.id, name) : undefined} />
       <QuickAdd target={list && { listId: list.id, listName: list.name }} />
       <TaskList query={tasks} sections={listSections(visibleRows(tasks.data ?? []))} empty="Nothing here." />
     </>
