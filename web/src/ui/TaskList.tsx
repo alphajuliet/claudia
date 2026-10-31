@@ -248,12 +248,13 @@ interface Sheet { kind: "due" | "snooze"; id: string }
  * choice closes it.
  */
 function RowSheet({ sheet, timeZone, onClose }: { sheet: Sheet; timeZone: string; onClose: () => void }) {
-  const task = useTask(sheet.id).data?.[0];
+  const { data } = useTask(sheet.id);
+  const task = data?.[0];
   return (
     <BottomSheet title={sheet.kind === "due" ? "Due" : "Snooze"} onClose={onClose}>
-      {task && (sheet.kind === "due"
-        ? <DueField task={task} timeZone={timeZone} onQuick={onClose} />
-        : <SnoozeField task={task} timeZone={timeZone} onClose={onClose} />)}
+      {!task ? <p className="muted">{data ? "This task no longer exists." : "Loading…"}</p>
+        : sheet.kind === "due" ? <DueField task={task} timeZone={timeZone} onQuick={onClose} />
+        : <SnoozeField task={task} timeZone={timeZone} onClose={onClose} />}
     </BottomSheet>
   );
 }
@@ -285,7 +286,7 @@ function useOpenRow() {
 export function TaskList({ query, sections, empty }: { query: QueryState; sections: Section[]; empty: string }) {
   const timeZone = useTimeZone();
   const today = todayIn(timeZone);
-  const onComplete = useComplete();
+  const complete = useComplete();
   const onRename = useRename();
   const pending = usePendingCompletions();
   const { selectedId, select } = useSelectedTask();
@@ -301,6 +302,11 @@ export function TaskList({ query, sections, empty }: { query: QueryState; sectio
   const order = shown ? shownSections.flatMap((s) => [...(s.heading ? [s.heading] : []), ...s.rows.map((r) => r.task)]) : [];
   const { highlightId, current, highlight, move, goTo } = useHighlight(order);
   const { openId, setOpenId } = useOpenRow();
+  // Completing or reopening the open row (its checkbox, a swipe) closes it, so it doesn't spring open again later.
+  const onComplete = (t: Task) => {
+    if (t.id === openId) setOpenId(null);
+    return complete(t);
+  };
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const openSheet = (kind: Sheet["kind"]) => (t: Task) => {
     setOpenId(null);

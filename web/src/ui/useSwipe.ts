@@ -7,6 +7,8 @@ const IGNORE = ".task-check, button, input, textarea, select, a";
 const FALLBACK_WIDTH = 320;
 /** How long the spring back runs (the CSS transition). */
 const SPRING_MS = 180;
+/** How long after a swipe its click may come. iOS sends none after a drag, so a later click is someone else's. */
+const SWALLOW_MS = 500;
 
 type Mode = "drag" | "spring" | "open" | null;
 
@@ -29,7 +31,8 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
   const ref = useRef<T>(null);
   const state = useRef<SwipeState | null>(null);
   const pointer = useRef<number | null>(null);
-  const swallow = useRef(false);
+  // Until when the click after a swipe is swallowed (0 for none).
+  const swallow = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const isOpen = useRef(open);
   isOpen.current = open;
@@ -51,7 +54,8 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
   };
 
   // Opening and closing come from the list (one row open at a time).
-  const wasOpen = useRef(open);
+  // From false, so a row that mounts open is moved there too.
+  const wasOpen = useRef(false);
   useEffect(() => {
     const el = ref.current;
     if (!el || wasOpen.current === open) return;
@@ -69,15 +73,14 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
     const el = e.currentTarget;
     if (isOpen.current) {
       // A tap or a swipe right on an open row closes it; a swipe further left leaves it open.
-      if (s.phase === "scrolling") return;
-      swallow.current = true;
+      swallow.current = Date.now() + SWALLOW_MS;
       el.releasePointerCapture?.(e.pointerId);
       if (!cancelled && (s.phase === "pending" || s.dx > 0)) onCloseActions?.();
       else settle(el, -REVEAL_WIDTH);
       return;
     }
     if (s.phase !== "swiping") return;
-    swallow.current = true;
+    swallow.current = Date.now() + SWALLOW_MS;
     el.releasePointerCapture?.(e.pointerId);
     const outcome = cancelled ? "cancel" : end(s, el.clientWidth || FALLBACK_WIDTH);
     if (outcome === "complete") {
@@ -96,9 +99,11 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
   return {
     ref,
     onPointerDown: (e: PointerEvent<T>) => {
-      // A second finger doesn't restart the swipe.
-      if (state.current) return;
-      swallow.current = false;
+      // A second finger doesn't restart the swipe, but a new first one does: the last one's pointerup was lost.
+      if (state.current && !e.isPrimary) return;
+      state.current = null;
+      pointer.current = null;
+      swallow.current = 0;
       if (disabled || e.pointerType !== "touch" || (e.target as Element).closest(IGNORE)) return;
       state.current = start(e.clientX, e.clientY);
       pointer.current = e.pointerId;
@@ -121,14 +126,17 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
         e.currentTarget.setPointerCapture?.(e.pointerId);
       }
       // An open row moves from where it sits, between open and closed.
-      const dx = opened ? Math.min(0, Math.max(-REVEAL_WIDTH, next.dx - REVEAL_WIDTH)) : next.dx;
+      // Never further left than the buttons, so the Complete strip doesn't show behind them.
+      const dx = Math.max(-REVEAL_WIDTH, opened ? Math.min(0, next.dx - REVEAL_WIDTH) : next.dx);
       set(e.currentTarget, dx, "drag");
     },
     onPointerUp: (e: PointerEvent<T>) => finish(e, false),
     onPointerCancel: (e: PointerEvent<T>) => finish(e, true),
+    onLostPointerCapture: (e: PointerEvent<T>) => finish(e, true),
     onClickCapture: (e: MouseEvent<T>) => {
-      if (!swallow.current) return;
-      swallow.current = false;
+      const until = swallow.current;
+      swallow.current = 0;
+      if (Date.now() > until) return;
       e.stopPropagation();
       e.preventDefault();
     },

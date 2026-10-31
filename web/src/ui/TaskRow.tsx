@@ -99,14 +99,6 @@ function TaskTitle({ task, onRename, onOpen, pointerType }: {
   );
 }
 
-/**
- * One task. While `pending` (a complete or reopen is running), its checkbox is disabled so a double click sends one.
- * `onSelect` is called for clicks on the row outside the checkbox and title, and for taps on the title (it opens the detail panel); `selected`
- * marks the row whose details are showing. The row can take focus (the keyboard highlight), and focus anywhere in
- * it calls `onHighlight`. On touch, a swipe right completes or reopens it, as the checkbox does (`useSwipe`); on an
- * open task, a swipe left calls `onReveal`, and while `open` the row shows Date and Snooze (`onDate`, `onSnooze`).
- * Keyboard and screen-reader users have the panel for those, so the buttons are hidden from them while closed.
- */
 /** The ▸/▾ toggle of a heading or a task with subtasks. */
 export function Disclosure({ title, collapsed, onToggle }: { title: string; collapsed: boolean; onToggle: (collapsed: boolean) => void }) {
   return (
@@ -125,6 +117,14 @@ export function Disclosure({ title, collapsed, onToggle }: { title: string; coll
   );
 }
 
+/**
+ * One task. While `pending` (a complete or reopen is running), its checkbox is disabled so a double click sends one.
+ * `onSelect` is called for clicks on the row outside the checkbox and title, and for taps on the title (it opens the detail panel); `selected`
+ * marks the row whose details are showing. The row can take focus (the keyboard highlight), and focus anywhere in
+ * it calls `onHighlight`. On touch, a swipe right completes or reopens it, as the checkbox does (`useSwipe`); on an
+ * open task, a swipe left calls `onReveal`, and while `open` the row shows Date and Snooze (`onDate`, `onSnooze`).
+ * Keyboard and screen-reader users have the panel for those, so the buttons are hidden from them while closed.
+ */
 export function TaskRow({ task, depth, today, timeZone, pending, selected = false, highlighted = false, expandable = false, collapsed = false, open = false, onComplete, onRename, onSelect, onHighlight, onToggle, onReveal, onCloseActions, onDate, onSnooze }: {
   task: Task;
   depth: number;

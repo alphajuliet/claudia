@@ -411,7 +411,7 @@ button.section-title-button.selected { color: var(--accent); }
   --indent: 1.6rem;
   position: relative;
   border-radius: var(--radius);
-  touch-action: pan-y;
+  touch-action: pan-y pinch-zoom;
 }
 .task-row-body {
   position: relative;
@@ -513,6 +513,10 @@ button.section-title-button.highlighted { outline: 2px solid var(--focus); outli
    on it counts as the control (the row's click handler leaves checkbox taps alone). The ▸ toggle sits above the
    checkbox and keeps its area to its left, so the two don't overlap. */
 @media (pointer: coarse) {
+  /* Holding then dragging a row swipes it rather than selecting text. */
+  .task-row { -webkit-user-select: none; user-select: none; }
+  /* Safari won't edit a field that inherits none: the inline rename stays typeable. */
+  .task-row input { -webkit-user-select: text; user-select: text; }
   .task-row-body, .detail-subtask { min-height: var(--touch); }
   .task-check { --check: 1.5rem; position: relative; width: var(--check); height: var(--check); }
   .task-check:checked { background-size: 0.95rem; }
@@ -940,4 +944,6 @@ kbd {
 .bottom-sheet-done { min-width: var(--touch); min-height: var(--touch); font-weight: 600; }
 /* The sheet's title names the field. */
 .bottom-sheet .detail-label { display: none; }
+/* So without the label column, the choices and inputs sit in rows as in the panel. */
+.bottom-sheet .detail-field { grid-template-columns: minmax(0, 1fr); }
 .bottom-sheet-body { padding-bottom: 1rem; }
