@@ -5,13 +5,13 @@ import { useDeleteTask, useLists, useMoveTask, usePendingCompletions, useSetComp
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
 import { displayItems, moveFor, placeOf, stepMove, withoutDragged, type Item } from "../lib/reorder";
-import { collapseRows, parentsIn, rowsUnder, type Row } from "../lib/tasks";
+import { collapseRows, dueDateOf, parentsIn, rowsUnder, type Row } from "../lib/tasks";
 import { setCollapsed, useCollapsed } from "./collapsed";
 import { BottomSheet } from "./BottomSheet";
 import { DueField, SnoozeField } from "./DateFields";
 import { useCommand } from "./keyboard";
 import { InlineMarkdown, plainText } from "./Markdown";
-import { Disclosure, dueDateOf, TaskRow } from "./TaskRow";
+import { Disclosure, TaskRow } from "./TaskRow";
 import { useSelectedTask } from "./selection";
 import { useToast } from "./Toast";
 import { useDrag, type DragTarget } from "./useDrag";

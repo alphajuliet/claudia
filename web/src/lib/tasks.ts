@@ -1,6 +1,11 @@
+import { todayIn } from "./dates";
 import type { List, Task } from "@claudia/shared";
 
 export interface Row { task: Task; depth: number }
+
+/** The task's due date (YYYY-MM-DD): its date, or the day of its due time in the user's time zone. */
+export const dueDateOf = (task: Task, timeZone: string) =>
+  task.dueDate ?? (task.dueAt ? todayIn(timeZone, new Date(task.dueAt)) : null);
 
 /** Snoozed until a time still in the future. */
 export const isSnoozed = (t: Task, now = new Date()) => t.snoozedUntil !== null && t.snoozedUntil > now.toISOString();

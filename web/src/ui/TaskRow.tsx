@@ -1,12 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type RefObject } from "react";
 import type { Task } from "@claudia/shared";
-import { formatDue, todayIn } from "../lib/dates";
+import { formatDue } from "../lib/dates";
+import { dueDateOf } from "../lib/tasks";
 import { InlineMarkdown, plainText } from "./Markdown";
 import { useSwipe } from "./useSwipe";
-
-/** The task's due date (YYYY-MM-DD): its date, or the day of its due time in the user's time zone. */
-export const dueDateOf = (task: Task, timeZone: string) =>
-  task.dueDate ?? (task.dueAt ? todayIn(timeZone, new Date(task.dueAt)) : null);
 
 /**
  * The title (inline Markdown), as a button that turns into a text input showing the raw text. Enter or leaving the field saves a changed,
