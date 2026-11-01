@@ -400,7 +400,14 @@ input.nav-rename { height: var(--row-height); padding: 0 0.5rem; font-size: inhe
 /* Two columns where they fit, so it stacks by itself on a phone or beside the open panel. */
 .task-sections.split { grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); gap: 1.5rem 2.5rem; align-items: start; }
 .content > .task-sections.split { max-width: 72rem; }
-.task-column { display: grid; gap: 1.5rem; min-width: 0; }
+/* The track is minmax(0, 1fr), or a row's unwrapped title sets its width and it runs under the next column. */
+.task-column { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1.5rem; min-width: 0; }
+/* A column is narrow, so its rows grow as on a phone: the title wraps, and the labels and date move under it when they don't fit. */
+.task-sections.split .task-row-body { flex-wrap: wrap; row-gap: 0.15rem; }
+.task-sections.split .task-title { flex: 1 1 auto; max-width: calc(100% - 2.25rem); } /* Room for the checkbox, so a long title stays beside it. */
+.task-sections.split span.task-title { white-space: normal; overflow-wrap: anywhere; }
+.task-sections.split .task-meta { flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; margin-left: auto; min-width: 0; }
+.task-sections.split .chip { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 .task-note { max-width: 11rem; overflow: hidden; color: var(--muted); font-size: 0.85rem; text-overflow: ellipsis; white-space: nowrap; }
 .section-title:has(> .section-aside) { display: flex; align-items: baseline; gap: 0.5rem; }
 .section-aside { margin-left: auto; font-weight: 500; }
