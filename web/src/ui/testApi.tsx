@@ -7,6 +7,7 @@ import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import type { Filter, Folder, List, Task } from "@claudia/shared";
 import { todayIn } from "../lib/dates";
+import { listPosition, type ListMove } from "../lib/listMove";
 import { SessionProvider } from "../session/SessionProvider";
 import { tokenStore } from "../session/store";
 import { AppShell } from "./AppShell";
@@ -87,6 +88,15 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
       const { name } = JSON.parse(String(init.body)) as { name: string };
       bodies[`/api/${renamed[1]}`] = items.map((x) => (x.id === renamed[2] ? { ...x, name } : x));
       return json((bodies[`/api/${renamed[1]}`] as { id: string }[]).find((x) => x.id === renamed[2]));
+    }
+    const movedList = path.match(/^\/api\/lists\/(\w+)\/move$/);
+    if (movedList && init?.method === "POST") {
+      if (!(await pass("POST", path, init.body))) return fail("Boom");
+      const lists = bodies["/api/lists"] as List[];
+      const to = JSON.parse(String(init.body)) as ListMove;
+      const position = listPosition(lists, movedList[1]!, to)!;
+      bodies["/api/lists"] = lists.map((l) => (l.id === movedList[1] ? { ...l, folderId: to.folderId, position } : l));
+      return json((bodies["/api/lists"] as List[]).find((l) => l.id === movedList[1]));
     }
     if (path in bodies) return json(bodies[path]);
     if (path === "/api/counts") return json(countsOf([...store.values()]));

@@ -1,18 +1,20 @@
 export type CommandId =
-  | "next" | "previous" | "moveUp" | "moveDown" | "collapse" | "expand" | "open" | "close" | "complete" | "rename" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
+  | "next" | "previous" | "moveUp" | "moveDown" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "rename" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
   | "goDashboard" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
 export interface Command { id: CommandId; label: string; keys: string[] }
 
 /**
  * Every command, in the order the shortcuts overlay lists them. Keys are `KeyboardEvent.key` values, "g i" is a
- * chord (g, then i) and "Alt+ArrowUp" is ArrowUp with Alt (⌥) held. Defaults follow Godspeed; user bindings from the `keymap` setting come with the keymap editor.
+ * chord (g, then i) and "Alt+ArrowUp" is ArrowUp with Alt (⌥) held ("Alt+Shift+ArrowUp" with Shift too). Defaults follow Godspeed; user bindings from the `keymap` setting come with the keymap editor.
  */
 export const COMMANDS: Command[] = [
   { id: "next", label: "Next task", keys: ["j", "ArrowDown"] },
   { id: "previous", label: "Previous task", keys: ["k", "ArrowUp"] },
   { id: "moveUp", label: "Move task up", keys: ["Alt+ArrowUp"] },
   { id: "moveDown", label: "Move task down", keys: ["Alt+ArrowDown"] },
+  { id: "moveListUp", label: "Move list up", keys: ["Alt+Shift+ArrowUp"] },
+  { id: "moveListDown", label: "Move list down", keys: ["Alt+Shift+ArrowDown"] },
   { id: "collapse", label: "Collapse, or go to the parent", keys: ["h"] },
   { id: "expand", label: "Expand", keys: ["l"] },
   { id: "open", label: "Open task details", keys: ["Enter", "o"] },

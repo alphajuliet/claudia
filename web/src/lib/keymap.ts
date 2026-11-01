@@ -39,8 +39,8 @@ export function createMatcher(commands: Command[], chordMs = 1500) {
 
 const NOT_TEXT = new Set(["checkbox", "radio", "button", "submit", "reset", "range", "color", "file", "image"]);
 
-/** The keys bound with Alt ("ArrowUp" for "Alt+ArrowUp"): with Alt, only these are ours. */
-const ALT_KEYS = new Set(COMMANDS.flatMap((c) => c.keys).filter((k) => k.startsWith("Alt+")).map((k) => k.slice(4)));
+/** The keys bound with Alt ("ArrowUp" for "Alt+ArrowUp" and "Alt+Shift+ArrowUp"): with Alt, only these are ours. */
+const ALT_KEYS = new Set(COMMANDS.flatMap((c) => c.keys).filter((k) => k.startsWith("Alt+")).map((k) => k.split("+").at(-1)!));
 
 /**
  * True when a key press belongs to the browser or a field: Ctrl or ⌘ held, Alt held with a key no command binds

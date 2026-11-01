@@ -28,7 +28,8 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
       }
       // Caps Lock gives capitals without Shift: read them as the lower-case key (Shift+C stays C).
       const base = e.key.length === 1 && !e.shiftKey ? e.key.toLowerCase() : e.key;
-      const key = e.altKey ? `Alt+${base}` : base;
+      // Shift is part of a printable key already, so it only shows here for the likes of the arrows.
+      const key = e.altKey ? `Alt+${e.shiftKey && e.key.length > 1 ? "Shift+" : ""}${base}` : base;
       const id = matcher.match(key, Date.now());
       if (id === "pending") {
         e.preventDefault();

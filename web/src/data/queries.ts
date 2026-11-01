@@ -1,7 +1,8 @@
-import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, type Task } from "@claudia/shared";
+import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, type List, type Task } from "@claudia/shared";
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
+import { listPosition, type ListMove } from "../lib/listMove";
 import { useSession } from "../session/SessionProvider";
 
 /** Parses a response with a schema, or throws the API's error message. */
@@ -374,6 +375,7 @@ function movedInCache(queryClient: QueryClient, { id, ...to }: TaskMove): Map<st
 }
 
 const moveKey = taskWriteKey("move");
+const moveListKey = ["lists", "move"];
 
 /**
  * Moves a task (and its subtasks) to another list or parent, or reorders it; with `withSection`, a heading takes its
@@ -429,6 +431,33 @@ export function useDeleteTask() {
     },
     onError: (_error, _vars, context) => restoreCached(queryClient, context?.changed),
     onSettled: () => refetchWhenLast(queryClient),
+  });
+}
+
+/**
+ * Moves a list in the sidebar (to another folder, or among its siblings), in the cache at once; on failure it goes back
+ * and the promise rejects. Moves run one at a time, in order, and the lists are refetched after the last.
+ */
+export function useMoveList() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: moveListKey,
+    scope: { id: "list-move" },
+    mutationFn: async ({ id, ...to }: ListMove & { id: string }) => json(await api(`/api/lists/${id}/move`, send("POST", to)), ListSchema),
+    onMutate: async ({ id, ...to }) => {
+      await queryClient.cancelQueries({ queryKey: ["lists"] });
+      const before = queryClient.getQueryData<List[]>(["lists"]);
+      const position = before ? listPosition(before, id, to) : null;
+      if (position) queryClient.setQueryData<List[]>(["lists"], before?.map((l) => (l.id === id ? { ...l, folderId: to.folderId, position } : l)));
+      return { before };
+    },
+    onError: (_e, _vars, context) => {
+      if (context?.before) queryClient.setQueryData(["lists"], context.before);
+    },
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey: moveListKey }) <= 1) void queryClient.invalidateQueries({ queryKey: ["lists"] });
+    },
   });
 }
 

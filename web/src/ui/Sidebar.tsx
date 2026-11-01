@@ -1,13 +1,17 @@
 import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import type { Counts, List } from "@claudia/shared";
-import { useCounts, useFilters, useFolders, useLists } from "../data/queries";
+import { useCounts, useFilters, useFolders, useLists, useMoveList } from "../data/queries";
+import { moveForDrop, moveForStep, type ListMove } from "../lib/listMove";
 import { listOrder, sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox, viewCount, VIEWS } from "../lib/views";
 import { useSession } from "../session/SessionProvider";
 import { CONTEXT_CHOICES, useContextFilter } from "./contextFilter";
 import { InlineRename, useRenameReported } from "./InlineRename";
+import { useCommand } from "./keyboard";
 import { THEME_CHOICES, useTheme } from "./theme";
+import { useToast } from "./Toast";
+import { useListDrag } from "./useListDrag";
 
 /** A sidebar link, with its count of open tasks when there are any. */
 function NavLink({ href, children, count, onNavigate, onDoubleClick, dropList }: {
@@ -25,6 +29,7 @@ function NavLink({ href, children, count, onNavigate, onDoubleClick, dropList }:
     <Link
       href={href}
       className="nav-link"
+      draggable={false}
       aria-current={current ? "page" : undefined}
       onClick={onNavigate}
       onDoubleClick={onDoubleClick}
@@ -59,7 +64,7 @@ function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Co
   return (
     <li>
       <details open className="folder">
-        <summary>
+        <summary data-folder-row={node.folder.id}>
           <InlineRename name={node.folder.name} label="Folder name" className="nav-rename" onRename={(name) => rename(node.folder.id, name)}>
             {(start) => (
               <span className="folder-name" title="Double-click to rename" onDoubleClick={(e) => { e.preventDefault(); start(); }}>
@@ -70,7 +75,7 @@ function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Co
         </summary>
         <ul className="nav-list">
           {node.lists.map((l) => (
-            <li key={l.id}><ListLink list={l} counts={counts} onNavigate={onNavigate} /></li>
+            <li key={l.id} data-list-row={l.id}><ListLink list={l} counts={counts} onNavigate={onNavigate} /></li>
           ))}
           {node.folders.map((f) => <FolderItem key={f.folder.id} node={f} counts={counts} onNavigate={onNavigate} />)}
         </ul>
@@ -123,6 +128,21 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   // The Inbox list already shows as the Inbox view, so it stays out of the tree.
   const tree = sidebarTree(folders, lists.filter((l) => l.id !== inboxId), context);
   const counts = useCounts().data;
+  const toast = useToast();
+  const moveList = useMoveList();
+  const move = (id: string, to: ListMove) => {
+    moveList.mutateAsync({ id, ...to }).catch((e: Error) => toast.show({ message: e.message, error: true }));
+  };
+  const drag = useListDrag({ plan: (id, drop) => moveForDrop(tree, id, drop), onMove: move });
+  // The open list moves with Alt+Shift+↑ and Alt+Shift+↓.
+  const [location] = useLocation();
+  const openList = location.match(/^\/list\/([^/]+)$/)?.[1];
+  const step = (delta: 1 | -1) => () => {
+    const to = openList && moveForStep(tree, openList, delta);
+    if (to) move(openList, to);
+  };
+  useCommand("moveListUp", openList ? step(-1) : undefined);
+  useCommand("moveListDown", openList ? step(1) : undefined);
   // Views count the lists they show: every list, or the Inbox and the context's lists.
   const shown = context === "all" ? "all" : [...(inboxId ? [inboxId] : []), ...listOrder(tree)];
 
@@ -136,7 +156,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
         ))}
       </div>
 
-      <div className="sidebar-scroll">
+      <div className="sidebar-scroll" ref={drag.ref} onPointerDown={drag.onPointerDown}>
         <ul className="nav-list">
           <li><NavLink href="/dashboard" onNavigate={onNavigate}>Dashboard</NavLink></li>
           <li><NavLink href="/search" onNavigate={onNavigate}>Search</NavLink></li>
@@ -161,10 +181,10 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
 
         {(tree.lists.length > 0 || tree.folders.length > 0) && (
           <section aria-labelledby="sidebar-lists">
-            <h2 id="sidebar-lists" className="nav-heading">Lists</h2>
+            <h2 id="sidebar-lists" className="nav-heading" data-folder-row="">Lists</h2>
             <ul className="nav-list">
               {tree.lists.map((l) => (
-                <li key={l.id}><ListLink list={l} counts={counts} onNavigate={onNavigate} /></li>
+                <li key={l.id} data-list-row={l.id}><ListLink list={l} counts={counts} onNavigate={onNavigate} /></li>
               ))}
               {tree.folders.map((f) => <FolderItem key={f.folder.id} node={f} counts={counts} onNavigate={onNavigate} />)}
             </ul>
