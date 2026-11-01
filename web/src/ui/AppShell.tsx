@@ -4,6 +4,7 @@ import type { CommandId } from "../lib/commands";
 import { ContextFilterProvider } from "./contextFilter";
 import { Dashboard } from "./Dashboard";
 import { KeyboardProvider, useCommand } from "./keyboard";
+import { ListPicker } from "./ListPicker";
 import { Logo, MenuIcon } from "./Logo";
 import { FilterScreen, Home, ListScreen, NotFound, ViewScreen } from "./screens";
 import { SearchScreen } from "./SearchScreen";
@@ -40,6 +41,7 @@ export function AppShell() {
 function Shell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const { selectedId, select } = useSelectedTask();
   const [location, navigate] = useLocation();
   const menu = useRef<HTMLButtonElement>(null);
@@ -53,6 +55,7 @@ function Shell() {
   // On the search screen, `/` is the screen's own (it focuses the field).
   useCommand("search", () => (location === "/search" ? false : navigate("/search")));
   useCommand("help", () => setHelpOpen(true));
+  useCommand("goList", () => setPickerOpen(true));
   // Closing the panel puts focus back on the task's row, so the keyboard carries on from there.
   const closePanel = () => {
     const closed = selectedId;
@@ -111,6 +114,7 @@ function Shell() {
           </main>
           {selectedId && <TaskDetail key={selectedId} id={selectedId} onClose={closePanel} />}
           {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
+          {pickerOpen && <ListPicker onClose={() => setPickerOpen(false)} onGo={(href) => { setPickerOpen(false); navigate(href); }} />}
           {GO.map(([id, to]) => <GoCommand key={id} id={id} to={to} />)}
         </div>
       </ToastProvider>

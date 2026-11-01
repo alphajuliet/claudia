@@ -1,7 +1,7 @@
 export type CommandId =
   | "next" | "previous" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "rename" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
   | "contextAll" | "contextWork" | "contextPersonal" | "contextHome"
-  | "goDashboard" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
+  | "goList" | "goDashboard" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
 export interface Command { id: CommandId; label: string; keys: string[] }
 
@@ -32,6 +32,7 @@ export const COMMANDS: Command[] = [
   { id: "contextWork", label: "Show Work", keys: ["2"] },
   { id: "contextPersonal", label: "Show Personal", keys: ["3"] },
   { id: "contextHome", label: "Show Home", keys: ["4"] },
+  { id: "goList", label: "Go to a list", keys: ["g l"] },
   { id: "goDashboard", label: "Go to Dashboard", keys: ["g d"] },
   { id: "goInbox", label: "Go to Inbox", keys: ["g i"] },
   { id: "goToday", label: "Go to Today", keys: ["g t"] },
