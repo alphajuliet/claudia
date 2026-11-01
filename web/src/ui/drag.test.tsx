@@ -220,7 +220,7 @@ describe("dragging in a list", () => {
     release(50, yOf(3, 0.9));
   });
 
-  it("leaves touch to the swipes", async () => {
+  it("leaves a touch that moves at once to the swipes and scrolling", async () => {
     const { fetchMock } = threeTasks();
     const touch = { ...mouse, pointerType: "touch" };
     start(await main().findByText("Mulch the roses"), 2, touch);
@@ -283,6 +283,162 @@ describe("dropping on a sidebar list", () => {
     expect(sidebarLink("Garden").dataset.dropTarget).toBeUndefined();
     release(-100, yOf(1));
     expectCleared();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
+    expect(titles()).toEqual(["Weed the beds", "Plant tomatoes", "Mulch the roses"]);
+  });
+});
+
+describe("press and hold to drag on a touch screen", () => {
+  const touch = { pointerType: "touch", pointerId: 7, isPrimary: true, button: 0 };
+  /** Presses `el` (item `from`) with a finger at x 50 and, with the clock faked, holds it for `ms`. */
+  function hold(el: Element, from: number, ms = 500) {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    fireEvent.pointerDown(el, { ...touch, clientX: 50, clientY: yOf(from) });
+    vi.advanceTimersByTime(ms);
+  }
+  afterEach(() => vi.useRealTimers());
+
+  it("lifts the row after 500ms, then moves it to where the finger lets go", async () => {
+    const { tasks: [a, , c], fetchMock, href } = threeTasks();
+    const title = await main().findByText("Mulch the roses");
+    hold(title, 2, 499);
+    expect(document.body.dataset.drag).toBeUndefined();
+    vi.advanceTimersByTime(1);
+    expect(row("Mulch the roses").dataset.dragLift).toBeDefined();
+    expect(document.body.dataset.drag).toBeDefined();
+    // The page doesn't scroll under the finger.
+    const scroll = new Event("touchmove", { bubbles: true, cancelable: true });
+    title.dispatchEvent(scroll);
+    expect(scroll.defaultPrevented).toBe(true);
+    // A finger's moves go to the element it pressed. Sideways, the swipe has stood down: the row doesn't follow.
+    fireEvent.pointerMove(title, { ...touch, clientX: 150, clientY: yOf(2) });
+    expect(row("Mulch the roses").dataset.swipe).toBeUndefined();
+    fireEvent.pointerMove(title, { ...touch, clientX: 50, clientY: yOf(0, 0.1) });
+    expect(document.querySelector(".drop-line")).toBeTruthy();
+    release(50, yOf(0, 0.1), touch);
+    fireEvent.click(title);
+    expect(href()).not.toContain("?task=");
+    expectCleared();
+    expect(document.querySelector("[data-drag-lift]")).toBeNull();
+    vi.useRealTimers();
+    await waitFor(() => expect(moves(fetchMock, c!)).toEqual([{ parentId: null, beforeId: a!.id }]));
+    await waitFor(() => expect(titles()).toEqual(["Mulch the roses", "Weed the beds", "Plant tomatoes"]));
+  });
+
+  it("lifts a heading with its section", async () => {
+    const tasks = [
+      task({ title: "Spring", kind: "heading", listId: garden.id }),
+      task({ title: "Plant tomatoes", listId: garden.id }),
+      task({ title: "Summer", kind: "heading", listId: garden.id }),
+      task({ title: "Mulch the roses", listId: garden.id }),
+    ];
+    const fetchMock = stubApi(tasks);
+    renderAt(`/list/${garden.id}`);
+    await main().findByText("Plant tomatoes");
+    hold(main().getByRole("button", { name: "Spring" }), 0);
+    moveTo(50, yOf(3, 0.9), touch);
+    release(50, yOf(3, 0.9), touch);
+    vi.useRealTimers();
+    await waitFor(() => expect(moves(fetchMock, tasks[0]!)).toEqual([{ parentId: null, withSection: true }]));
+    await waitFor(() => expect(headings()).toEqual(["Summer", "Spring"]));
+  });
+
+  it("doesn't drag when the finger moves first, and a sideways move still swipes", async () => {
+    const { fetchMock } = threeTasks();
+    const title = await main().findByText("Mulch the roses");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    // Down the screen: a scroll.
+    fireEvent.pointerDown(title, { ...touch, clientX: 50, clientY: yOf(2) });
+    fireEvent.pointerMove(title, { ...touch, clientX: 50, clientY: yOf(2) - 20 });
+    vi.advanceTimersByTime(600);
+    expect(document.body.dataset.drag).toBeUndefined();
+    const scroll = new Event("touchmove", { bubbles: true, cancelable: true });
+    title.dispatchEvent(scroll);
+    expect(scroll.defaultPrevented).toBe(false);
+    fireEvent.pointerCancel(title, { ...touch });
+
+    // Sideways: a swipe, which completes it.
+    const li = row("Mulch the roses");
+    fireEvent.pointerDown(title, { ...touch, clientX: 50, clientY: yOf(2) });
+    fireEvent.pointerMove(title, { ...touch, clientX: 120, clientY: yOf(2) });
+    vi.advanceTimersByTime(600);
+    expect(document.body.dataset.drag).toBeUndefined();
+    expect(li.dataset.dragLift).toBeUndefined();
+    fireEvent.pointerMove(title, { ...touch, clientX: 250, clientY: yOf(2) });
+    expect(li.dataset.swipe).toBe("drag");
+    fireEvent.pointerUp(title, { ...touch, clientX: 250, clientY: yOf(2) });
+    vi.useRealTimers();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([p]) => String(p).endsWith("/complete"))).toBe(true));
+    expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
+  });
+
+  it("leaves a quick tap to open the task", async () => {
+    const { href } = threeTasks();
+    const title = await main().findByText("Plant tomatoes");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    fireEvent.pointerDown(title, { ...touch, clientX: 50, clientY: yOf(1) });
+    vi.advanceTimersByTime(100);
+    fireEvent.pointerUp(title, { ...touch, clientX: 50, clientY: yOf(1) });
+    vi.advanceTimersByTime(600);
+    expect(document.body.dataset.drag).toBeUndefined();
+    fireEvent.click(title);
+    expect(href()).toContain("?task=");
+  });
+
+  it("does nothing when let go without moving after the lift, and ignores the click", async () => {
+    const { fetchMock, href } = threeTasks();
+    const title = await main().findByText("Plant tomatoes");
+    hold(title, 1);
+    expect(row("Plant tomatoes").dataset.dragLift).toBeDefined();
+    fireEvent.pointerUp(title, { ...touch, clientX: 50, clientY: yOf(1) });
+    fireEvent.click(title);
+    expect(href()).not.toContain("?task=");
+    expectCleared();
+    expect(document.querySelector("[data-drag-lift]")).toBeNull();
+    vi.advanceTimersByTime(600);
+    vi.useRealTimers();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
+    expect(titles()).toEqual(["Weed the beds", "Plant tomatoes", "Mulch the roses"]);
+    // Only that click: the next tap opens it.
+    fireEvent.pointerDown(title, { ...touch, pointerId: 8, clientX: 50, clientY: yOf(1) });
+    fireEvent.pointerUp(title, { ...touch, pointerId: 8, clientX: 50, clientY: yOf(1) });
+    fireEvent.click(title);
+    expect(href()).toContain("?task=");
+  });
+
+  it("closes Date and Snooze on a row lifted while they show", async () => {
+    threeTasks();
+    const title = await main().findByText("Plant tomatoes");
+    const base = { ...touch, pointerId: 9 };
+    fireEvent.pointerDown(title, { ...base, clientX: 200, clientY: yOf(1) });
+    fireEvent.pointerMove(title, { ...base, clientX: 100, clientY: yOf(1) });
+    fireEvent.pointerUp(title, { ...base, clientX: 100, clientY: yOf(1) });
+    expect(row("Plant tomatoes").dataset.swipe).toBe("open");
+    hold(title, 1);
+    fireEvent.pointerMove(title, { ...touch, clientX: 50, clientY: yOf(0, 0.1) });
+    expect(row("Plant tomatoes").dataset.swipe).not.toBe("open");
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    release(50, yOf(0, 0.1), touch);
+  });
+
+  it("cancels when the system cancels the touch", async () => {
+    const { fetchMock } = threeTasks();
+    const title = await main().findByText("Mulch the roses");
+    hold(title, 2);
+    moveTo(50, yOf(0, 0.1), touch);
+    fireEvent.pointerCancel(document.body, { ...touch });
+    expectCleared();
+    release(50, yOf(0, 0.1), touch);
+
+    hold(title, 2);
+    moveTo(50, yOf(0, 0.1), touch);
+    fireEvent.touchCancel(title);
+    expectCleared();
+    expect(document.querySelector("[data-drag-lift]")).toBeNull();
+    release(50, yOf(0, 0.1), touch);
+    vi.useRealTimers();
     await new Promise((r) => setTimeout(r, 20));
     expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
     expect(titles()).toEqual(["Weed the beds", "Plant tomatoes", "Mulch the roses"]);

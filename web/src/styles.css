@@ -494,9 +494,9 @@ button.disclosure::before { content: ""; position: absolute; inset: -0.35rem -0.
 .task-row.highlighted { outline: 2px solid var(--focus); outline-offset: -2px; }
 button.section-title-button.highlighted { outline: 2px solid var(--focus); outline-offset: 2px; }
 
-/* Dragging to reorder (mouse, list screens): the dragged rows (or a heading's section) fade, a line shows the gap
-   they land in, indented to the depth, and a row outlined takes them as subtasks. A copy of the title follows the
-   pointer. */
+/* Dragging to reorder (list screens; press and hold on touch): the dragged rows (or a heading's section) fade, a
+   line shows the gap they land in, indented to the depth, and a row outlined takes them as subtasks. A copy of the
+   title follows the pointer. */
 body[data-drag], body[data-drag] * { cursor: grabbing !important; user-select: none; -webkit-user-select: none; }
 [data-dragging] { opacity: 0.4; }
 .drop-line {
@@ -518,6 +518,13 @@ body[data-drag], body[data-drag] * { cursor: grabbing !important; user-select: n
   border: 2px solid var(--accent);
   border-radius: 50%;
   background: var(--bg);
+}
+/* A row or heading held long enough on a touch screen lifts before the drag starts. */
+.task-row[data-drag-lift], button.section-title-button[data-drag-lift] {
+  opacity: 1;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.12s ease;
 }
 .task-row[data-drop-into] { outline: 2px solid var(--accent); outline-offset: -2px; background: var(--accent-soft); }
 .drag-ghost {
@@ -569,8 +576,9 @@ body[data-drag], body[data-drag] * { cursor: grabbing !important; user-select: n
    on it counts as the control (the row's click handler leaves checkbox taps alone). The ▸ toggle sits above the
    checkbox and keeps its area to its left, so the two don't overlap. */
 @media (pointer: coarse) {
-  /* Holding then dragging a row swipes it rather than selecting text. */
-  .task-row { -webkit-user-select: none; user-select: none; }
+  /* Holding a row (or a heading) lifts it to drag, and dragging swipes it: neither selects text or brings up the
+     callout menu. */
+  .task-row, button.section-title-button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   /* Safari won't edit a field that inherits none: the inline rename stays typeable. */
   .task-row input { -webkit-user-select: text; user-select: text; }
   .task-row-body, .detail-subtask { min-height: var(--touch); }

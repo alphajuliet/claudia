@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MouseEvent, type PointerEvent } from "react";
 import { end, move, REVEAL_WIDTH, start, type SwipeState } from "../lib/swipe";
+import { isDragging } from "./useDrag";
 
 /** Presses on these are theirs, not the row's. */
 const IGNORE = ".task-check, button, input, textarea, select, a";
@@ -18,7 +19,8 @@ type Mode = "drag" | "spring" | "open" | null;
  * false. On an open row, a swipe right or a tap calls `onCloseActions` instead. Anything shorter springs back.
  * While swiping it sets `--swipe-x` and `data-swipe` ("drag", then "spring" on the way back or "open" while open; both animate) on
  * the row, and the click the browser sends after a swipe is swallowed so the row doesn't also open. Mouse and pen
- * presses, and presses on the row's controls, are left alone. Spread the returned handlers (and `ref`) on the row.
+ * presses, and presses on the row's controls, are left alone, as is a touch once a drag has started from it
+ * (`isDragging`). Spread the returned handlers (and `ref`) on the row.
  */
 export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseActions, open = false, allowLeft = false, disabled = false }: {
   onComplete: () => void;
@@ -65,6 +67,22 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
     settle(el, open ? -REVEAL_WIDTH : 0);
   }, [open]);
   useEffect(() => () => clearTimeout(timer.current), []);
+
+  /**
+   * Gives the touch up to a drag (a press held on the row lifted it): no complete or reveal, and the row goes back
+   * to rest (an open one closes). The drag swallows the click.
+   */
+  const standDown = (e: PointerEvent<T>) => {
+    const s = state.current;
+    state.current = null;
+    pointer.current = null;
+    if (captured.current) {
+      captured.current = false;
+      e.currentTarget.releasePointerCapture?.(e.pointerId);
+    }
+    if (isOpen.current) onCloseActions?.();
+    else if (s?.phase === "swiping") settle(e.currentTarget, 0);
+  };
 
   const finish = (e: PointerEvent<T>, cancelled: boolean) => {
     if (e.pointerId !== pointer.current) return;
@@ -114,6 +132,7 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
     onPointerMove: (e: PointerEvent<T>) => {
       const s = state.current;
       if (!s || e.pointerId !== pointer.current) return;
+      if (isDragging()) return standDown(e);
       const opened = isOpen.current;
       const next = move(s, e.clientX, e.clientY, allowLeft || opened);
       state.current = next;
@@ -134,7 +153,7 @@ export function useSwipe<T extends HTMLElement>({ onComplete, onReveal, onCloseA
       const dx = Math.max(-REVEAL_WIDTH, opened ? Math.min(0, next.dx - REVEAL_WIDTH) : next.dx);
       set(e.currentTarget, dx, "drag");
     },
-    onPointerUp: (e: PointerEvent<T>) => finish(e, false),
+    onPointerUp: (e: PointerEvent<T>) => (isDragging() && e.pointerId === pointer.current ? standDown(e) : finish(e, false)),
     onPointerCancel: (e: PointerEvent<T>) => finish(e, true),
     // Only the row's own capture, lost while the finger is still down, cancels. Taking it fires this on the child
     // that held the touch's implicit capture (it bubbles here), and our own release comes after `finish`.

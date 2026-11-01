@@ -7,6 +7,11 @@ import { plainText } from "./Markdown";
 const IGNORE = ".task-check, .disclosure, input, textarea, select, a, .swipe-actions";
 /** How far the mouse moves with the button down before a press becomes a drag. */
 const THRESHOLD = 5;
+/** How long a finger holds still on a row before it lifts, and how far it may stray meanwhile. */
+const HOLD_MS = 500;
+const HOLD_SLOP = 10;
+/** How long after a touch drag its click may come (iOS may send none, so a later click is someone else's). */
+const TOUCH_SWALLOW_MS = 500;
 /** Within this of the scroller's top or bottom, the content scrolls, by up to MAX_SCROLL px a frame. */
 const EDGE = 40;
 const MAX_SCROLL = 12;
@@ -18,7 +23,7 @@ export type DragTarget = Drop | { kind: "list"; listId: string };
 
 interface Measured { item: Item; el: Element; rect: DOMRect; dragged: boolean }
 
-interface Pending { pointerId: number; x: number; y: number; task: Task; depth: number }
+interface Pending { pointerId: number; x: number; y: number; task: Task; depth: number; touch: boolean }
 
 interface Active extends Pending {
   /** The items when the drag started, and without the dragged ones. */
@@ -36,7 +41,12 @@ interface Active extends Pending {
   lastX: number;
   lastY: number;
   frame: number;
+  /** The finger has moved since the lift (a mouse drag starts by moving). */
+  moved: boolean;
 }
+
+/** A drag (mouse or touch) is under way. A row's swipe stands down for it. */
+export const isDragging = () => document.body.dataset.drag !== undefined;
 
 /** The px of a CSS length in rem or px, or null. */
 function toPx(value: string): number | null {
@@ -110,13 +120,15 @@ function listAt(x: number, y: number, listId: string): Element | null {
 }
 
 /**
- * Dragging rows and headings with the mouse to reorder a list (`listId`, or none to turn it off). Spread the
- * returned `onPointerDown` and `ref` on the element holding the rows. A press on a row or a heading's title that
+ * Dragging rows and headings to reorder a list (`listId`, or none to turn it off). Spread the returned
+ * `onPointerDown` and `ref` on the element holding the rows. A mouse press on a row or a heading's title that
  * moves THRESHOLD px starts a drag: a ghost follows the pointer, the dragged rows (or a heading's section) fade and
  * a line, indented to the depth, shows where it lands (or the row it would go under is outlined). A drop calls
  * `onDrop` with the dragged task, the target and the items as they were; Escape cancels. The click after a drag is
  * swallowed, so the title doesn't rename and the row doesn't select. Over another list in the sidebar (an element
- * with `data-drop-list`), that list is the target and gets `data-drop-target`. Touch is left to the swipes.
+ * with `data-drop-list`), that list is the target and gets `data-drop-target`. On a touch screen a finger held still
+ * for HOLD_MS lifts the row (`data-drag-lift`) and starts the same drag; one that moves first is left to scrolling
+ * and the swipes, and the swipe stands down once a drag starts (`isDragging`).
  */
 export function useDrag({ listId, items, onDrop }: {
   listId: string | undefined;
@@ -212,7 +224,7 @@ export function useDrag({ listId, items, onDrop }: {
       measured: measure(container, items, rest),
       indent: (sample && toPx(getComputedStyle(sample).getPropertyValue("--indent"))) || FALLBACK_INDENT,
       scroller: container.closest<HTMLElement>(".content"),
-      target: null, marked: null, lastX: p.x, lastY: p.y, frame: 0,
+      target: null, marked: null, lastX: p.x, lastY: p.y, frame: 0, moved: !p.touch,
     };
     // A heading fades with its section; a row with its subtasks.
     const faded = p.task.kind === "heading" ? [container.querySelector(`[data-task-id="${CSS.escape(p.task.id)}"]`)?.closest("section")] : d.measured.filter((m) => m.dragged).map((m) => m.el);
@@ -235,15 +247,19 @@ export function useDrag({ listId, items, onDrop }: {
     d.ghost.remove();
     d.line.remove();
     mark(d, null);
-    for (const el of document.querySelectorAll("[data-dragging]")) delete (el as HTMLElement).dataset.dragging;
+    for (const el of document.querySelectorAll("[data-dragging], [data-drag-lift]")) {
+      delete (el as HTMLElement).dataset.dragging;
+      delete (el as HTMLElement).dataset.dragLift;
+    }
     delete document.body.dataset.drag;
   };
 
   /**
    * Swallows the click the browser sends after the drag, and only that one. After an Escape the button is still
-   * down: the click comes after the next pointerup, so the swallower waits for it.
+   * down: the click comes after the next pointerup, so the swallower waits for it. After a touch it waits `ms`, as
+   * the click may come late or not at all.
    */
-  const swallowClick = (untilUp = false) => {
+  const swallowClick = (untilUp = false, ms = 0) => {
     unswallow.current();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onClick = (e: MouseEvent) => {
@@ -253,7 +269,7 @@ export function useDrag({ listId, items, onDrop }: {
     };
     const onUp = () => {
       clearTimeout(timer);
-      timer = setTimeout(() => unswallow.current(), 0);
+      timer = setTimeout(() => unswallow.current(), ms);
     };
     window.addEventListener("click", onClick, true);
     if (untilUp) window.addEventListener("pointerup", onUp, true);
@@ -271,13 +287,29 @@ export function useDrag({ listId, items, onDrop }: {
     unswallow.current();
   }, []);
 
+  // While a finger drags, the page doesn't scroll under it (nor, in Chromium, cancel the pointer to pan). The
+  // listener is there before any touch starts, as browsers only honour preventDefault from listeners that were
+  // non-passive when the touch began. A long press doesn't bring up a menu either.
+  useEffect(() => {
+    if (!listId) return;
+    const onTouchMove = (e: TouchEvent) => { if (active.current?.touch && e.cancelable) e.preventDefault(); };
+    const onMenu = (e: Event) => { if (pending.current?.touch) e.preventDefault(); };
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    document.addEventListener("contextmenu", onMenu);
+    return () => {
+      document.removeEventListener("touchmove", onTouchMove);
+      document.removeEventListener("contextmenu", onMenu);
+    };
+  }, [listId]);
+
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     unswallow.current();
     const container = ref.current;
     // A press still under way lost its pointerup (the mouse let go outside the window): start afresh.
     finish();
     if (!latest.current.listId || !container) return;
-    if (e.pointerType !== "mouse" || e.button !== 0 || !e.isPrimary) return;
+    const touch = e.pointerType === "touch";
+    if ((e.pointerType !== "mouse" && !touch) || e.button !== 0 || !e.isPrimary) return;
     const target = e.target as Element;
     // Not from a control, nor while a title is being renamed.
     if (target.closest(IGNORE) || container.querySelector(".task-title-input")) return;
@@ -285,17 +317,35 @@ export function useDrag({ listId, items, onDrop }: {
     const id = source?.getAttribute("data-task-id");
     const item = id ? latest.current.items.find((i) => i.task.id === id) : undefined;
     if (!item) return;
-    pending.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, task: item.task, depth: item.kind === "row" ? item.depth : 0 };
+    pending.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, task: item.task, depth: item.kind === "row" ? item.depth : 0, touch };
+
+    // A finger lifts the row once it has held still for HOLD_MS; the drag starts where it is then.
+    let at = { x: e.clientX, y: e.clientY };
+    const hold = touch ? setTimeout(() => {
+      const p = pending.current;
+      if (!p || active.current) return;
+      const d = begin({ ...p, ...at }, container);
+      (source as HTMLElement).dataset.dragLift = "";
+      d.ghost.style.transform = `translate(${at.x + 12}px, ${at.y + 8}px)`;
+    }, HOLD_MS) : undefined;
 
     const onMove = (ev: PointerEvent) => {
       const p = pending.current;
       if (!p || ev.pointerId !== p.pointerId) return;
       let d = active.current;
       if (!d) {
-        if (Math.hypot(ev.clientX - p.x, ev.clientY - p.y) < THRESHOLD) return;
+        const far = Math.hypot(ev.clientX - p.x, ev.clientY - p.y);
+        // A finger that moves before the lift scrolls or swipes, as it always did.
+        if (p.touch) {
+          if (far > HOLD_SLOP) finish();
+          else at = { x: ev.clientX, y: ev.clientY };
+          return;
+        }
+        if (far < THRESHOLD) return;
         d = begin(p, container);
       }
       ev.preventDefault();
+      d.moved = true;
       update(d, ev.clientX, ev.clientY);
       if (!d.frame) autoScroll(d);
     };
@@ -303,17 +353,19 @@ export function useDrag({ listId, items, onDrop }: {
       const p = pending.current;
       if (!p || ev.pointerId !== p.pointerId) return;
       const d = active.current;
-      if (d) update(d, ev.clientX, ev.clientY);
-      const target = d?.target ?? null;
+      // Let go without moving after the lift, it stays where it was.
+      if (d?.moved) update(d, ev.clientX, ev.clientY);
+      const target = d?.moved ? d.target : null;
       const items = d?.items ?? [];
       finish();
       if (!d) return;
-      swallowClick();
+      swallowClick(false, p.touch ? TOUCH_SWALLOW_MS : 0);
       if (target) latest.current.onDrop(p.task, target, items);
     };
     const onCancel = (ev: PointerEvent) => {
       if (ev.pointerId === pending.current?.pointerId) finish();
     };
+    const onTouchCancel = () => { if (pending.current?.touch) finish(); };
     // Escape cancels the drag and goes no further, so the panel stays open.
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape" || !active.current) return;
@@ -327,13 +379,16 @@ export function useDrag({ listId, items, onDrop }: {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
+    if (touch) window.addEventListener("touchcancel", onTouchCancel);
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("scroll", onScroll, true);
     document.addEventListener("selectstart", noSelect);
     detach.current = () => {
+      clearTimeout(hold);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
+      window.removeEventListener("touchcancel", onTouchCancel);
       window.removeEventListener("keydown", onKey, true);
       document.removeEventListener("scroll", onScroll, true);
       document.removeEventListener("selectstart", noSelect);
