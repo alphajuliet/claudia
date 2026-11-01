@@ -801,6 +801,23 @@ input.task-title-input {
 .when-choices { display: flex; flex-wrap: wrap; gap: 0.3rem; }
 .when-inputs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
 .when-inputs .detail-date { margin-left: 0; border-color: var(--border); }
+.when-input { position: relative; display: inline-flex; }
+/* iOS only: an empty date or time input is a blank box of no set size, so give it one and name it. Other browsers
+   show their own dd/mm/yyyy. The hint lets taps through to the input, which opens the picker. */
+@supports (-webkit-touch-callout: none) {
+  .when-input { min-width: 8rem; }
+  .when-input .detail-date { width: 100%; }
+  .when-input[data-hint] .detail-date { color: transparent; }
+  .when-input[data-hint]::before {
+    content: attr(data-hint);
+    position: absolute;
+    top: 50%;
+    left: 0.5rem;
+    transform: translateY(-50%);
+    color: var(--muted);
+    pointer-events: none;
+  }
+}
 .when-note { font-size: 0.85rem; }
 @media (pointer: coarse) {
   .when-choices button.quiet.small, .when-current button.quiet.small, .when-inputs .detail-date { min-height: var(--touch); }

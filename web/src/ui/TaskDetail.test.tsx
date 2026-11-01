@@ -305,23 +305,38 @@ describe("the detail panel", () => {
     expect(screen.getByRole("complementary", { name: "Task details" })).toBeTruthy();
   });
 
-  it("shows a start date read-only, with Clear", async () => {
-    const weed = task({ title: "Weed the beds", listId: garden.id, startDate: "2026-11-01" });
+  it("shows the start date after Due and Snooze, and clears it", async () => {
+    const startDate = addDays(today, 9);
+    const weed = task({ title: "Weed the beds", listId: garden.id, startDate });
     const { fetchMock, p } = await openOn(weed);
     const start = within(p.getByRole("group", { name: "Start" }));
-    expect(start.getByText(formatDue("2026-11-01", today).text)).toBeTruthy();
-    expect(start.queryByRole("textbox")).toBeNull();
-    expect(p.queryByLabelText("Start date")).toBeNull();
+    expect(start.getByText(formatDue(startDate, today).text)).toBeTruthy();
+    expect((p.getByLabelText("Start date") as HTMLInputElement).value).toBe(startDate);
     const names = p.getAllByRole("group").map((g) => g.getAttribute("aria-labelledby") && document.getElementById(g.getAttribute("aria-labelledby")!)?.textContent);
     expect(names.filter((n) => n === "Due" || n === "Snooze" || n === "Start")).toEqual(["Due", "Snooze", "Start"]);
     await userEvent.click(start.getByRole("button", { name: "Clear start date" }));
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ startDate: null }]);
   });
 
-  it("has no Start without a start date", async () => {
+  it("sets the start date from a quick choice or the date input, with no time", async () => {
     const plain = task({ title: "Weed the beds", listId: garden.id });
+    const { fetchMock, p } = await openOn(plain);
+    const start = within(p.getByRole("group", { name: "Start" }));
+    expect(start.getByText("None")).toBeTruthy();
+    expect(p.queryByLabelText("Start time")).toBeNull();
+    await userEvent.click(start.getByRole("button", { name: "Start: Today" }));
+    expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${plain.id}`)).toEqual([{ startDate: today }]);
+    fireEvent.change(p.getByLabelText("Start date"), { target: { value: "2026-12-24" } });
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${plain.id}`)).toEqual([{ startDate: today }, { startDate: "2026-12-24" }]));
+  });
+
+  it("hints at empty date and time inputs only", async () => {
+    const plain = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-11-05" });
     const { p } = await openOn(plain);
-    expect(p.queryByRole("group", { name: "Start" })).toBeNull();
+    const hint = (label: string) => p.getByLabelText(label).parentElement!.getAttribute("data-hint");
+    expect(hint("Due date")).toBeNull();
+    expect(hint("Due time")).toBe("Time");
+    expect(hint("Snooze date")).toBe("Date");
   });
 
   it("shows a due time", async () => {

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { Task } from "@claudia/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { cachedTask, useUpdateTask } from "../data/queries";
-import { formatDue, formatWhen, nowIn, splitIn, todayIn, zonedToUtc, type When } from "../lib/dates";
+import { formatWhen, nowIn, splitIn, zonedToUtc, type When } from "../lib/dates";
 import { isSnoozed } from "../lib/tasks";
 import { dueFields, quickDates } from "../lib/when";
 import { Field, FieldStatus, usePatch, type SaveState } from "./TaskFields";
@@ -62,27 +62,31 @@ function IdleInput({ type, label, value, complete, disabled = false, describedBy
   };
   // Closing the panel doesn't drop a value waiting to save.
   useEffect(() => flush, []);
+  const shown = draft ?? value ?? "";
   return (
-    <input
-      type={type}
-      className="detail-date"
-      aria-label={label}
-      disabled={disabled}
-      aria-describedby={describedBy}
-      value={draft ?? value ?? ""}
-      onChange={(e) => {
-        const typed = e.target.value;
-        setDraft(typed);
-        if (complete(typed)) later(typed);
-        else cancel();
-      }}
-      onBlur={() => {
-        cancel();
-        // Only a whole value or none: a year left at 0202 isn't saved.
-        if (draft !== null && (draft === "" || complete(draft))) save(draft);
-        setDraft(null);
-      }}
-    />
+    // iOS draws an empty date or time input as a blank box: the wrapper shows a hint there instead (styles.css).
+    <span className="when-input" data-hint={shown === "" ? (type === "date" ? "Date" : "Time") : undefined}>
+      <input
+        type={type}
+        className="detail-date"
+        aria-label={label}
+        disabled={disabled}
+        aria-describedby={describedBy}
+        value={shown}
+        onChange={(e) => {
+          const typed = e.target.value;
+          setDraft(typed);
+          if (complete(typed)) later(typed);
+          else cancel();
+        }}
+        onBlur={() => {
+          cancel();
+          // Only a whole value or none: a year left at 0202 isn't saved.
+          if (draft !== null && (draft === "" || complete(draft))) save(draft);
+          setDraft(null);
+        }}
+      />
+    </span>
   );
 }
 
@@ -91,9 +95,9 @@ export interface WhenChoice { label: string; date: string; time?: string }
 
 /**
  * A day with an optional time: what is set now (overdue in red when `showOverdue`) with Clear, quick choices, and date
- * and time inputs. A time needs a day, so a time typed with none set is today.
+ * and time inputs. A time needs a day, so a time typed with none set is today. `dateOnly` leaves out the time.
  */
-export function WhenField({ label, name, value, choices, today, nowTime, timeDisabled = false, showOverdue = false, status, onSave }: {
+export function WhenField({ label, name, value, choices, today, nowTime, timeDisabled = false, dateOnly = false, showOverdue = false, status, onSave }: {
   label: string;
   name: string;
   value: When | null;
@@ -101,6 +105,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   today: string;
   nowTime: string;
   timeDisabled?: boolean;
+  dateOnly?: boolean;
   showOverdue?: boolean;
   status: SaveState;
   /** `quick` is true for a quick choice, false for Clear or a typed date or time. */
@@ -109,7 +114,8 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   const shown = value && formatWhen(value, today, nowTime);
   const noteId = useId();
   // Without times, a new day drops the one already set (such as an imported due time on a repeating task).
-  const keptTime = timeDisabled ? null : value?.time ?? null;
+  const noTime = timeDisabled || dateOnly;
+  const keptTime = noTime ? null : value?.time ?? null;
   return (
     <Field label={label} group>
       <div className="when">
@@ -133,7 +139,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
               type="button"
               className="quiet small"
               aria-label={`${label}: ${c.label}`}
-              onClick={() => onSave({ date: c.date, time: timeDisabled ? null : c.time ?? keptTime }, true)}
+              onClick={() => onSave({ date: c.date, time: noTime ? null : c.time ?? keptTime }, true)}
             >
               {c.label}
             </button>
@@ -147,15 +153,17 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
             complete={wholeDate}
             onSave={(date) => onSave(date ? { date, time: keptTime } : null, false)}
           />
-          <IdleInput
-            type="time"
-            label={`${label} time`}
-            value={value?.time ?? null}
-            complete={wholeTime}
-            disabled={timeDisabled}
-            describedBy={timeDisabled ? noteId : undefined}
-            onSave={(time) => onSave(time ? { date: value?.date ?? today, time } : value && { date: value.date, time: null }, false)}
-          />
+          {!dateOnly && (
+            <IdleInput
+              type="time"
+              label={`${label} time`}
+              value={value?.time ?? null}
+              complete={wholeTime}
+              disabled={timeDisabled}
+              describedBy={timeDisabled ? noteId : undefined}
+              onSave={(time) => onSave(time ? { date: value?.date ?? today, time } : value && { date: value.date, time: null }, false)}
+            />
+          )}
         </div>
         {timeDisabled && <p id={noteId} className="when-note muted">Times on repeating tasks are coming</p>}
       </div>
@@ -268,20 +276,28 @@ export function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone:
   );
 }
 
-/** A start date, shown only when one is set. Nothing uses it, so the panel can clear it but not set it. */
+/** The day work on the task can begin, with no time. Nothing acts on it yet, except that it moves with a repeating task. */
 function StartField({ task, timeZone }: { task: Task; timeZone: string }) {
   const { state, patch } = usePatch(task);
-  if (!task.startDate) return null;
+  const { date: today, time: nowTime } = nowIn(timeZone);
+  const quick = quickDates(today);
   return (
-    <Field label="Start" group>
-      <div className="when-current">
-        <span>{formatDue(task.startDate, todayIn(timeZone)).text}</span>
-        <button type="button" className="quiet small" aria-label="Clear start date" onClick={() => void patch({ startDate: null })}>
-          Clear
-        </button>
-        <FieldStatus state={state} />
-      </div>
-    </Field>
+    <WhenField
+      label="Start"
+      name="start date"
+      value={task.startDate ? { date: task.startDate, time: null } : null}
+      choices={[
+        { label: "Today", date: quick.today },
+        { label: "Tomorrow", date: quick.tomorrow },
+        { label: "This weekend", date: quick.weekend },
+        { label: "Next week", date: quick.nextWeek },
+      ]}
+      today={today}
+      nowTime={nowTime}
+      dateOnly
+      status={state}
+      onSave={(when) => void patch({ startDate: when?.date ?? null })}
+    />
   );
 }
 
