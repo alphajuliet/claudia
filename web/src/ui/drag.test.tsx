@@ -168,6 +168,24 @@ describe("dragging in a list", () => {
     expect(titles()).toEqual(["Weed the beds", "Mulch the roses", "Plant tomatoes"]);
   });
 
+  it("drags a heading by its whole line, and a click on its title still selects it", async () => {
+    const tasks = [
+      task({ title: "Spring", kind: "heading", listId: garden.id }),
+      task({ title: "Plant tomatoes", listId: garden.id }),
+      task({ title: "Summer", kind: "heading", listId: garden.id }),
+      task({ title: "Mulch the roses", listId: garden.id }),
+    ];
+    const fetchMock = stubApi(tasks);
+    const { href } = renderAt(`/list/${garden.id}`);
+    await main().findByText("Plant tomatoes");
+    drag(main().getByRole("button", { name: "Spring" }).closest("h2")!, 0, 50, yOf(3, 0.9));
+    await waitFor(() => expect(moves(fetchMock, tasks[0]!)).toEqual([{ parentId: null, withSection: true }]));
+    await waitFor(() => expect(headings()).toEqual(["Summer", "Spring"]));
+    await new Promise((r) => setTimeout(r, 5));
+    fireEvent.click(main().getByRole("button", { name: "Spring" }));
+    expect(href()).toContain(`?task=${tasks[0]!.id}`);
+  });
+
   it("cancels with Escape, leaving the panel open", async () => {
     const { fetchMock, href } = threeTasks();
     await main().findByText("Weed the beds");
@@ -326,7 +344,7 @@ describe("press and hold to drag on a touch screen", () => {
     await waitFor(() => expect(titles()).toEqual(["Mulch the roses", "Weed the beds", "Plant tomatoes"]));
   });
 
-  it("lifts a heading with its section", async () => {
+  it("lifts a heading by its line, with its section", async () => {
     const tasks = [
       task({ title: "Spring", kind: "heading", listId: garden.id }),
       task({ title: "Plant tomatoes", listId: garden.id }),
@@ -336,7 +354,10 @@ describe("press and hold to drag on a touch screen", () => {
     const fetchMock = stubApi(tasks);
     renderAt(`/list/${garden.id}`);
     await main().findByText("Plant tomatoes");
-    hold(main().getByRole("button", { name: "Spring" }), 0);
+    // Beside the title, not on it: the whole line takes the press.
+    const line = main().getByRole("button", { name: "Spring" }).closest("h2")!;
+    hold(line, 0);
+    expect(line.dataset.dragLift).toBeDefined();
     moveTo(50, yOf(3, 0.9), touch);
     release(50, yOf(3, 0.9), touch);
     vi.useRealTimers();
@@ -421,6 +442,49 @@ describe("press and hold to drag on a touch screen", () => {
     expect(row("Plant tomatoes").dataset.swipe).not.toBe("open");
     fireEvent.keyDown(document.body, { key: "Escape" });
     release(50, yOf(0, 0.1), touch);
+  });
+
+  it("lets the page scroll for touches outside the list", async () => {
+    threeTasks();
+    const title = await main().findByText("Mulch the roses");
+    hold(title, 2);
+    const outside = new Event("touchmove", { bubbles: true, cancelable: true });
+    screen.getByRole("navigation", { name: "Sidebar" }).dispatchEvent(outside);
+    expect(outside.defaultPrevented).toBe(false);
+    fireEvent.pointerCancel(document.body, { ...touch });
+  });
+
+  it("lets a tap elsewhere through straight after a drag", async () => {
+    const { href } = threeTasks();
+    const title = await main().findByText("Plant tomatoes");
+    hold(title, 1);
+    fireEvent.pointerUp(title, { ...touch, clientX: 50, clientY: yOf(1) });
+    // Within the 500ms the click after the hold may take, a tap on the sidebar still goes there.
+    const link = sidebarLink("Errands");
+    fireEvent.pointerDown(link, { ...touch, pointerId: 8 });
+    fireEvent.pointerUp(link, { ...touch, pointerId: 8 });
+    fireEvent.click(link);
+    expect(href()).toBe(`/list/${errands.id}`);
+  });
+
+  it("cancels on a second finger, before or after the lift", async () => {
+    const { fetchMock } = threeTasks();
+    const title = await main().findByText("Mulch the roses");
+    hold(title, 2, 200);
+    fireEvent.pointerDown(document.body, { ...touch, pointerId: 8, isPrimary: false });
+    vi.advanceTimersByTime(400);
+    expect(document.body.dataset.drag).toBeUndefined();
+    expect(row("Mulch the roses").dataset.dragLift).toBeUndefined();
+    fireEvent.pointerUp(title, { ...touch });
+
+    hold(title, 2);
+    fireEvent.pointerMove(title, { ...touch, clientX: 50, clientY: yOf(0, 0.1) });
+    fireEvent.pointerDown(document.body, { ...touch, pointerId: 8, isPrimary: false });
+    expectCleared();
+    release(50, yOf(0, 0.1), touch);
+    vi.useRealTimers();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
   });
 
   it("cancels when the system cancels the touch", async () => {

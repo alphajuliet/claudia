@@ -1,4 +1,4 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import type { Task } from "@claudia/shared";
 import { gapDepths, headingGaps, withoutDragged, type Drop, type Item } from "../lib/reorder";
 import { plainText } from "./Markdown";
@@ -121,7 +121,7 @@ function listAt(x: number, y: number, listId: string): Element | null {
 
 /**
  * Dragging rows and headings to reorder a list (`listId`, or none to turn it off). Spread the returned
- * `onPointerDown` and `ref` on the element holding the rows. A mouse press on a row or a heading's title that
+ * `onPointerDown` and `ref` on the element holding the rows. A mouse press on a row or a heading's line that
  * moves THRESHOLD px starts a drag: a ghost follows the pointer, the dragged rows (or a heading's section) fade and
  * a line, indented to the depth, shows where it lands (or the row it would go under is outlined). A drop calls
  * `onDrop` with the dragged task, the target and the items as they were; Escape cancels. The click after a drag is
@@ -135,7 +135,7 @@ export function useDrag({ listId, items, onDrop }: {
   items: Item[];
   onDrop: (task: Task, target: DragTarget, items: Item[]) => void;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
   const latest = useRef({ listId, items, onDrop });
   latest.current = { listId, items, onDrop };
   const pending = useRef<Pending | null>(null);
@@ -271,11 +271,15 @@ export function useDrag({ listId, items, onDrop }: {
       clearTimeout(timer);
       timer = setTimeout(() => unswallow.current(), ms);
     };
+    const onDown = () => unswallow.current();
     window.addEventListener("click", onClick, true);
+    // A new press anywhere (Undo on the toast, say) has a click of its own.
+    window.addEventListener("pointerdown", onDown, true);
     if (untilUp) window.addEventListener("pointerup", onUp, true);
     else onUp();
     unswallow.current = () => {
       window.removeEventListener("click", onClick, true);
+      window.removeEventListener("pointerdown", onDown, true);
       window.removeEventListener("pointerup", onUp, true);
       clearTimeout(timer);
       unswallow.current = () => {};
@@ -287,20 +291,23 @@ export function useDrag({ listId, items, onDrop }: {
     unswallow.current();
   }, []);
 
-  // While a finger drags, the page doesn't scroll under it (nor, in Chromium, cancel the pointer to pan). The
-  // listener is there before any touch starts, as browsers only honour preventDefault from listeners that were
-  // non-passive when the touch began. A long press doesn't bring up a menu either.
-  useEffect(() => {
-    if (!listId) return;
+  // While a finger drags, the page doesn't scroll under it (nor, in Chromium, cancel the pointer to pan). A touch's
+  // moves go to where it began, so the listener sits on the rows' container, for as long as it is there: browsers
+  // only honour preventDefault from listeners that were non-passive when the touch began. Touches elsewhere don't
+  // wait on it. A long press doesn't bring up a menu either.
+  const attach = useCallback((el: HTMLDivElement | null) => {
+    ref.current = el;
+    if (!el) return;
     const onTouchMove = (e: TouchEvent) => { if (active.current?.touch && e.cancelable) e.preventDefault(); };
     const onMenu = (e: Event) => { if (pending.current?.touch) e.preventDefault(); };
-    document.addEventListener("touchmove", onTouchMove, { passive: false });
-    document.addEventListener("contextmenu", onMenu);
+    el.addEventListener("touchmove", onTouchMove, { passive: false });
+    el.addEventListener("contextmenu", onMenu);
     return () => {
-      document.removeEventListener("touchmove", onTouchMove);
-      document.removeEventListener("contextmenu", onMenu);
+      el.removeEventListener("touchmove", onTouchMove);
+      el.removeEventListener("contextmenu", onMenu);
+      if (ref.current === el) ref.current = null;
     };
-  }, [listId]);
+  }, []);
 
   const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
     unswallow.current();
@@ -313,8 +320,9 @@ export function useDrag({ listId, items, onDrop }: {
     const target = e.target as Element;
     // Not from a control, nor while a title is being renamed.
     if (target.closest(IGNORE) || container.querySelector(".task-title-input")) return;
-    const source = target.closest("li.task-row, .section-title-button");
-    const id = source?.getAttribute("data-task-id");
+    // A heading's whole line takes the press, not only its title (as narrow as the word on a phone).
+    const source = target.closest("li.task-row, h2.section-title");
+    const id = (source?.matches("h2") ? source.querySelector(".section-title-button") : source)?.getAttribute("data-task-id");
     const item = id ? latest.current.items.find((i) => i.task.id === id) : undefined;
     if (!item) return;
     pending.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, task: item.task, depth: item.kind === "row" ? item.depth : 0, touch };
@@ -366,6 +374,8 @@ export function useDrag({ listId, items, onDrop }: {
       if (ev.pointerId === pending.current?.pointerId) finish();
     };
     const onTouchCancel = () => { if (pending.current?.touch) finish(); };
+    // A second finger (a pinch, say) cancels a touch press or drag.
+    const onOtherDown = (ev: PointerEvent) => { if (ev.pointerId !== pending.current?.pointerId) finish(); };
     // Escape cancels the drag and goes no further, so the panel stays open.
     const onKey = (ev: KeyboardEvent) => {
       if (ev.key !== "Escape" || !active.current) return;
@@ -379,7 +389,10 @@ export function useDrag({ listId, items, onDrop }: {
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", onCancel);
-    if (touch) window.addEventListener("touchcancel", onTouchCancel);
+    if (touch) {
+      window.addEventListener("touchcancel", onTouchCancel);
+      window.addEventListener("pointerdown", onOtherDown, true);
+    }
     window.addEventListener("keydown", onKey, true);
     document.addEventListener("scroll", onScroll, true);
     document.addEventListener("selectstart", noSelect);
@@ -389,11 +402,12 @@ export function useDrag({ listId, items, onDrop }: {
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onCancel);
       window.removeEventListener("touchcancel", onTouchCancel);
+      window.removeEventListener("pointerdown", onOtherDown, true);
       window.removeEventListener("keydown", onKey, true);
       document.removeEventListener("scroll", onScroll, true);
       document.removeEventListener("selectstart", noSelect);
     };
   };
 
-  return { ref, onPointerDown };
+  return { ref: attach, onPointerDown };
 }

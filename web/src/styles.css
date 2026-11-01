@@ -520,7 +520,7 @@ body[data-drag], body[data-drag] * { cursor: grabbing !important; user-select: n
   background: var(--bg);
 }
 /* A row or heading held long enough on a touch screen lifts before the drag starts. */
-.task-row[data-drag-lift], button.section-title-button[data-drag-lift] {
+.task-row[data-drag-lift], h2.section-title[data-drag-lift] {
   opacity: 1;
   background: var(--bg-raised);
   box-shadow: var(--shadow);
@@ -578,7 +578,7 @@ body[data-drag], body[data-drag] * { cursor: grabbing !important; user-select: n
 @media (pointer: coarse) {
   /* Holding a row (or a heading) lifts it to drag, and dragging swipes it: neither selects text or brings up the
      callout menu. */
-  .task-row, button.section-title-button { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+  .task-row, h2.section-title { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
   /* Safari won't edit a field that inherits none: the inline rename stays typeable. */
   .task-row input { -webkit-user-select: text; user-select: text; }
   .task-row-body, .detail-subtask { min-height: var(--touch); }
