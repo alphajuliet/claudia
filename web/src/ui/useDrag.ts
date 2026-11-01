@@ -66,13 +66,11 @@ function dropAt(d: Active, x: number, y: number): { drop: Drop; lineY: number | 
   const shown = measured.filter((m) => !m.dragged);
   if (shown.length === 0) return null;
   const restIndex = new Map(rest.map((item, i) => [item.task.id, i]));
-  // The y of each gap: halfway between the rows either side, or the edge of the first or last.
+  // The y of each gap: the top of the row after it, or the bottom of the last. The dragged rows are still laid out
+  // (faded), so only the others' edges count.
   const gapY = (g: number) => {
     const below = shown.find((m) => restIndex.get(m.item.task.id)! >= g);
-    const above = [...shown].reverse().find((m) => restIndex.get(m.item.task.id)! < g);
-    if (!above) return below!.rect.top;
-    if (!below) return above.rect.bottom;
-    return (above.rect.bottom + below.rect.top) / 2;
+    return below ? below.rect.top : shown.at(-1)!.rect.bottom;
   };
   const heading = d.task.kind === "heading";
 
@@ -241,18 +239,28 @@ export function useDrag({ listId, items, onDrop }: {
     delete document.body.dataset.drag;
   };
 
-  /** Swallows the click the browser sends after the drag, and only that one. */
-  const swallowClick = () => {
+  /**
+   * Swallows the click the browser sends after the drag, and only that one. After an Escape the button is still
+   * down: the click comes after the next pointerup, so the swallower waits for it.
+   */
+  const swallowClick = (untilUp = false) => {
     unswallow.current();
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const onClick = (e: MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
       unswallow.current();
     };
+    const onUp = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => unswallow.current(), 0);
+    };
     window.addEventListener("click", onClick, true);
-    const timer = setTimeout(() => unswallow.current(), 0);
+    if (untilUp) window.addEventListener("pointerup", onUp, true);
+    else onUp();
     unswallow.current = () => {
       window.removeEventListener("click", onClick, true);
+      window.removeEventListener("pointerup", onUp, true);
       clearTimeout(timer);
       unswallow.current = () => {};
     };
@@ -312,6 +320,7 @@ export function useDrag({ listId, items, onDrop }: {
       ev.stopPropagation();
       ev.preventDefault();
       finish();
+      swallowClick(true);
     };
     const onScroll = () => remeasure();
     const noSelect = (ev: Event) => { if (active.current) ev.preventDefault(); };

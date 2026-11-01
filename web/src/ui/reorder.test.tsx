@@ -44,6 +44,23 @@ describe("Alt+↑ and Alt+↓", () => {
     await waitFor(() => expect(document.activeElement).toBe(row("Plant tomatoes")));
   });
 
+  it("sends quick moves to the server one at a time, in order", async () => {
+    let release = () => {};
+    const first = new Promise<void>((resolve) => { release = resolve; });
+    let gated = false;
+    const { tasks: [a, , c], fetchMock } = threeTasks({ gate: (method) => (method === "POST" && !gated ? ((gated = true), first) : undefined) });
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("j");
+    await altDown();
+    await altDown();
+    await waitFor(() => expect(titles()).toEqual(["Plant tomatoes", "Mulch the roses", "Weed the beds"]));
+    // The second waits until the first has been answered.
+    expect(moves(fetchMock, a!)).toEqual([{ parentId: null, beforeId: c!.id }]);
+    release();
+    await waitFor(() => expect(moves(fetchMock, a!)).toEqual([{ parentId: null, beforeId: c!.id }, { parentId: null }]));
+    await waitFor(() => expect(titles()).toEqual(["Plant tomatoes", "Mulch the roses", "Weed the beds"]));
+  });
+
   it("does nothing on the last task going down", async () => {
     const { tasks: [, , c], fetchMock } = threeTasks();
     await main().findByText("Weed the beds");

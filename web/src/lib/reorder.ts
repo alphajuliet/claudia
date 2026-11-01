@@ -89,7 +89,8 @@ export function headingGaps(items: Item[]): number[] {
 
 /**
  * Where a task is now, as a move request: for Undo after a move to another list. A heading's place is past its
- * section, and a task straight after a heading is first under it.
+ * section, and a task straight after a heading is first under it. A row at depth 0 is top level, even a subtask
+ * whose parent isn't shown (completed): any move of it detaches it, and a drop where it is sends nothing.
  */
 export function placeOf(items: Item[], task: Task): MoveRequest {
   const i = items.findIndex((item) => item.task.id === task.id);
@@ -97,7 +98,8 @@ export function placeOf(items: Item[], task: Task): MoveRequest {
   const item = items[i]!;
   if (item.kind === "heading") return request(null, items[endOf(items, i)]);
   if (item.depth === 0 && items[i - 1]?.kind === "heading") return firstUnder(items[i - 1]!);
-  return request(task.parentId, nextAt(items, i + 1, item.depth));
+  // Shown at the top level (a subtask whose parent isn't on screen) counts as top level, as drops and steps take it.
+  return request(item.depth > 0 ? task.parentId : null, nextAt(items, i + 1, item.depth));
 }
 
 const samePlace = (a: MoveRequest, b: MoveRequest) => a.parentId === b.parentId && a.beforeId === b.beforeId && a.afterId === b.afterId;

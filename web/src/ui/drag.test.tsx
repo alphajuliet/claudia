@@ -187,6 +187,39 @@ describe("dragging in a list", () => {
     await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
   });
 
+  it("swallows the click after the mouse-up that follows an Escape", async () => {
+    const { href } = threeTasks();
+    const title = await main().findByText("Mulch the roses");
+    start(title, 2);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    moveTo(50, yOf(2));
+    release(50, yOf(2));
+    fireEvent.click(title);
+    expect(main().queryByRole("textbox", { name: "Title" })).toBeNull();
+    expect(href()).not.toContain("?task=");
+    await new Promise((r) => setTimeout(r, 5));
+    // Only that one: the next click renames.
+    fireEvent.click(title);
+    expect(main().getByRole("textbox", { name: "Title" })).toBeTruthy();
+  });
+
+  it("draws the line at the next row's top edge, not across the dragged rows", async () => {
+    const a = task({ title: "Weed the beds", listId: garden.id });
+    const b = task({ title: "Plant tomatoes", listId: garden.id });
+    stubApi([a, b, task({ title: "Stake them", listId: garden.id, parentId: b.id }), task({ title: "Mulch the roses", listId: garden.id })]);
+    renderAt(`/list/${garden.id}`);
+    await main().findByText("Stake them");
+    expect(titles()).toEqual(["Weed the beds", "Plant tomatoes", "Stake them", "Mulch the roses"]);
+    // .task-sections is at 0 in jsdom, so the line's top is the gap's y.
+    start(main().getByText("Plant tomatoes"), 1);
+    moveTo(50, yOf(3, 0.1));
+    expect(document.querySelector<HTMLElement>(".drop-line")!.style.top).toBe(`${yOf(3, 0)}px`);
+    moveTo(50, yOf(3, 0.9));
+    expect(document.querySelector<HTMLElement>(".drop-line")!.style.top).toBe(`${yOf(4, 0)}px`);
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    release(50, yOf(3, 0.9));
+  });
+
   it("leaves touch to the swipes", async () => {
     const { fetchMock } = threeTasks();
     const touch = { ...mouse, pointerType: "touch" };

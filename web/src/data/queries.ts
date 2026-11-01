@@ -386,6 +386,8 @@ export function useMoveTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationKey: moveKey,
+    // One at a time, in order: holding Alt+↓ or quick drags mustn't reach the server out of order.
+    scope: { id: "task-move" },
     mutationFn: async ({ id, ...to }: TaskMove) => json(await api(`/api/tasks/${id}/move`, send("POST", to)), TaskSchema),
     onMutate: async (move) => {
       await queryClient.cancelQueries(tasksKey);

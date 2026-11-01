@@ -162,6 +162,31 @@ describe("placeOf", () => {
   });
 });
 
+describe("a subtask shown at the top level (its parent isn't on screen)", () => {
+  // b's parent p is completed and hidden, so b shows at depth 0.
+  const orphan = (): Item[] => {
+    const items = outline("a", "b", "c");
+    items[1] = { ...items[1]!, task: { ...items[1]!.task, parentId: "p" } } as Item;
+    return items;
+  };
+
+  it("is placed at the top level", () => {
+    const items = orphan();
+    expect(placeOf(items, find(items, "b"))).toEqual({ parentId: null, beforeId: "c" });
+  });
+
+  it("sends nothing for a drop where it is", () => {
+    const items = orphan();
+    expect(drop(items, "b", { kind: "gap", index: 1, depth: 0 })).toBeNull();
+  });
+
+  it("moves to the top level when dropped or stepped elsewhere", () => {
+    const items = orphan();
+    expect(drop(items, "b", { kind: "gap", index: 0, depth: 0 })).toEqual({ parentId: null, beforeId: "a" });
+    expect(stepMove(items, find(items, "b"), 1)).toEqual({ parentId: null });
+  });
+});
+
 describe("moveFor: gaps", () => {
   it("moves a task to the top", () => {
     const items = outline("a", "b", "c");

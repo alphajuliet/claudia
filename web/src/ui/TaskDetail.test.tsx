@@ -672,9 +672,11 @@ describe("the detail panel", () => {
     const select = p.getByRole("combobox", { name: "List" }) as HTMLSelectElement;
     await userEvent.selectOptions(select, errands.id);
     await userEvent.selectOptions(select, projects.id);
-    await waitFor(() => expect(held).toHaveLength(2));
+    // Moves go one at a time: the second waits for the first.
+    await waitFor(() => expect(held).toHaveLength(1));
+    expect(select.value).toBe(projects.id);
     held[0]!.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitFor(() => expect(held).toHaveLength(2));
     expect(select.value).toBe(projects.id);
     held[1]!.resolve();
     await waitFor(() => expect(p.getByText("Saved")).toBeTruthy());
