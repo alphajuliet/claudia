@@ -36,6 +36,12 @@
   -webkit-text-size-adjust: 100%;
 }
 
+/* From the home screen, iOS 26.1 and later can report an inset of 0 while still blurring the top of the page, so the
+   gap can't depend on the inset (https://bugs.webkit.org/show_bug.cgi?id=301994). */
+@media (display-mode: standalone) and (pointer: coarse) {
+  :root { --safe-top: calc(env(safe-area-inset-top) + 1rem); }
+}
+
 /* Dark: from the system unless the theme is set to light, or always when it's set to dark (`data-theme` on <html>). */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -167,7 +173,7 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 /* Full screen from an iPad's home screen, the status bar sits over the page: start below it. (Narrow screens pad the
    top bar, the drawer and the sheet instead.) */
 @media (min-width: 900px) {
-  .shell { padding-top: env(safe-area-inset-top); }
+  .shell { padding-top: var(--safe-top); }
 }
 
 .topbar { display: none; }
