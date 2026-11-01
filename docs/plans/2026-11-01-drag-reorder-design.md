@@ -1,6 +1,6 @@
 # Drag tasks within and between headings
 
-Date: 2026-11-01. Status: approved.
+Date: 2026-11-01. Status: approved; built.
 
 Board card: "Drag tasks within and between headings in a list" (#Desktop). Tasks keep their order (fractional `position`) and the API can move them (`POST /api/tasks/{id}/move` with `listId`, `parentId`, `afterId` or `beforeId`), but the web app has no way to reorder. This card adds dragging with the mouse on list screens, Alt+↑ and Alt+↓ from the keyboard, moving a heading with its section, and dropping on a sidebar list.
 
@@ -40,3 +40,14 @@ Two registered commands, listed under `?`:
 ## Not in scope
 
 Dragging on touch screens or the iPad, dragging in views or filters, several tasks at once, and indenting or outdenting from the keyboard.
+
+## As built
+
+- The depth of a drop between rows comes from how far the pointer has moved sideways since the drag began (one indent, about 23px, per level), not from its absolute position. A row is usually grabbed by its title, well to the right of the indents.
+- A task lands first under a heading with `afterId: <heading>`, so it goes first even when the heading is collapsed or its first tasks are hidden. Everything else uses `beforeId`, or no placement for the end.
+- A heading may also land just before the first heading, after any tasks above it, which stay where they are.
+- The Inbox link in the sidebar takes drops for the Inbox list. Undo after a sidebar drop puts the task back where it was, and a heading back with its section.
+- An open subtask whose parent isn't shown (a completed parent) sits at the top level on screen, and dragging or stepping it makes it top level. A drop where it already is sends nothing.
+- Moves are sent one at a time, in order, so holding Alt+↓ or dragging quickly can't leave the server in a different order from the screen.
+- A click after Escape cancels a drag is ignored, as is the one after a drop.
+- Checked in Chromium at 1280px, light and dark: between rows, into a task, a heading with its section, Escape, a sidebar drop with Undo, Alt+↑ and Alt+↓ across headings, and the order after a reload.
