@@ -8,6 +8,62 @@ import { addDays, at, errands, garden, inbox, main, projects, renderAt, sentBodi
 const quickAdd = () => main().findByRole("textbox", { name: "Add a task" }) as Promise<HTMLInputElement>;
 
 describe("quick add", () => {
+  /** Says whether the main pointer is coarse (a touch screen). */
+  const pointer = (coarse: boolean) =>
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      media: query,
+      matches: query === "(pointer: coarse)" ? coarse : false,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+
+  it("adds the task when the field is left on a touch screen (the iOS keyboard's ✓ only hides it)", async () => {
+    pointer(true);
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Plant tomatoes");
+    field.blur();
+    await waitFor(() => expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Plant tomatoes" }]));
+    expect(field.value).toBe("");
+  });
+
+  it("keeps the text without adding when the field is left with a mouse", async () => {
+    pointer(false);
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Plant tomatoes");
+    await userEvent.click(document.body);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([]);
+    expect(field.value).toBe("Plant tomatoes");
+  });
+
+  it("adds nothing on a touch screen when Escape clears the field or the field is left empty", async () => {
+    pointer(true);
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Plant tomatoes{Escape}");
+    expect(field.value).toBe("");
+    await userEvent.click(field);
+    field.blur();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([]);
+  });
+
+  it("keeps the field focused when the date chip's × is tapped, so nothing is added yet", async () => {
+    pointer(true);
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    const field = await quickAdd();
+    await userEvent.type(field, "Call Sam tomorrow");
+    await userEvent.click(await main().findByRole("button", { name: "Keep “tomorrow” in the title" }));
+    expect(document.activeElement).toBe(field);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([]);
+    expect(field.value).toBe("Call Sam tomorrow");
+  });
+
   it("adds to the list being shown, at the end, and keeps focus for the next one", async () => {
     const fetchMock = stubApi([task({ title: "Weed the beds", listId: garden.id })]);
     renderAt(`/list/${garden.id}`);

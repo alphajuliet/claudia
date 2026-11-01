@@ -34,7 +34,8 @@ const mergeLabels = (labels: string[]) =>
 
 /**
  * A one-line field above the rows. Enter adds the task (with any `#labels`, and a due date or time read from the end
- * of the text), clears the field and keeps focus; Escape clears and leaves. A chip under the field previews the date,
+ * of the text), clears the field and keeps focus; Escape clears and leaves. On a touch screen, leaving the field with
+ * text in it adds the task too: the ✓ over the iOS keyboard only hides it, sending no Enter. A chip under the field previews the date,
  * and its × keeps those words in the title. When `announce` is set (the task goes somewhere other than the list on
  * screen), or a date was read, a toast says where it went. Nothing is shown without a target.
  */
@@ -46,6 +47,8 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
   const timeZone = useTimeZone();
   const input = useRef<HTMLInputElement>(null);
   const previewId = useId();
+  // Escape leaves the field after clearing it: that blur mustn't add what was there.
+  const cancelling = useRef(false);
   useCommand("capture", target ? () => input.current?.focus() : undefined);
   if (!target) return null;
 
@@ -99,8 +102,16 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
       submit();
     } else if (e.key === "Escape") {
       setEntry(EMPTY);
+      cancelling.current = true;
       e.currentTarget.blur();
     }
+  };
+  const onBlur = () => {
+    if (cancelling.current) {
+      cancelling.current = false;
+      return;
+    }
+    if (touchScreen()) submit();
   };
 
   return (
@@ -119,6 +130,7 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
           value={text}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
+          onBlur={onBlur}
         />
       </div>
       {shown && preview && (
@@ -131,6 +143,8 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
             type="button"
             className="chip-remove"
             aria-label={`Keep “${shown.matched}” in the title`}
+            // Keep focus in the field, so the tap doesn't count as leaving it (and add the task on a touch screen).
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               setEntry((e) => ({ ...e, dismissed: shown.matched }));
               input.current?.focus();
@@ -143,3 +157,6 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
     </div>
   );
 }
+
+/** A touch screen (phone or iPad) as the main pointer. */
+const touchScreen = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;
