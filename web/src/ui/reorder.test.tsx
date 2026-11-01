@@ -25,6 +25,70 @@ function threeTasks(opts: StubOptions = {}) {
   return { tasks, fetchMock };
 }
 
+describe("Shift+H, J, K and L", () => {
+  it("moves the highlighted task with J and K", async () => {
+    const { tasks: [a, b], fetchMock } = threeTasks();
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("j");
+    await userEvent.keyboard("{Shift>}J{/Shift}");
+    await waitFor(() => expect(titles()).toEqual(["Plant tomatoes", "Weed the beds", "Mulch the roses"]));
+    expect(moves(fetchMock, a!)).toHaveLength(1);
+    await waitFor(() => expect(document.activeElement).toBe(row("Weed the beds")));
+    await userEvent.keyboard("{Shift>}K{/Shift}");
+    await waitFor(() => expect(titles()).toEqual(["Weed the beds", "Plant tomatoes", "Mulch the roses"]));
+    expect(moves(fetchMock, b!)).toEqual([]);
+  });
+
+  it("indents the task under the one above with L, and out again after its parent with H", async () => {
+    const { tasks: [a, b], fetchMock } = threeTasks();
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("jj");
+    await userEvent.keyboard("{Shift>}L{/Shift}");
+    await waitFor(() => expect(row("Plant tomatoes").dataset.depth).toBe("1"));
+    expect(moves(fetchMock, b!)).toEqual([{ parentId: a!.id }]);
+    expect(document.activeElement).toBe(row("Plant tomatoes"));
+    await userEvent.keyboard("{Shift>}H{/Shift}");
+    await waitFor(() => expect(row("Plant tomatoes").dataset.depth).toBe("0"));
+    expect(titles()).toEqual(["Weed the beds", "Plant tomatoes", "Mulch the roses"]);
+    expect(document.activeElement).toBe(row("Plant tomatoes"));
+  });
+
+  it("opens a collapsed task it indents under, so the task stays in sight", async () => {
+    const parent = task({ title: "Weed the beds", listId: garden.id });
+    const tasks = [parent, task({ title: "Dig", listId: garden.id, parentId: parent.id }), task({ title: "Plant tomatoes", listId: garden.id })];
+    stubApi(tasks);
+    renderAt(`/list/${garden.id}`);
+    await userEvent.click(await main().findByRole("button", { name: "Collapse Weed the beds" }));
+    expect(titles()).toEqual(["Weed the beds", "Plant tomatoes"]);
+    await userEvent.keyboard("j");
+    expect(row("Plant tomatoes").classList).toContain("highlighted");
+    await userEvent.keyboard("{Shift>}L{/Shift}");
+    await waitFor(() => expect(titles()).toEqual(["Weed the beds", "Dig", "Plant tomatoes"]));
+    expect(row("Plant tomatoes").dataset.depth).toBe("1");
+    await waitFor(() => expect(document.activeElement).toBe(row("Plant tomatoes")));
+  });
+
+  it("does nothing on the first task, or at the top level with H", async () => {
+    const { fetchMock } = threeTasks();
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("j");
+    await userEvent.keyboard("{Shift>}LH{/Shift}");
+    await new Promise((r) => setTimeout(r));
+    expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
+  });
+
+  it("does nothing in a view", async () => {
+    const tasks = ["Weed the beds", "Plant tomatoes"].map((title) => task({ title, listId: garden.id, labels: ["next"] }));
+    const fetchMock = stubApi(tasks);
+    renderAt("/next");
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("jj");
+    await userEvent.keyboard("{Shift>}LHJK{/Shift}");
+    await new Promise((r) => setTimeout(r));
+    expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
+  });
+});
+
 describe("Alt+↑ and Alt+↓", () => {
   it("moves the highlighted task past its neighbour and keeps it highlighted and focused", async () => {
     const { tasks: [a, b], fetchMock } = threeTasks();

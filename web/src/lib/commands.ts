@@ -1,5 +1,5 @@
 export type CommandId =
-  | "next" | "previous" | "moveUp" | "moveDown" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "rename" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
+  | "next" | "previous" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "rename" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
   | "contextAll" | "contextWork" | "contextPersonal" | "contextHome"
   | "goDashboard" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
@@ -12,8 +12,10 @@ export interface Command { id: CommandId; label: string; keys: string[] }
 export const COMMANDS: Command[] = [
   { id: "next", label: "Next task", keys: ["j", "ArrowDown"] },
   { id: "previous", label: "Previous task", keys: ["k", "ArrowUp"] },
-  { id: "moveUp", label: "Move task up", keys: ["Alt+ArrowUp"] },
-  { id: "moveDown", label: "Move task down", keys: ["Alt+ArrowDown"] },
+  { id: "moveUp", label: "Move task up", keys: ["K", "Alt+ArrowUp"] },
+  { id: "moveDown", label: "Move task down", keys: ["J", "Alt+ArrowDown"] },
+  { id: "indent", label: "Indent task under the one above", keys: ["L"] },
+  { id: "outdent", label: "Outdent task", keys: ["H"] },
   { id: "moveListUp", label: "Move list up", keys: ["Alt+Shift+ArrowUp"] },
   { id: "moveListDown", label: "Move list down", keys: ["Alt+Shift+ArrowDown"] },
   { id: "collapse", label: "Collapse, or go to the parent", keys: ["h"] },

@@ -1,6 +1,6 @@
 import type { Task } from "@claudia/shared";
 import { describe, expect, it } from "vitest";
-import { displayItems, gapDepths, headingGaps, type Item, moveFor, placeOf, stepMove, withoutDragged } from "./reorder";
+import { displayItems, gapDepths, headingGaps, indentMove, type Item, moveFor, outdentMove, placeOf, stepMove, withoutDragged } from "./reorder";
 
 const task = (overrides: Partial<Task> & Pick<Task, "id">): Task => ({
   listId: "L1",
@@ -448,5 +448,56 @@ describe("stepMove: headings", () => {
 
   it("is null for the last heading going down", () => {
     expect(stepMove(items, find(items, "H3"), 1)).toBeNull();
+  });
+});
+
+describe("indentMove", () => {
+  it("makes a task the last subtask of the one above it at its depth, past that task's subtasks", () => {
+    const items = outline("a", "  x", "b");
+    expect(indentMove(items, find(items, "b"))).toEqual({ parentId: "a" });
+  });
+  it("works among subtasks", () => {
+    const items = outline("a", "  x", "  y");
+    expect(indentMove(items, find(items, "y"))).toEqual({ parentId: "x" });
+  });
+  it("gives null for the first task, the first subtask, a heading, and straight after a heading", () => {
+    const items = outline("a", "  x", "# h", "b");
+    expect(indentMove(items, find(items, "a"))).toBeNull();
+    expect(indentMove(items, find(items, "x"))).toBeNull();
+    expect(indentMove(items, find(items, "h"))).toBeNull();
+    expect(indentMove(items, find(items, "b"))).toBeNull();
+  });
+  it("won't go under a completed task", () => {
+    const items = outline("a", "b");
+    items[0]!.task.completedAt = "2026-11-01T00:00:00.000Z";
+    expect(indentMove(items, find(items, "b"))).toBeNull();
+  });
+});
+
+describe("outdentMove", () => {
+  it("puts a subtask straight after its parent at the parent's level", () => {
+    const items = outline("a", "  x", "  y", "b");
+    expect(outdentMove(items, find(items, "y"))).toEqual({ parentId: null, beforeId: "b" });
+  });
+  it("leaves the tasks below it under the old parent, and goes after them", () => {
+    const items = outline("a", "  x", "  y", "b");
+    expect(outdentMove(items, find(items, "x"))).toEqual({ parentId: null, beforeId: "b" });
+  });
+  it("goes last when nothing follows the parent", () => {
+    const items = outline("a", "  x");
+    expect(outdentMove(items, find(items, "x"))).toEqual({ parentId: null });
+  });
+  it("stays above a following heading", () => {
+    const items = outline("a", "  x", "# h", "b");
+    expect(outdentMove(items, find(items, "x"))).toEqual({ parentId: null, beforeId: "h" });
+  });
+  it("goes up one level from deep in", () => {
+    const items = outline("a", "  x", "    d", "  y");
+    expect(outdentMove(items, find(items, "d"))).toEqual({ parentId: "a", beforeId: "y" });
+  });
+  it("gives null at the top level and for a heading", () => {
+    const items = outline("a", "# h");
+    expect(outdentMove(items, find(items, "a"))).toBeNull();
+    expect(outdentMove(items, find(items, "h"))).toBeNull();
   });
 });

@@ -4,7 +4,7 @@ import type { Task } from "@claudia/shared";
 import { useDeleteTask, useLists, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
-import { displayItems, moveFor, placeOf, stepMove, withoutDragged, type Item } from "../lib/reorder";
+import { displayItems, indentMove, moveFor, outdentMove, placeOf, stepMove, withoutDragged, type Item, type MoveRequest } from "../lib/reorder";
 import { collapseRows, dueDateOf, parentsIn, rowsUnder, type Row } from "../lib/tasks";
 import { setCollapsed, useCollapsed } from "./collapsed";
 import { BottomSheet } from "./BottomSheet";
@@ -287,7 +287,7 @@ function useOpenRow() {
   return { openId, setOpenId };
 }
 
-/** Moves the highlighted task with Alt+↑ and Alt+↓, keeping focus on it as its row moves (or remounts) elsewhere. */
+/** Moves the highlighted task (J, K, Alt+↑ and Alt+↓) and indents it (L, H), keeping focus on it as its row moves (or remounts) elsewhere. */
 function useStepMove(sections: ShownSection[], current: Task | undefined, order: Task[], enabled: boolean, arrowsHere: (e: KeyboardEvent) => boolean) {
   const move = useMoveTask();
   const toast = useToast();
@@ -314,6 +314,26 @@ function useStepMove(sections: ShownSection[], current: Task | undefined, order:
   };
   useCommand("moveUp", step(-1));
   useCommand("moveDown", step(1));
+
+  const send = (request: MoveRequest) => {
+    if (!current) return;
+    moved.current = current.id;
+    move.mutateAsync({ id: current.id, ...request }).catch((err: Error) => toast.show({ message: err.message, error: true }));
+  };
+  // Like the moves above, these are only for a list, and at the end of the line the key does nothing.
+  useCommand("indent", () => {
+    if (!enabled || !current) return false;
+    const request = indentMove(displayItems(sections), current);
+    if (!request) return;
+    // Or the task would go out of sight inside its new parent.
+    setCollapsed(request.parentId, false);
+    send(request);
+  });
+  useCommand("outdent", () => {
+    if (!enabled || !current) return false;
+    const request = outdentMove(displayItems(sections), current);
+    if (request) send(request);
+  });
 }
 
 /**
@@ -342,7 +362,7 @@ function useDropMove(listId: string | undefined) {
 
 /**
  * Task rows in sections, with loading, error and empty states. With `reorder` (a list screen), rows and headings
- * drag with the mouse, and Alt+↑ and Alt+↓ move the highlighted task.
+ * drag with the mouse, and the keys move and indent the highlighted task.
  */
 export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
   query: QueryState;

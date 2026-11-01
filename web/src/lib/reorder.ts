@@ -157,3 +157,33 @@ export function stepMove(items: Item[], task: Task, direction: -1 | 1): MoveRequ
   if (next.kind === "heading") return firstUnder(next);
   return request(parentId, nextAt(items, endOf(items, items.indexOf(next)), item.depth));
 }
+
+/**
+ * L: the move that makes the task the last subtask of the task above it at its depth, or null when there isn't one
+ * (the first in its section or under its parent) or that task is a heading or completed, where the task would go
+ * out of sight once completed tasks are hidden.
+ */
+export function indentMove(items: Item[], task: Task): (MoveRequest & { parentId: string }) | null {
+  const i = items.findIndex((item) => item.task.id === task.id);
+  const item = items[i];
+  if (item?.kind !== "row") return null;
+  const above = previousAt(items, i, item.depth);
+  if (above?.kind !== "row" || above.task.completedAt) return null;
+  return { parentId: above.task.id };
+}
+
+/**
+ * H: the move that takes a subtask out a level, straight after its parent, or null at the top level. Tasks below it
+ * stay under the old parent.
+ */
+export function outdentMove(items: Item[], task: Task): MoveRequest | null {
+  const i = items.findIndex((item) => item.task.id === task.id);
+  const item = items[i];
+  if (item?.kind !== "row" || item.depth === 0) return null;
+  const depth = item.depth - 1;
+  let p = i - 1;
+  while (p >= 0 && depthOf(items[p]!) !== depth) p--;
+  const parent = items[p];
+  if (parent?.kind !== "row") return null;
+  return request(depth > 0 ? parent.task.parentId : null, nextAt(items, endOf(items, p), depth));
+}
