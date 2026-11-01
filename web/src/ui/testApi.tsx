@@ -40,6 +40,7 @@ export const task = (fields: Partial<Task> & Pick<Task, "title" | "listId">): Ta
 });
 
 export interface StubOptions {
+  folders?: Folder[];
   failComplete?: boolean;
   failCreate?: boolean;
   failUpdate?: boolean;
@@ -66,7 +67,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   const store = new Map(tasks.map((t) => [t.id, t]));
   const bodies: Record<string, unknown> = {
     "/api/me": me,
-    "/api/folders": [work, personal],
+    "/api/folders": opts.folders ?? [work, personal],
     "/api/lists": opts.lists ?? [inbox, errands, projects, garden],
     "/api/filters": opts.filters ?? [],
     "/api/settings": {},

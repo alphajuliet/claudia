@@ -1,6 +1,6 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { List } from "@claudia/shared";
+import type { Folder, List } from "@claudia/shared";
 import { errands, garden, inbox, personal, projects, renderAt, sentBodies, stubApi, work } from "./testApi";
 
 const shed: List = { ...errands, id: "01JA0000000000000000000009", name: "Shed", position: "a1" };
@@ -147,6 +147,85 @@ describe("dragging a list in the sidebar", () => {
     await screen.findByText("Boom");
     await waitFor(() => expect(names()).toEqual(["Errands", "Shed", "Projects", "Garden"]));
     expect(moves(fetchMock, shed)).toHaveLength(1);
+  });
+});
+
+describe("dragging past the end of a folder with sub-folders", () => {
+  // Rows: Lists, Errands, Acme, Projects, Travel, Old, Cuscal, Life. Old is the last thing in Acme.
+  const old: Folder = { ...work, id: "01JC0000000000000000000003", name: "Old", parentId: work.id };
+  const travel: List = { ...projects, id: "01JA0000000000000000000008", name: "Travel", position: "a1" };
+  const cuscal: List = { ...projects, id: "01JA0000000000000000000007", name: "Cuscal", folderId: old.id };
+  const belowCuscal = yOf(6, 0.75);
+  const INDENT = 21.6;
+
+  async function nested() {
+    const fetchMock = stubApi([], { lists: [inbox, errands, projects, travel, cuscal], folders: [work, old, personal] });
+    renderAt("/next");
+    await waitFor(() => expect(names()).toEqual(["Errands", "Projects", "Travel", "Cuscal"]));
+    return fetchMock;
+  }
+
+  it("keeps a list from the folder in that folder, however deep the row above is", async () => {
+    const fetchMock = await nested();
+    press(link("Projects"), yOf(3));
+    moveTo(yOf(3) + 8);
+    moveTo(belowCuscal);
+    expect(sidebar().getByText("Acme").closest("summary")!.hasAttribute("data-drop-target")).toBe(true);
+    release(belowCuscal);
+    await waitFor(() => expect(moves(fetchMock, projects)).toEqual([{ folderId: work.id }]));
+    await waitFor(() => expect(names()).toEqual(["Errands", "Travel", "Projects", "Cuscal"]));
+  });
+
+  it("starts in the innermost folder for a list from elsewhere", async () => {
+    const fetchMock = await nested();
+    drag(link("Errands"), 1, belowCuscal);
+    await waitFor(() => expect(moves(fetchMock, errands)).toEqual([{ folderId: old.id }]));
+  });
+
+  it("goes a level out for each indent left", async () => {
+    const fetchMock = await nested();
+    drag(link("Errands"), 1, belowCuscal, 50 - INDENT);
+    await waitFor(() => expect(moves(fetchMock, errands)).toEqual([{ folderId: work.id }]));
+  });
+
+  it("goes a level in for each indent right", async () => {
+    const fetchMock = await nested();
+    drag(link("Travel"), 4, belowCuscal, 50 + INDENT);
+    await waitFor(() => expect(moves(fetchMock, travel)).toEqual([{ folderId: old.id }]));
+  });
+
+  it("indents the line to the level", async () => {
+    await nested();
+    press(link("Errands"), yOf(1));
+    moveTo(yOf(1) + 8);
+    moveTo(belowCuscal, 50 - INDENT);
+    const line = document.querySelector<HTMLElement>(".drop-line")!;
+    expect(line.hidden).toBe(false);
+    expect(line.style.left).toBe(`${INDENT}px`);
+    release(belowCuscal, 50 - INDENT);
+  });
+
+  it("takes a list out of a sub-folder by moving it left in place", async () => {
+    const fetchMock = await nested();
+    press(link("Cuscal"), yOf(6));
+    moveTo(yOf(6) + 8);
+    moveTo(yOf(6, 0.75), 50 - INDENT);
+    release(yOf(6, 0.75), 50 - INDENT);
+    await waitFor(() => expect(moves(fetchMock, cuscal)).toEqual([{ folderId: work.id }]));
+  });
+
+  it("stays in the folder of the list below, wherever the pointer is sideways", async () => {
+    const fetchMock = await nested();
+    drag(link("Errands"), 1, yOf(4, 0.25), 0);
+    await waitFor(() => expect(moves(fetchMock, errands)).toEqual([{ folderId: work.id, beforeId: travel.id }]));
+  });
+
+  it("drops into a folder from the middle of its name, and past the last row after the last list", async () => {
+    const fetchMock = await nested();
+    drag(link("Errands"), 1, yOf(5));
+    await waitFor(() => expect(moves(fetchMock, errands)).toEqual([{ folderId: old.id }]));
+    drag(link("Projects"), 2, yOf(30), 500);
+    expect(moves(fetchMock, projects)).toEqual([]);
   });
 });
 
