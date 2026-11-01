@@ -122,7 +122,7 @@ export function Disclosure({ title, collapsed, onToggle }: { title: string; coll
  * open task, a swipe left calls `onReveal`, and while `open` the row shows Date and Snooze (`onDate`, `onSnooze`).
  * Keyboard and screen-reader users have the panel for those, so the buttons are hidden from them while closed.
  */
-export function TaskRow({ task, depth, today, timeZone, pending, selected = false, highlighted = false, expandable = false, collapsed = false, open = false, onComplete, onRename, onSelect, onHighlight, onToggle, onReveal, onCloseActions, onDate, onSnooze }: {
+export function TaskRow({ task, depth, today, timeZone, pending, selected = false, highlighted = false, expandable = false, collapsed = false, open = false, note, onComplete, onRename, onSelect, onHighlight, onToggle, onReveal, onCloseActions, onDate, onSnooze }: {
   task: Task;
   depth: number;
   today: string;
@@ -130,6 +130,8 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
   pending: boolean;
   selected?: boolean;
   highlighted?: boolean;
+  /** Short context after the date, such as the task's list. */
+  note?: string;
   /** It has subtasks, so it shows a toggle; `collapsed` hides them. */
   expandable?: boolean;
   collapsed?: boolean;
@@ -207,6 +209,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
               <span className="sr-only">Repeats</span>
             </span>
           )}
+          {note && <span className="task-note">{note}</span>}
         </span>
       </div>
     </li>

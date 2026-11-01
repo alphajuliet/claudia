@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import type { Task } from "@claudia/shared";
 import { useDeleteTask, useLists, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
@@ -18,9 +18,9 @@ import { useDrag, type DragTarget } from "./useDrag";
 
 /**
  * A run of rows, under a title (a list name in a view, a heading in a list) or none. A heading's title selects it,
- * as a row would.
+ * as a row would. `aside` follows the title, and `placeholder` stands in for rows when there are none.
  */
-export interface Section { key: string; title?: string; heading?: Task; rows: Row[] }
+export interface Section { key: string; title?: string; heading?: Task; rows: Row[]; aside?: ReactNode; placeholder?: ReactNode }
 
 interface QueryState { isPending: boolean; error: Error | null; refetch: () => unknown }
 
@@ -106,6 +106,7 @@ interface RowProps {
   onCloseActions: () => void;
   onDate: (task: Task) => void;
   onSnooze: (task: Task) => void;
+  rowNote?: (task: Task) => string | undefined;
 }
 
 /** A section as shown: `rows` without collapsed parts, `all` with them, and which tasks have subtasks. */
@@ -125,7 +126,7 @@ function pendingRows(rows: Row[], pending: Set<string>): Set<string> {
   return out;
 }
 
-function TaskSection({ section, pending: pendingIds, selectedId, highlightId, openId, ...rest }: RowProps & { section: ShownSection }) {
+function TaskSection({ section, pending: pendingIds, selectedId, highlightId, openId, rowNote, ...rest }: RowProps & { section: ShownSection }) {
   const { heading } = section;
   const id = useId();
   const pending = pendingRows(section.all, pendingIds);
@@ -142,6 +143,7 @@ function TaskSection({ section, pending: pendingIds, selectedId, highlightId, op
           expandable={section.parents.has(r.task.id)}
           collapsed={section.collapsed.has(r.task.id)}
           open={r.task.id === openId}
+          note={rowNote?.(r.task)}
           {...rest}
         />
       ))}
@@ -167,8 +169,9 @@ function TaskSection({ section, pending: pendingIds, selectedId, highlightId, op
             <InlineMarkdown text={section.title} links={false} />
           </button>
         ) : <span id={id}>{section.title}</span>}
+        {section.aside && <span className="section-aside">{section.aside}</span>}
       </h2>
-      {section.rows.length > 0 && rows}
+      {section.rows.length > 0 ? rows : section.placeholder}
     </section>
   );
 }
@@ -341,7 +344,15 @@ function useDropMove(listId: string | undefined) {
  * Task rows in sections, with loading, error and empty states. With `reorder` (a list screen), rows and headings
  * drag with the mouse, and Alt+↑ and Alt+↓ move the highlighted task.
  */
-export function TaskList({ query, sections, empty, reorder }: { query: QueryState; sections: Section[]; empty: string; reorder?: { listId: string } }) {
+export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
+  query: QueryState;
+  sections: Section[];
+  empty: string;
+  reorder?: { listId: string };
+  /** Sections before this index go in a first column, and the rest in a second. */
+  split?: number;
+  rowNote?: (task: Task) => string | undefined;
+}) {
   const timeZone = useTimeZone();
   const today = todayIn(timeZone);
   const complete = useComplete();
@@ -449,30 +460,37 @@ export function TaskList({ query, sections, empty, reorder }: { query: QueryStat
   }
   if (query.isPending) return <p className="list-state muted">Loading…</p>;
   if (sections.every((s) => s.rows.length === 0 && !s.title)) return <p className="list-state muted">{empty}</p>;
+  const sectionViews = shownSections.map((s) => (
+    <TaskSection
+      key={s.key}
+      section={s}
+      today={today}
+      timeZone={timeZone}
+      pending={pending}
+      selectedId={selectedId}
+      highlightId={highlightId}
+      onComplete={onComplete}
+      onRename={onRename}
+      onSelect={(t) => select(t.id)}
+      onHighlight={highlight}
+      onToggle={toggle}
+      openId={openId}
+      onReveal={(t) => setOpenId(t.id)}
+      onCloseActions={() => setOpenId(null)}
+      onDate={openSheet("due")}
+      onSnooze={openSheet("snooze")}
+      rowNote={rowNote}
+    />
+  ));
   return (
-    <div className="task-sections" ref={drag.ref} onPointerDown={drag.onPointerDown}>
+    <div className={split === undefined ? "task-sections" : "task-sections split"} ref={drag.ref} onPointerDown={drag.onPointerDown}>
       {sheet && <RowSheet sheet={sheet} timeZone={timeZone} onClose={closeSheet} />}
-      {shownSections.map((s) => (
-        <TaskSection
-          key={s.key}
-          section={s}
-          today={today}
-          timeZone={timeZone}
-          pending={pending}
-          selectedId={selectedId}
-          highlightId={highlightId}
-          onComplete={onComplete}
-          onRename={onRename}
-          onSelect={(t) => select(t.id)}
-          onHighlight={highlight}
-          onToggle={toggle}
-          openId={openId}
-          onReveal={(t) => setOpenId(t.id)}
-          onCloseActions={() => setOpenId(null)}
-          onDate={openSheet("due")}
-          onSnooze={openSheet("snooze")}
-        />
-      ))}
+      {split === undefined ? sectionViews : (
+        <>
+          <div className="task-column">{sectionViews.slice(0, split)}</div>
+          <div className="task-column">{sectionViews.slice(split)}</div>
+        </>
+      )}
     </div>
   );
 }
