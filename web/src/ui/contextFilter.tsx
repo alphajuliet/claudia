@@ -1,13 +1,14 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
 import { CONTEXTS } from "@claudia/shared";
+import type { CommandId } from "../lib/commands";
 import type { ContextFilter } from "../lib/sidebar";
 
 const KEY = "claudia.context";
-export const CONTEXT_CHOICES: { id: ContextFilter; name: string }[] = [
-  { id: "all", name: "All" },
-  { id: "work", name: "Work" },
-  { id: "personal", name: "Personal" },
-  { id: "home", name: "Home" },
+export const CONTEXT_CHOICES: { id: ContextFilter; name: string; command: CommandId }[] = [
+  { id: "all", name: "All", command: "contextAll" },
+  { id: "work", name: "Work", command: "contextWork" },
+  { id: "personal", name: "Personal", command: "contextPersonal" },
+  { id: "home", name: "Home", command: "contextHome" },
 ];
 
 const isContext = (value: unknown): value is ContextFilter =>

@@ -84,6 +84,12 @@ function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Co
   );
 }
 
+/** The keys for a context (1 to 4, in the order of the buttons). */
+function ContextCommand({ choice, onChoose }: { choice: (typeof CONTEXT_CHOICES)[number]; onChoose: () => void }) {
+  useCommand(choice.command, onChoose);
+  return null;
+}
+
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
 /**
@@ -148,6 +154,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
 
   return (
     <nav ref={ref} className="sidebar" aria-label="Sidebar" id="sidebar" onKeyDown={onKeyDown}>
+      {CONTEXT_CHOICES.map((c) => <ContextCommand key={c.id} choice={c} onChoose={() => setContext(c.id)} />)}
       <div className="segmented" role="group" aria-label="Context">
         {CONTEXT_CHOICES.map((c) => (
           <button key={c.id} type="button" aria-pressed={context === c.id} onClick={() => setContext(c.id)}>

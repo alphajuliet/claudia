@@ -15,6 +15,34 @@ describe("keyboard commands", () => {
     expect(href()).toBe("/waiting");
   });
 
+  it("changes context with 1 to 4, and narrows what the view shows", async () => {
+    stubApi([task({ title: "Water the beans", listId: garden.id, labels: ["next"] })]);
+    localStorage.removeItem("claudia.context");
+    renderAt("/next");
+    await main().findByText("Water the beans");
+    const pressed = () => screen.getByRole("group", { name: "Context" }).querySelector('[aria-pressed="true"]')?.textContent;
+    expect(pressed()).toBe("All");
+    await userEvent.keyboard("2");
+    expect(pressed()).toBe("Work");
+    await waitFor(() => expect(main().queryByText("Water the beans")).toBeNull());
+    await userEvent.keyboard("3");
+    expect(pressed()).toBe("Personal");
+    await main().findByText("Water the beans");
+    await userEvent.keyboard("4");
+    expect(pressed()).toBe("Home");
+    await userEvent.keyboard("1");
+    expect(pressed()).toBe("All");
+  });
+
+  it("shows Alt and Shift as symbols in the shortcuts", async () => {
+    stubApi([]);
+    renderAt("/inbox");
+    await main().findByRole("heading", { name: "Inbox" });
+    await userEvent.keyboard("?");
+    const row = screen.getByRole("row", { name: /Move list up/ });
+    expect(row.querySelector("kbd")?.textContent).toBe("⌥⇧↑");
+  });
+
   it("leaves keys typed in a field alone", async () => {
     stubApi([]);
     const { href } = renderAt("/inbox");

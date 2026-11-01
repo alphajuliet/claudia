@@ -3,8 +3,9 @@ import { COMMANDS } from "../lib/commands";
 
 const NAMES: Record<string, string> = { ArrowDown: "↓", ArrowUp: "↑", Escape: "Esc", Enter: "Enter", Backspace: "⌫" };
 
-/** A key as shown: "Alt+ArrowUp" reads "⌥↑". */
-const name = (k: string): string => (k.startsWith("Alt+") ? `⌥${name(k.slice(4))}` : NAMES[k] ?? k);
+/** A key as shown: "Alt+Shift+ArrowUp" reads "⌥⇧↑". */
+const name = (k: string): string =>
+  k.startsWith("Alt+") ? `⌥${name(k.slice(4))}` : k.startsWith("Shift+") ? `⇧${name(k.slice(6))}` : NAMES[k] ?? k;
 
 /** One binding as keycaps: "g i" reads "g then i". */
 function Keys({ binding }: { binding: string }) {

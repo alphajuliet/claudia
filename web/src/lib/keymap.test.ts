@@ -2,6 +2,19 @@ import { describe, expect, it } from "vitest";
 import { COMMANDS } from "./commands";
 import { createMatcher, ignoresKeys, wrapIndex } from "./keymap";
 
+describe("the default keys", () => {
+  it("keeps a key that starts a chord from being a command of its own, which it would silently stop running", () => {
+    const keys = COMMANDS.flatMap((c) => c.keys);
+    const starts = new Set(keys.filter((k) => k.includes(" ")).map((k) => k.split(" ")[0]));
+    expect(keys.filter((k) => starts.has(k))).toEqual([]);
+  });
+
+  it("binds each key once", () => {
+    const keys = COMMANDS.flatMap((c) => c.keys);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
 describe("createMatcher", () => {
   it("matches single keys, including arrows", () => {
     const m = createMatcher(COMMANDS);
