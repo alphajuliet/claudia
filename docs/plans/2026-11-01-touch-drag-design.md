@@ -1,6 +1,6 @@
 # Drag tasks to reorder on touch screens
 
-Date: 2026-11-01. Status: approved.
+Date: 2026-11-01. Status: approved; built.
 
 Board card: "Drag tasks to reorder on touch screens (press and hold)" (#Mobile). Dragging (`2026-11-01-drag-reorder-design.md`) works with a mouse only. On a phone or iPad there's no way to reorder. This card adds press and hold to start the same drag on touch screens, on list screens.
 
@@ -27,3 +27,12 @@ Move up or Move down buttons, and dragging in views or filters.
   - a hold then a release without moving does nothing, and the click is ignored;
   - a cancelled touch cancels the drag.
 - Chromium with touch emulation (CDP `Input.dispatchTouchEvent`) at 390px and at iPad width. Then on the iPhone after the deploy.
+
+## As built
+
+- A heading drags from anywhere on its line (`h2.section-title`) except the ▸ toggle, with the mouse as well as on touch. A tap or click on its title still selects it.
+- On the lift the ghost shows at once, but no drop line or target appears until the finger moves. Lifting a row showing Date and Snooze closes them.
+- The row lifted stays bright with a shadow while its subtasks fade. A heading's whole section fades, so its shadow is muted.
+- The page is held still by a non-passive `touchmove` listener on the rows' container, there for as long as the list is, because browsers only honour `preventDefault` from a listener that was non-passive when the touch began. The drag itself still runs on pointer events.
+- A second finger anywhere cancels a hold or a drag, so a pinch can't turn into one. The click after a hold is ignored for up to 500ms, or until the next press anywhere.
+- Checked in Chromium with touch emulation at 390px and 1180px: row and heading drags (no `pointercancel`, no page scroll), hold then release, tap, swipes, and a sidebar drop with Undo. Not yet checked in Safari on an iPhone: the callout, the scroll hold and the bounce need a real device.
