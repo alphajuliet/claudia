@@ -404,7 +404,9 @@ input.nav-rename { height: var(--row-height); padding: 0 0.5rem; font-size: inhe
 .task-note { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
 .section-title:has(> .section-aside) { display: flex; align-items: baseline; gap: 0.5rem; }
 .section-aside { margin-left: auto; font-weight: 500; }
-.section-empty { padding: 0.25rem 0; }
+.section-empty { padding: 0.25rem 0.5rem; }
+.section-empty p { margin: 0; }
+.dashboard-summary { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin-bottom: 1rem; }
 .wip-over { color: var(--danger); font-weight: 650; }
 
 .section-title {

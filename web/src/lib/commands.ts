@@ -1,6 +1,6 @@
 export type CommandId =
   | "next" | "previous" | "moveUp" | "moveDown" | "collapse" | "expand" | "open" | "close" | "complete" | "rename" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
-  | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
+  | "goDashboard" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
 export interface Command { id: CommandId; label: string; keys: string[] }
 
@@ -23,6 +23,7 @@ export const COMMANDS: Command[] = [
   { id: "toggleCompleted", label: "Show or hide completed tasks", keys: ["C"] },
   { id: "capture", label: "Add a task", keys: ["c"] },
   { id: "search", label: "Search", keys: ["/"] },
+  { id: "goDashboard", label: "Go to Dashboard", keys: ["g d"] },
   { id: "goInbox", label: "Go to Inbox", keys: ["g i"] },
   { id: "goToday", label: "Go to Today", keys: ["g t"] },
   { id: "goNext", label: "Go to Next", keys: ["g n"] },

@@ -64,19 +64,12 @@ describe("AppShell", () => {
     expect(sidebar().getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 
-  it("marks the current route's link and redirects / to the Inbox", async () => {
+  it("marks the current route's link and redirects / to the Dashboard", async () => {
     stubApi();
-    renderShell("/");
-    expect(await screen.findByRole("heading", { level: 1, name: "Inbox" })).toBeTruthy();
-    expect((await sidebar().findByRole("link", { name: "Inbox" })).getAttribute("aria-current")).toBe("page");
-    expect(sidebar().getByRole("link", { name: "Today" }).getAttribute("aria-current")).toBeNull();
-  });
-
-  it("redirects / to Today when there is no list called Inbox", async () => {
-    stubApi({ lists: [projects] });
     const { location } = renderShell("/");
-    expect(await screen.findByRole("heading", { level: 1, name: "Today" })).toBeTruthy();
-    expect(location.history.at(-1)).toBe("/today");
+    expect((await sidebar().findByRole("link", { name: "Dashboard" })).getAttribute("aria-current")).toBe("page");
+    expect((await sidebar().findByRole("link", { name: "Inbox" })).getAttribute("aria-current")).toBeNull();
+    expect(location.history.at(-1)).toBe("/dashboard");
   });
 
   it("hides Inbox when there is no list called Inbox", async () => {

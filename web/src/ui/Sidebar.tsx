@@ -138,6 +138,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
 
       <div className="sidebar-scroll">
         <ul className="nav-list">
+          <li><NavLink href="/dashboard" onNavigate={onNavigate}>Dashboard</NavLink></li>
           <li><NavLink href="/search" onNavigate={onNavigate}>Search</NavLink></li>
           {VIEWS.filter((v) => v.id !== "inbox" || inboxId).map((v) => (
             <li key={v.id}>

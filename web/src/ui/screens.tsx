@@ -22,11 +22,9 @@ export function NotFound() {
   );
 }
 
-/** The home address: the Inbox, or Today when there's no list called Inbox. */
+/** The home address: the Dashboard. */
 export function Home() {
-  const lists = useLists();
-  if (lists.isPending) return null;
-  return <Redirect to={lists.isSuccess && !findInbox(lists.data) ? "/today" : "/inbox"} replace />;
+  return <Redirect to="/dashboard" replace />;
 }
 
 /** Open tasks first, then completed ones not already among them. */
@@ -95,14 +93,24 @@ function ScreenHeader({ title, onRename }: { title: string; onRename?: (name: st
  * Sections for a view or filter: open, unsnoozed tasks (headings left out) grouped by list in sidebar order,
  * narrowed to the current context. The Inbox list is not in the sidebar tree, so it is put first.
  */
-export function useGroupedSections(tasks: Task[] | undefined): Section[] {
+function useListOrder() {
   const { context } = useContextFilter();
   const folders = useFolders().data ?? [];
   const lists = useLists().data ?? [];
   const inboxId = findInbox(lists)?.id;
-  const order = [...(inboxId ? [inboxId] : []), ...listOrder(sidebarTree(folders, lists.filter((l) => l.id !== inboxId), context))];
+  return { context, lists, order: [...(inboxId ? [inboxId] : []), ...listOrder(sidebarTree(folders, lists.filter((l) => l.id !== inboxId), context))] };
+}
+
+/** What a view shows: tasks, not headings, that aren't snoozed and are in the context's lists. */
+export function useTaskFilter(): (t: Task) => boolean {
+  const { context, order } = useListOrder();
   const inContext = new Set(order);
-  const shown = (tasks ?? []).filter((t) => t.kind === "task" && !isSnoozed(t) && (context === "all" || inContext.has(t.listId)));
+  return (t) => t.kind === "task" && !isSnoozed(t) && (context === "all" || inContext.has(t.listId));
+}
+
+export function useGroupedSections(tasks: Task[] | undefined): Section[] {
+  const { lists, order } = useListOrder();
+  const shown = (tasks ?? []).filter(useTaskFilter());
   return groupByList(shown, lists, order).map((g) => ({ key: g.listId, title: g.list?.name ?? "Other list", rows: g.rows }));
 }
 
