@@ -25,6 +25,7 @@
   --touch: 44px;
   /* The top inset on iOS, plus a gap: Safari blurs content a little below the status bar, not only behind it. The
      min() makes the gap 0 where there's no inset, so other browsers are unchanged. */
+  --logo: #7722ff;
   --safe-top: calc(env(safe-area-inset-top) + min(env(safe-area-inset-top), 0.75rem));
 
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, "Helvetica Neue", sans-serif;
@@ -39,7 +40,7 @@
 /* From the home screen, iOS 26.1 and later can report an inset of 0 while still blurring the top of the page, so the
    gap can't depend on the inset (https://bugs.webkit.org/show_bug.cgi?id=301994). */
 @media (display-mode: standalone) and (pointer: coarse) {
-  :root { --safe-top: calc(env(safe-area-inset-top) + 1rem); }
+  :root { --safe-top: calc(env(safe-area-inset-top) + 40px); }
 }
 
 /* Dark: from the system unless the theme is set to light, or always when it's set to dark (`data-theme` on <html>). */
@@ -931,7 +932,10 @@ input.task-title-input {
     border-bottom: 1px solid var(--border);
     background: var(--bg);
   }
-  .topbar-title { font-weight: 650; }
+  button.topbar-menu { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch); min-height: var(--touch); padding: 0; margin-left: -0.5rem; border-color: transparent; color: var(--fg); }
+  .menu-icon { width: 1.6rem; height: 1.6rem; }
+  .topbar-title { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 1.45rem; font-weight: 650; line-height: 1.2; }
+  .logo { flex: none; width: 1.5rem; height: 1.5rem; color: var(--logo); }
 
   .sidebar {
     position: fixed;

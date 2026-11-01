@@ -132,6 +132,17 @@ describe("AppShell", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Not found" })).toBeTruthy();
   });
 
+  it("shows the Menu button as an icon, and the logo beside the name", () => {
+    stubApi();
+    const { container } = renderShell();
+    const menu = screen.getByRole("button", { name: "Menu" });
+    expect(menu.textContent).toBe("");
+    expect(menu.querySelector("svg")).not.toBeNull();
+    const title = container.querySelector(".topbar-title")!;
+    expect(title.textContent).toBe("Claudia");
+    expect(title.querySelector("svg.logo")).not.toBeNull();
+  });
+
   it("opens the sidebar drawer from Menu and closes it when a link is chosen", async () => {
     stubApi();
     const { container } = renderShell();

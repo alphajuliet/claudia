@@ -3,6 +3,7 @@ import { Route, Switch, useLocation } from "wouter";
 import type { CommandId } from "../lib/commands";
 import { ContextFilterProvider } from "./contextFilter";
 import { KeyboardProvider, useCommand } from "./keyboard";
+import { Logo, MenuIcon } from "./Logo";
 import { FilterScreen, Home, ListScreen, NotFound, ViewScreen } from "./screens";
 import { SearchScreen } from "./SearchScreen";
 import { useSelectedTask } from "./selection";
@@ -89,10 +90,10 @@ function Shell() {
       <ToastProvider>
         <div className={["shell", drawerOpen && "drawer-open", selectedId && "detail-open"].filter(Boolean).join(" ")}>
           <header className="topbar">
-            <button ref={menu} type="button" className="quiet" aria-expanded={drawerOpen} aria-controls="sidebar" onClick={() => setDrawerOpen((o) => !o)}>
-              Menu
+            <button ref={menu} type="button" className="quiet topbar-menu" aria-label="Menu" aria-expanded={drawerOpen} aria-controls="sidebar" onClick={() => setDrawerOpen((o) => !o)}>
+              <MenuIcon />
             </button>
-            <span className="topbar-title">Claudia</span>
+            <span className="topbar-title"><Logo />Claudia</span>
           </header>
           <Sidebar onNavigate={close} drawerOpen={drawerOpen} onCloseDrawer={dismissDrawer} />
           {drawerOpen && <div className="backdrop" aria-hidden="true" onClick={dismissDrawer} />}
