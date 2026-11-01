@@ -238,11 +238,11 @@ export function useSetCompleted() {
       // Subtasks completed with it get the server's time, so reopening (or Undo) finds them before the refetch.
       const stamped = (t: Task) =>
         t.id === saved.id ? saved : context && "completedAt" in context && t.completedAt === context.completedAt ? { ...t, completedAt: saved.completedAt } : t;
-      if (saved.completedAt)
+      if (saved.completedAt) {
         for (const [key, tasks] of queryClient.getQueriesData<Task[]>(tasksKey))
           if (tasks?.some((t) => t.id === saved.id))
             queryClient.setQueryData<Task[]>(key, keepsCompleted(key) ? tasks.map(stamped) : tasks.filter((t) => t.id !== saved.id));
-      else writeCached(queryClient, saved);
+      } else writeCached(queryClient, saved); // A repeating task stays open, with its next date.
     },
     onSettled: () => refetchWhenLast(queryClient),
   });

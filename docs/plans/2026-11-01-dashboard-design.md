@@ -1,6 +1,6 @@
 # Dashboard design
 
-Status: approved.
+Status: approved; built.
 
 The Dashboard is the daily start: what needs Andrew today, as real tasks he can act on. It mirrors the daily review in the task management note (top 3, overdue, due this week, waiting items) and shows the WIP limit of 3. It is not a statistics screen, and needs no API change.
 
@@ -51,3 +51,12 @@ An empty section shows one quiet line, such as "Nothing overdue". A section that
 ## Testing
 
 Unit tests for sorting into sections and removing duplicates. Screen tests with the fake API. Playwright screenshots at desktop and phone width, light and dark.
+
+## As built
+
+- **Queries:** one query, `dueBefore=today+7`, serves both Overdue and today and This week, so there is no separate 7-day query.
+- **Columns:** they stack when the content can't fit two 20rem columns, not at a fixed 900px. iPad portrait gets two columns, and a laptop with the panel open gets one.
+- **Rows** still show their labels, so WIP rows carry a `wip` chip and Waiting rows a `waitingOn` chip.
+- **Summary:** a count shows as "–" until its query has data, so a failed section never reads as zero.
+- **A failed refresh** with data already on screen shows nothing: the last data stays. Only a section with no data shows the error.
+- **Known limits:** the date doesn't change at midnight until the screen next renders, as with every other view's idea of today. Completing a parent leaves a subtask showing in another section until the refetch.

@@ -86,6 +86,28 @@ describe("the dashboard", () => {
     expect(await section("WIP").findByText("Weed")).toBeTruthy();
   });
 
+  it("doesn't report a failed section as zero", async () => {
+    const fetchMock = stubApi([], { lists: [inbox, garden, projects] });
+    const real = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((path: string, init?: RequestInit) =>
+      String(path).includes("dueBefore") ? Promise.resolve(json({ error: { code: "boom", message: "Boom" } }, 500)) : real(path, init));
+    renderAt("/dashboard");
+    await section("Overdue and today").findByRole("alert");
+    expect(main().getByRole("link", { name: "– Overdue" })).toBeTruthy();
+    expect(main().getByRole("link", { name: "– Today" })).toBeTruthy();
+  });
+
+  it("moves a repeating task on at once, before the refetch", async () => {
+    let release = () => {};
+    const holdRefetch = new Promise<void>((resolve) => { release = resolve; });
+    const water = task({ title: "Water pots", listId: garden.id, dueDate: today, recurRule: "FREQ=DAILY", recurFrom: "due" });
+    stubApi([water], { lists: [inbox, garden, projects], holdRefetch });
+    renderAt("/dashboard");
+    await userEvent.click(await main().findByRole("checkbox", { name: "Complete Water pots" }));
+    await waitFor(() => expect(titles("This week")).toEqual(["Water pots"]));
+    release();
+  });
+
   it("is reached with g d", async () => {
     stubApi([]);
     const { href } = renderAt("/inbox");

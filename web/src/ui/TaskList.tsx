@@ -417,7 +417,8 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
     if (up) goTo(up);
   });
   useCommand("expand", () => {
-    if (!current || !collapsed.has(current.id)) return false;
+    // A task whose subtasks aren't on this screen keeps its state for the screens where they are.
+    if (!current || !canCollapse(current) || !collapsed.has(current.id)) return false;
     setCollapsed(current.id, false);
   });
 

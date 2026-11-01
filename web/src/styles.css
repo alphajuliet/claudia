@@ -398,10 +398,10 @@ input.nav-rename { height: var(--row-height); padding: 0 0.5rem; font-size: inhe
 
 .task-sections { position: relative; display: grid; gap: 1.5rem; }
 /* Two columns where they fit, so it stacks by itself on a phone or beside the open panel. */
-.task-sections.split { grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr)); gap: 1.5rem 2.5rem; align-items: start; }
+.task-sections.split { grid-template-columns: repeat(auto-fit, minmax(min(20rem, 100%), 1fr)); gap: 1.5rem 2.5rem; align-items: start; }
 .content > .task-sections.split { max-width: 72rem; }
 .task-column { display: grid; gap: 1.5rem; min-width: 0; }
-.task-note { color: var(--muted); font-size: 0.85rem; white-space: nowrap; }
+.task-note { max-width: 11rem; overflow: hidden; color: var(--muted); font-size: 0.85rem; text-overflow: ellipsis; white-space: nowrap; }
 .section-title:has(> .section-aside) { display: flex; align-items: baseline; gap: 0.5rem; }
 .section-aside { margin-left: auto; font-weight: 500; }
 .section-empty { padding: 0.25rem 0.5rem; }
