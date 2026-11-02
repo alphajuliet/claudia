@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import type { Task } from "@claudia/shared";
-import { useCreateTask, useDeleteTask, useLists, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
+import { type TaskCreate, useCreateTask, useDeleteTask, useLists, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
 import { displayItems, indentMove, moveFor, outdentMove, placeOf, stepMove, withoutDragged, type Item, type MoveRequest } from "../lib/reorder";
@@ -128,6 +128,26 @@ function pendingRows(rows: Row[], pending: Set<string>): Set<string> {
 
 /** A task made with `n t` or `n s` has a title until you give it one: the API needs one. */
 const NEW_TASK_TITLE = "New task";
+const NEW_HEADING_TITLE = "New heading";
+
+/**
+ * Where a new heading goes. After a task it starts a section there (after a subtask, its top-level task, as a heading
+ * can't nest). On a heading it goes after that whole section, leaving it intact. With neither, it goes last.
+ */
+function headingPlace(order: Task[], target: Task | undefined): { afterId?: string; beforeId?: string } {
+  if (!target) return {};
+  if (target.kind === "heading") {
+    const next = order.slice(order.indexOf(target) + 1).find((t) => t.kind === "heading");
+    return next ? { beforeId: next.id } : {};
+  }
+  let top = target;
+  while (top.parentId) {
+    const parent = order.find((t) => t.id === top.parentId);
+    if (!parent) break;
+    top = parent;
+  }
+  return { afterId: top.id };
+}
 
 function TaskSection({ section, pending: pendingIds, selectedId, highlightId, openId, rowNote, ...rest }: RowProps & { section: ShownSection }) {
   const { heading } = section;
@@ -471,9 +491,9 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
   // n t and n s make the task and open its panel to fill in; closing it untouched takes the task away again (`Shell`).
   const create = useCreateTask();
   const toast = useToast();
-  const make = (fields: { listId: string; parentId: string | null; afterId?: string }) => {
+  const make = (fields: TaskCreate) => {
     if (create.isPending) return;
-    create.mutateAsync({ ...fields, title: NEW_TASK_TITLE }).then((saved) => {
+    create.mutateAsync(fields).then((saved) => {
       markMade(saved);
       select(saved.id);
     }, (e: Error) => toast.show({ message: e.message, error: true }));
@@ -483,15 +503,19 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
   useCommand("newTask", () => {
     if (!target) return false;
     if (target.kind === "heading") setCollapsed(target.id, false); // It goes first in the section.
-    make({ listId: target.listId, parentId: target.parentId, afterId: target.id });
+    make({ listId: target.listId, parentId: target.parentId, afterId: target.id, title: NEW_TASK_TITLE });
   });
   useCommand("newSubtask", () => {
     if (!target) return false;
     // A heading can't have subtasks, and one under a completed task would be out of sight.
     if (target.kind === "heading" || target.completedAt) return;
     setCollapsed(target.id, false);
-    make({ listId: target.listId, parentId: target.id });
+    make({ listId: target.listId, parentId: target.id, title: NEW_TASK_TITLE });
   });
+  // Headings need a list, and only a list screen shows them.
+  useCommand("newHeading", reorder ? () => {
+    make({ listId: reorder.listId, parentId: null, kind: "heading", title: NEW_HEADING_TITLE, ...headingPlace(order, target) });
+  } : undefined);
   useCommand("rename", () => {
     const title = current?.kind === "task" && document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(current.id)}"] .task-title`);
     if (!title) return false;

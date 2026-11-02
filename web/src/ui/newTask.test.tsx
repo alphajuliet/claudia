@@ -133,6 +133,89 @@ describe("n s", () => {
   });
 });
 
+describe("n h", () => {
+  const heading = (title: string) => task({ title, listId: garden.id, kind: "heading" });
+  const newHeading = { listId: garden.id, parentId: null, kind: "heading", title: "New heading" };
+
+  it("starts a section after the highlighted task, with the title ready to type over", async () => {
+    const first = a();
+    const { fetchMock } = await list([first, b()]);
+    await userEvent.keyboard("jnh");
+    const field = await titleField();
+    expect(creates(fetchMock)).toEqual([{ ...newHeading, afterId: first.id }]);
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    expect([field.selectionStart, field.selectionEnd]).toEqual([0, "New heading".length]);
+  });
+
+  it("goes after the top-level task from a subtask", async () => {
+    const parent = a();
+    const sub = task({ title: "Dig", listId: garden.id, parentId: parent.id });
+    const { fetchMock } = await list([parent, sub]);
+    await userEvent.keyboard("jjnh");
+    await titleField();
+    expect(creates(fetchMock)).toEqual([{ ...newHeading, afterId: parent.id }]);
+  });
+
+  it("goes after the whole section on a heading", async () => {
+    const beds = heading("Beds");
+    const pots = heading("Pots");
+    const { fetchMock } = await list([beds, a(), pots]);
+    await userEvent.keyboard("jnh");
+    await titleField();
+    expect(creates(fetchMock)).toEqual([{ ...newHeading, beforeId: pots.id }]);
+  });
+
+  it("goes last on the last heading, and with nothing highlighted", async () => {
+    const { fetchMock } = await list([a(), heading("Beds")]);
+    await userEvent.keyboard("nh");
+    await titleField();
+    expect(creates(fetchMock)).toEqual([newHeading]);
+  });
+
+  it("is what Add heading does, and works in an empty list", async () => {
+    const fetchMock = stubApi([]);
+    renderAt(`/list/${garden.id}`);
+    await main().findByText("Nothing here.");
+    await userEvent.click(screen.getByRole("button", { name: "Add heading" }));
+    await titleField();
+    expect(creates(fetchMock)).toEqual([newHeading]);
+  });
+
+  it("takes an untouched heading away again", async () => {
+    const { fetchMock } = await list([a()]);
+    await userEvent.keyboard("nh");
+    await titleField();
+    await userEvent.keyboard("{Escape}");
+    await waitFor(() => expect(deletes(fetchMock)).toHaveLength(1));
+  });
+
+  it("does nothing outside a list", async () => {
+    const fetchMock = stubApi([task({ title: "Weed the beds", listId: garden.id, labels: ["next"] })]);
+    renderAt("/next");
+    await main().findByText("Weed the beds");
+    await userEvent.keyboard("jnh");
+    await settle();
+    expect(creates(fetchMock)).toEqual([]);
+    expect(screen.queryByRole("button", { name: "Add heading" })).toBeNull();
+  });
+
+  it("starts with an empty title on a touch screen, keeping the saved one if left empty", async () => {
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((q: string) => ({ matches: q === "(pointer: coarse)", addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+    try {
+      await list([a()]);
+      await userEvent.click(screen.getByRole("button", { name: "Add heading" }));
+      const field = await titleField();
+      expect(field.value).toBe("");
+      expect(field.placeholder).toBe("New heading");
+      await userEvent.type(field, "Beds{Enter}");
+      await waitFor(() => expect(main().queryByText("Beds")).not.toBeNull());
+    } finally {
+      window.matchMedia = matchMedia;
+    }
+  });
+});
+
 describe("a failed save", () => {
   it("shows the error and opens nothing", async () => {
     const fetchMock = stubApi([a()], { failCreate: true });

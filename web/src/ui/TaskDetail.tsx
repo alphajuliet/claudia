@@ -110,7 +110,7 @@ function Body({ id, onClose }: { id: string; onClose: () => void }) {
   if (task.kind === "heading") {
     return (
       <>
-        <TitleField task={task} />
+        <TitleField task={task} startHere={isMade(task.id)} />
         <DeleteButton task={task} onClose={onClose} />
       </>
     );

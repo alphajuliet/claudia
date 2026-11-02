@@ -314,6 +314,7 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 .content > * { max-width: 46rem; }
 .content > h1 { margin-bottom: 1rem; }
 .screen-header { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+.screen-actions { display: flex; flex-shrink: 0; gap: 0.25rem; }
 .screen-header button[aria-pressed="true"] { color: var(--accent); }
 /* A list's title renames in place: a button that looks like the heading, and a field with the same font. */
 button.screen-title-button {
@@ -452,6 +453,7 @@ button.section-title-button.selected { color: var(--accent); }
   --indent: 1.6rem;
   position: relative;
   border-radius: var(--radius);
+  cursor: pointer;
   touch-action: pan-y pinch-zoom;
 }
 .task-row-body {
@@ -633,7 +635,6 @@ body[data-drag], body[data-drag] * { cursor: grabbing !important; user-select: n
 span.task-title {
   display: block;
   border-radius: 2px;
-  cursor: text;
 }
 .task-title code, .section-title code {
   padding: 0 0.25em;
@@ -642,6 +643,7 @@ span.task-title {
   border-radius: 3px;
 }
 input.task-title-input {
+  cursor: text;
   height: auto;
   padding: 0;
   border: 0;

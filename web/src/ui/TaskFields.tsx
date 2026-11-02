@@ -95,10 +95,13 @@ export function Field({ label, htmlFor, children, group = false }: { label: stri
 
 const enterPressed = (e: KeyboardEvent) => e.key === "Enter" && !e.nativeEvent.isComposing;
 
+const coarsePointer = () => window.matchMedia?.("(pointer: coarse)").matches ?? false;
+
 /** The title, large. Saves on Enter or leaving the field; an empty title goes back to the saved one. */
 export function TitleField({ task, startHere = false }: { task: Task; startHere?: boolean }) {
   const { state, patch } = usePatch(task);
-  const [draft, setDraft] = useState<string | null>(null);
+  // Touch keyboards won't open without a tap, and the tap would undo a selection: there the field starts empty instead.
+  const [draft, setDraft] = useState<string | null>(startHere && coarsePointer() ? "" : null);
   const input = useRef<HTMLInputElement>(null);
   // A new task's placeholder title, ready to type over.
   useEffect(() => {
@@ -119,6 +122,7 @@ export function TitleField({ task, startHere = false }: { task: Task; startHere?
         type="text"
         className="detail-title-input"
         aria-label="Title"
+        placeholder={task.title}
         autoComplete="off"
         enterKeyHint="done"
         value={draft ?? task.title}

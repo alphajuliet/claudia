@@ -75,3 +75,15 @@ export function useCommand(id: CommandId, handler: CommandHandler | undefined) {
     };
   }, [registry, id, enabled]);
 }
+
+/** Runs a command from a button rather than a key: the same handlers, in the same order. */
+export function useRunCommand() {
+  const registry = useContext(KeyboardContext);
+  return (id: CommandId) => {
+    const handlers = registry?.get(id) ?? [];
+    const e = new KeyboardEvent("keydown");
+    for (let i = handlers.length - 1; i >= 0; i--) {
+      if (handlers[i]!(e) !== false) return;
+    }
+  };
+}

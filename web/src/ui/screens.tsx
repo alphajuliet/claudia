@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { List, Task } from "@claudia/shared";
 import { Link, Redirect } from "wouter";
 import { useFilters, useFilterTasks, useFolders, useLists, useTasks, useTimeZone } from "../data/queries";
@@ -7,7 +8,7 @@ import { groupByList, isSnoozed, treeRows, type Row } from "../lib/tasks";
 import { findInbox, viewLabel, viewQuery, VIEWS, type ViewId } from "../lib/views";
 import { useContextFilter } from "./contextFilter";
 import { InlineRename, useRenameReported } from "./InlineRename";
-import { useCommand } from "./keyboard";
+import { useCommand, useRunCommand } from "./keyboard";
 import { QuickAdd, type QuickAddTarget } from "./QuickAdd";
 import { useShowCompleted } from "./showCompleted";
 import { TaskList, type Section } from "./TaskList";
@@ -69,8 +70,8 @@ function ShowCompletedButton() {
   );
 }
 
-/** A screen's title (click to rename, when `onRename` is given) and its Show completed toggle. */
-function ScreenHeader({ title, onRename }: { title: string; onRename?: (name: string) => void }) {
+/** A screen's title (click to rename, when `onRename` is given), any actions of its own and its Show completed toggle. */
+function ScreenHeader({ title, onRename, children }: { title: string; onRename?: (name: string) => void; children?: ReactNode }) {
   return (
     <header className="screen-header">
       {onRename ? (
@@ -84,7 +85,10 @@ function ScreenHeader({ title, onRename }: { title: string; onRename?: (name: st
       ) : (
         <h1>{title}</h1>
       )}
-      <ShowCompletedButton />
+      <div className="screen-actions">
+        {children}
+        <ShowCompletedButton />
+      </div>
     </header>
   );
 }
@@ -187,6 +191,7 @@ export function ListScreen({ id }: { id: string }) {
   const list: List | undefined = lists.data?.find((l) => l.id === id);
   const [show] = useShowCompleted();
   const rename = useRenameReported("lists");
+  const runCommand = useRunCommand();
   const query = new URLSearchParams({ listId: id, status: "open", limit: "500" }).toString();
   const open = useTasks(query, { keepPrevious: true, keepsCompleted: show });
   const done = useTasks(show ? withStatus(query, "completed") : null, { keepPrevious: true });
@@ -194,7 +199,9 @@ export function ListScreen({ id }: { id: string }) {
   if (lists.isSuccess && !list) return <NotFound />;
   return (
     <>
-      <ScreenHeader title={list?.name ?? "List"} onRename={list ? (name) => rename(list.id, name) : undefined} />
+      <ScreenHeader title={list?.name ?? "List"} onRename={list ? (name) => rename(list.id, name) : undefined}>
+        <button type="button" className="quiet small" onClick={() => runCommand("newHeading")}>Add heading</button>
+      </ScreenHeader>
       <QuickAdd target={list && { listId: list.id, listName: list.name }} />
       <TaskList query={tasks} sections={listSections(visibleRows(tasks.data ?? []))} empty="Nothing here." reorder={{ listId: id }} />
     </>
