@@ -25,18 +25,22 @@ export function useVisualViewport(): ViewportSize | null {
   return size;
 }
 
-const narrowQuery = "(max-width: 899.98px)";
-
-/** Whether the narrow (phone) layout applies, following changes to the window's width. */
-export function useNarrow(): boolean {
-  const [narrow, setNarrow] = useState(() => typeof window.matchMedia === "function" && window.matchMedia(narrowQuery).matches);
+/** Whether a media query matches, following changes. */
+function useMedia(query: string): boolean {
+  const [matches, setMatches] = useState(() => typeof window.matchMedia === "function" && window.matchMedia(query).matches);
   useEffect(() => {
     if (typeof window.matchMedia !== "function") return;
-    const mq = window.matchMedia(narrowQuery);
-    const update = (e: { matches: boolean }) => setNarrow(e.matches);
+    const mq = window.matchMedia(query);
+    const update = (e: { matches: boolean }) => setMatches(e.matches);
     update(mq);
     mq.addEventListener("change", update);
     return () => mq.removeEventListener("change", update);
-  }, []);
-  return narrow;
+  }, [query]);
+  return matches;
 }
+
+/** Whether the narrow layout applies (a phone, or an iPad held upright): the task panel is a full sheet. */
+export const useNarrow = () => useMedia("(max-width: 899.98px)");
+
+/** Whether the compact phone layout applies: the same query as its block in styles.css. */
+export const usePhone = () => useMedia("(max-width: 599.98px) and (pointer: coarse)");

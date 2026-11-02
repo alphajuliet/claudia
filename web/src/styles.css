@@ -1022,6 +1022,48 @@ input.task-title-input {
   .detail-body { padding: 0.25rem 1rem 2rem; }
 }
 
+/* Phones: tighter rows and a shorter task sheet. A 44px row fits too few tasks, so touch targets are row height here,
+   and a control keeps a wider target where it has the room. The width is that of `usePhone`. */
+@media (max-width: 599.98px) and (pointer: coarse) {
+  :root { --touch: 36px; }
+  .topbar { --touch: 44px; }
+
+  .task-sections, .task-column, .task-sections.split { gap: 0.75rem; }
+  .task-row, .task-check { --check: 1.25rem; }
+  .task-check::before { inset: calc((var(--touch) - var(--check)) / -2) calc((44px - var(--check)) / -2); }
+  .task-check:checked { background-size: 0.8rem; }
+  /* A faint line between tasks, from the title across, above the part that moves in a swipe. */
+  .task-row + .task-row::before {
+    content: "";
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: calc(0.5rem + var(--depth, 0) * var(--indent) + var(--check) + 0.65rem);
+    right: 0;
+    height: 1px;
+    background: color-mix(in srgb, var(--border) 60%, transparent);
+    pointer-events: none;
+  }
+
+  /* Done shares the title's line, so the header takes no height. */
+  .detail-header { height: 0; padding: 0; }
+  button.detail-done { position: absolute; top: 0.35rem; right: 0.75rem; min-height: 2.2rem; }
+  button.detail-done::before { content: ""; position: absolute; inset: -0.3rem; }
+  .detail-title { padding-right: 3.75rem; }
+  .detail-body { gap: 0.5rem; padding-top: 0.35rem; }
+  .detail-notes-input { min-height: 2.2rem; }
+  .detail-value { min-height: var(--touch); }
+  .detail-label { padding-top: 0.55rem; }
+  .detail-fields { gap: 0; padding: 0.3rem 0; }
+  .when { gap: 0.3rem; padding: 0; }
+  .when-current { min-height: var(--touch); }
+  button.when-toggle { flex: 1; justify-content: flex-start; min-height: var(--touch); padding: 0; border: 0; background: transparent; color: var(--fg); font-weight: 400; text-align: left; }
+  .when-choices button.quiet.small, .when-current button.quiet.small, .when-inputs .detail-date { min-height: 2.2rem; }
+  .when-choices button.quiet.small { padding: 0.15rem 0.6rem; }
+  .detail-footer { padding-top: 0; }
+  .detail-footer button.danger { min-height: var(--touch); padding: 0; border: 0; background: transparent; font-weight: 500; }
+}
+
 /* Keyboard shortcuts overlay */
 
 .overlay {

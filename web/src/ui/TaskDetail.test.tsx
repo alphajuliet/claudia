@@ -782,4 +782,44 @@ describe("the sheet and the keyboard", () => {
       HTMLElement.prototype.scrollIntoView = original;
     }
   });
+
+  describe("the date fields on a phone", () => {
+    const phone = () => vi.stubGlobal("matchMedia", (query: string) => ({
+      media: query,
+      matches: query.includes("599.98px"),
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    const dueGroup = async () => within(await screen.findByRole("group", { name: "Due" }));
+
+    it("shows only what is set until tapped, and a quick choice folds it again", async () => {
+      phone();
+      const t = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-12-25" });
+      const fetchMock = stubApi([t]);
+      renderAt(`/list/${garden.id}?task=${t.id}`);
+      const due = await dueGroup();
+      expect(due.queryByRole("button", { name: "Due: Tomorrow" })).toBeNull();
+      expect(due.queryByLabelText("Due date")).toBeNull();
+      expect(due.getByRole("button", { name: "Clear due date" })).toBeTruthy();
+      const toggle = due.getByRole("button", { name: "Change due date" });
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      await userEvent.click(toggle);
+      expect(toggle.getAttribute("aria-expanded")).toBe("true");
+      expect(due.getByLabelText("Due date")).toBeTruthy();
+      await userEvent.click(due.getByRole("button", { name: "Due: Tomorrow" }));
+      await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${t.id}`)).toHaveLength(1));
+      expect(due.queryByRole("button", { name: "Due: Tomorrow" })).toBeNull();
+    });
+
+    it("stays open after a typed date, for a time to follow", async () => {
+      phone();
+      const t = task({ title: "Weed the beds", listId: garden.id });
+      stubApi([t]);
+      renderAt(`/list/${garden.id}?task=${t.id}`);
+      const due = await dueGroup();
+      await userEvent.click(due.getByRole("button", { name: "Change due date" }));
+      fireEvent.change(due.getByLabelText("Due date"), { target: { value: "2026-12-25" } });
+      expect(due.getByLabelText("Due time")).toBeTruthy();
+    });
+  });
 });

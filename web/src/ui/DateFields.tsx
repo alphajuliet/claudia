@@ -7,6 +7,7 @@ import { isSnoozed } from "../lib/tasks";
 import { dueFields, quickDates } from "../lib/when";
 import { Field, FieldStatus, usePatch, type SaveState } from "./TaskFields";
 import { useToast } from "./Toast";
+import { usePhone } from "./useVisualViewport";
 
 /*
  * The panel's date fields. Each is a WhenField: what is set now, quick choices, and native date and time inputs, so
@@ -96,8 +97,9 @@ export interface WhenChoice { label: string; date: string; time?: string }
 /**
  * A day with an optional time: what is set now (overdue in red when `showOverdue`) with Clear, quick choices, and date
  * and time inputs. A time needs a day, so a time typed with none set is today. `dateOnly` leaves out the time.
+ * With `collapsible`, a phone shows only what is set: tapping it shows the rest, and a quick choice folds it again.
  */
-export function WhenField({ label, name, value, choices, today, nowTime, timeDisabled = false, dateOnly = false, showOverdue = false, status, onSave }: {
+export function WhenField({ label, name, value, choices, today, nowTime, timeDisabled = false, dateOnly = false, showOverdue = false, collapsible = false, status, onSave }: {
   label: string;
   name: string;
   value: When | null;
@@ -107,6 +109,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   timeDisabled?: boolean;
   dateOnly?: boolean;
   showOverdue?: boolean;
+  collapsible?: boolean;
   status: SaveState;
   /** `quick` is true for a quick choice, false for Clear or a typed date or time. */
   onSave: (when: When | null, quick: boolean) => void;
@@ -116,15 +119,23 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   // Without times, a new day drops the one already set (such as an imported due time on a repeating task).
   const noTime = timeDisabled || dateOnly;
   const keptTime = noTime ? null : value?.time ?? null;
+  const phone = usePhone();
+  const [unfolded, setUnfolded] = useState(false);
+  const foldable = collapsible && phone;
+  const current = shown ? (
+    <span className={showOverdue && shown.overdue ? "due overdue" : undefined}>{shown.text}</span>
+  ) : (
+    <span className="muted">None</span>
+  );
   return (
     <Field label={label} group>
       <div className="when">
         <div className="when-current">
-          {shown ? (
-            <span className={showOverdue && shown.overdue ? "due overdue" : undefined}>{shown.text}</span>
-          ) : (
-            <span className="muted">None</span>
-          )}
+          {foldable ? (
+            <button type="button" className="when-toggle" aria-label={`Change ${name}`} aria-expanded={unfolded} onClick={() => setUnfolded(!unfolded)}>
+              {current}
+            </button>
+          ) : current}
           {value && (
             <button type="button" className="quiet small" aria-label={`Clear ${name}`} onClick={() => onSave(null, false)}>
               Clear
@@ -132,40 +143,47 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
           )}
           <FieldStatus state={status} />
         </div>
-        <div className="when-choices">
-          {choices.map((c) => (
-            <button
-              key={c.label}
-              type="button"
-              className="quiet small"
-              aria-label={`${label}: ${c.label}`}
-              onClick={() => onSave({ date: c.date, time: noTime ? null : c.time ?? keptTime }, true)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-        <div className="when-inputs">
-          <IdleInput
-            type="date"
-            label={`${label} date`}
-            value={value?.date ?? null}
-            complete={wholeDate}
-            onSave={(date) => onSave(date ? { date, time: keptTime } : null, false)}
-          />
-          {!dateOnly && (
-            <IdleInput
-              type="time"
-              label={`${label} time`}
-              value={value?.time ?? null}
-              complete={wholeTime}
-              disabled={timeDisabled}
-              describedBy={timeDisabled ? noteId : undefined}
-              onSave={(time) => onSave(time ? { date: value?.date ?? today, time } : value && { date: value.date, time: null }, false)}
-            />
-          )}
-        </div>
-        {timeDisabled && <p id={noteId} className="when-note muted">Times on repeating tasks are coming</p>}
+        {(!foldable || unfolded) && (
+          <>
+            <div className="when-choices">
+              {choices.map((c) => (
+                <button
+                  key={c.label}
+                  type="button"
+                  className="quiet small"
+                  aria-label={`${label}: ${c.label}`}
+                  onClick={() => {
+                    setUnfolded(false);
+                    onSave({ date: c.date, time: noTime ? null : c.time ?? keptTime }, true);
+                  }}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            <div className="when-inputs">
+              <IdleInput
+                type="date"
+                label={`${label} date`}
+                value={value?.date ?? null}
+                complete={wholeDate}
+                onSave={(date) => onSave(date ? { date, time: keptTime } : null, false)}
+              />
+              {!dateOnly && (
+                <IdleInput
+                  type="time"
+                  label={`${label} time`}
+                  value={value?.time ?? null}
+                  complete={wholeTime}
+                  disabled={timeDisabled}
+                  describedBy={timeDisabled ? noteId : undefined}
+                  onSave={(time) => onSave(time ? { date: value?.date ?? today, time } : value && { date: value.date, time: null }, false)}
+                />
+              )}
+            </div>
+            {timeDisabled && <p id={noteId} className="when-note muted">Times on repeating tasks are coming</p>}
+          </>
+        )}
       </div>
     </Field>
   );
@@ -176,7 +194,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
  * `dueAt`, so the next completion would be the last. `onQuick` runs once a quick choice's save has started (a sheet
  * closes then; the panel stays open).
  */
-export function DueField({ task, timeZone, onQuick }: { task: Task; timeZone: string; onQuick?: () => void }) {
+export function DueField({ task, timeZone, onQuick, collapsible }: { task: Task; timeZone: string; onQuick?: () => void; collapsible?: boolean }) {
   const { state, patch } = usePatch(task);
   const { date: today, time: nowTime } = nowIn(timeZone);
   const quick = quickDates(today);
@@ -196,6 +214,7 @@ export function DueField({ task, timeZone, onQuick }: { task: Task; timeZone: st
       nowTime={nowTime}
       timeDisabled={Boolean(task.recurRule)}
       showOverdue
+      collapsible={collapsible}
       status={state}
       onSave={(when, quick) => {
         void patch(dueFields(when, timeZone));
@@ -217,7 +236,7 @@ function snoozeWhen(task: Task, timeZone: string): When | null {
  * quick choice closes the panel (or sheet) at once; a typed date leaves it open for a time to follow. Either way the toast then
  * says until when, with Undo.
  */
-export function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone: string; onClose: () => void }) {
+export function SnoozeField({ task, timeZone, onClose, collapsible }: { task: Task; timeZone: string; onClose: () => void; collapsible?: boolean }) {
   const { state, patch } = usePatch(task);
   const update = useUpdateTask();
   const queryClient = useQueryClient();
@@ -270,6 +289,7 @@ export function SnoozeField({ task, timeZone, onClose }: { task: Task; timeZone:
       choices={choices}
       today={today}
       nowTime={nowTime}
+      collapsible={collapsible}
       status={state}
       onSave={onSave}
     />
@@ -295,6 +315,7 @@ function StartField({ task, timeZone }: { task: Task; timeZone: string }) {
       today={today}
       nowTime={nowTime}
       dateOnly
+      collapsible
       status={state}
       onSave={(when) => void patch({ startDate: when?.date ?? null })}
     />
@@ -305,8 +326,8 @@ function StartField({ task, timeZone }: { task: Task; timeZone: string }) {
 export function DateFields({ task, timeZone, onClose }: { task: Task; timeZone: string; onClose: () => void }) {
   return (
     <>
-      <DueField task={task} timeZone={timeZone} />
-      <SnoozeField task={task} timeZone={timeZone} onClose={onClose} />
+      <DueField task={task} timeZone={timeZone} collapsible />
+      <SnoozeField task={task} timeZone={timeZone} onClose={onClose} collapsible />
       <StartField task={task} timeZone={timeZone} />
     </>
   );
