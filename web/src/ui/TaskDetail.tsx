@@ -6,7 +6,7 @@ import { DateFields } from "./DateFields";
 import { FieldStatus, LabelsField, ListField, NotesField, RepeatField, TitleField, useSave } from "./TaskFields";
 import { isMade, wasFollowed } from "./selection";
 import { InlineMarkdown, plainText } from "./Markdown";
-import { useNarrow, useVisualViewport } from "./useVisualViewport";
+import { useSheet, useVisualViewport } from "./useVisualViewport";
 
 /** The task's open subtasks, each with a checkbox, and a field that adds one to the end. */
 function Subtasks({ task }: { task: Task }) {
@@ -156,8 +156,8 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
   // On a phone the sheet fits the part of the screen the keyboard leaves, and a field taking focus scrolls into
   // that part once the keyboard has moved things.
   const vv = useVisualViewport();
-  const narrow = useNarrow();
-  const style = narrow && vv ? { height: vv.height, top: vv.offsetTop } : undefined;
+  const sheet = useSheet();
+  const style = sheet && vv ? { height: vv.height, top: vv.offsetTop } : undefined;
   const onFocus = (e: FocusEvent<HTMLElement>) => {
     const target = e.target;
     if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement)) return;

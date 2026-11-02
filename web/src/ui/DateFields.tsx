@@ -7,7 +7,7 @@ import { isSnoozed } from "../lib/tasks";
 import { dueFields, quickDates } from "../lib/when";
 import { Field, FieldStatus, usePatch, type SaveState } from "./TaskFields";
 import { useToast } from "./Toast";
-import { usePhone } from "./useVisualViewport";
+import { useCompact } from "./useVisualViewport";
 
 /*
  * The panel's date fields. Each is a WhenField: what is set now, quick choices, and native date and time inputs, so
@@ -97,7 +97,7 @@ export interface WhenChoice { label: string; date: string; time?: string }
 /**
  * A day with an optional time: what is set now (overdue in red when `showOverdue`) with Clear, quick choices, and date
  * and time inputs. A time needs a day, so a time typed with none set is today. `dateOnly` leaves out the time.
- * With `collapsible`, a phone shows only what is set: tapping it shows the rest, and a quick choice folds it again.
+ * With `collapsible`, a touch screen shows only what is set: tapping it shows the rest, and a quick choice folds it again.
  */
 export function WhenField({ label, name, value, choices, today, nowTime, timeDisabled = false, dateOnly = false, showOverdue = false, collapsible = false, status, onSave }: {
   label: string;
@@ -119,9 +119,9 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   // Without times, a new day drops the one already set (such as an imported due time on a repeating task).
   const noTime = timeDisabled || dateOnly;
   const keptTime = noTime ? null : value?.time ?? null;
-  const phone = usePhone();
+  const compact = useCompact();
   const [unfolded, setUnfolded] = useState(false);
-  const foldable = collapsible && phone;
+  const foldable = collapsible && compact;
   const current = shown ? (
     <span className={showOverdue && shown.overdue ? "due overdue" : undefined}>{shown.text}</span>
   ) : (

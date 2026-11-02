@@ -706,7 +706,7 @@ input.task-title-input {
   background: var(--bg);
 }
 @media (pointer: coarse) {
-  .detail-done { min-width: var(--touch); }
+  .detail-done { min-width: 44px; }
   .detail-header button, .detail-footer button { min-height: var(--touch); }
 }
 
@@ -1022,10 +1022,18 @@ input.task-title-input {
   .detail-body { padding: 0.25rem 1rem 2rem; }
 }
 
-/* Phones: tighter rows and a shorter task sheet. A 44px row fits too few tasks, so touch targets are row height here,
-   and a control keeps a wider target where it has the room. The width is that of `usePhone`. */
-@media (max-width: 599.98px) and (pointer: coarse) {
-  :root { --touch: 36px; }
+/* From about 700px there's room for the task beside the list, so an upright iPad keeps both in view. The width is that
+   of `useSheet`. The drawer stays: the sidebar would leave the list too narrow. */
+@media (min-width: 700px) and (max-width: 899.98px) {
+  .topbar { grid-column: 1 / -1; }
+  .shell.detail-open { grid-template-columns: minmax(0, 1fr) var(--detail-width); }
+  .detail { position: static; z-index: auto; border-left: 1px solid var(--border); padding-top: 0; padding-bottom: 0; }
+}
+
+/* Touch screens: tighter rows and a shorter task panel. A 44px row fits too few tasks, so touch targets are row height
+   here (40px, and 36px on a phone), and a control keeps a wider target where it has the room. As `useCompact`. */
+@media (pointer: coarse) {
+  :root { --touch: 40px; --sidebar-width: 220px; --detail-width: 340px; }
   .topbar { --touch: 44px; }
 
   .task-sections, .task-column, .task-sections.split { gap: 0.75rem; }
@@ -1047,10 +1055,10 @@ input.task-title-input {
 
   /* Done shares the title's line, so the header takes no height. */
   .detail-header { height: 0; padding: 0; }
-  button.detail-done { position: absolute; top: 0.35rem; right: 0.75rem; min-height: 2.2rem; }
+  button.detail-done { position: absolute; top: 0.35rem; right: 1rem; min-height: 2.2rem; }
   button.detail-done::before { content: ""; position: absolute; inset: -0.3rem; }
   .detail-title { padding-right: 3.75rem; }
-  .detail-body { gap: 0.5rem; padding-top: 0.35rem; }
+  .detail-body { gap: 0.5rem; padding: 0.35rem 1rem 2rem; }
   .detail-notes-input { min-height: 2.2rem; }
   .detail-value { min-height: var(--touch); }
   .detail-label { padding-top: 0.55rem; }
@@ -1062,6 +1070,11 @@ input.task-title-input {
   .when-choices button.quiet.small { padding: 0.15rem 0.6rem; }
   .detail-footer { padding-top: 0; }
   .detail-footer button.danger { min-height: var(--touch); padding: 0; border: 0; background: transparent; font-weight: 500; }
+}
+
+@media (max-width: 599.98px) and (pointer: coarse) {
+  :root { --touch: 36px; }
+  .topbar { --touch: 44px; }
 }
 
 /* Keyboard shortcuts overlay */

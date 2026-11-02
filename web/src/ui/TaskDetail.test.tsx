@@ -783,17 +783,17 @@ describe("the sheet and the keyboard", () => {
     }
   });
 
-  describe("the date fields on a phone", () => {
-    const phone = () => vi.stubGlobal("matchMedia", (query: string) => ({
+  describe("the date fields on a touch screen", () => {
+    const touch = () => vi.stubGlobal("matchMedia", (query: string) => ({
       media: query,
-      matches: query.includes("599.98px"),
+      matches: query === "(pointer: coarse)",
       addEventListener: () => {},
       removeEventListener: () => {},
     }));
     const dueGroup = async () => within(await screen.findByRole("group", { name: "Due" }));
 
     it("shows only what is set until tapped, and a quick choice folds it again", async () => {
-      phone();
+      touch();
       const t = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-12-25" });
       const fetchMock = stubApi([t]);
       renderAt(`/list/${garden.id}?task=${t.id}`);
@@ -812,7 +812,7 @@ describe("the sheet and the keyboard", () => {
     });
 
     it("stays open after a typed date, for a time to follow", async () => {
-      phone();
+      touch();
       const t = task({ title: "Weed the beds", listId: garden.id });
       stubApi([t]);
       renderAt(`/list/${garden.id}?task=${t.id}`);

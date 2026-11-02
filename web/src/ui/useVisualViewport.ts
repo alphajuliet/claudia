@@ -39,8 +39,8 @@ function useMedia(query: string): boolean {
   return matches;
 }
 
-/** Whether the narrow layout applies (a phone, or an iPad held upright): the task panel is a full sheet. */
-export const useNarrow = () => useMedia("(max-width: 899.98px)");
+/** Whether the task panel is a full sheet rather than beside the list: the width where styles.css stops that. */
+export const useSheet = () => useMedia("(max-width: 699.98px)");
 
-/** Whether the compact phone layout applies: the same query as its block in styles.css. */
-export const usePhone = () => useMedia("(max-width: 599.98px) and (pointer: coarse)");
+/** Whether the compact touch layout applies, as its block in styles.css does. */
+export const useCompact = () => useMedia("(pointer: coarse)");
