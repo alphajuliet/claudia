@@ -1,4 +1,5 @@
 import { useLocation, useSearch } from "wouter";
+import type { Task } from "@claudia/shared";
 
 /** The task the panel last switched to by following the keyboard highlight: that panel leaves focus on the row. */
 let followedId: string | null = null;
@@ -14,6 +15,20 @@ export function wasFollowed(id: string): boolean {
     if (followedId === id) followedId = null;
   });
   return true;
+}
+
+/** The task just made with `n t` or `n s`, whose panel is open for filling in. */
+let madeTask: Task | null = null;
+
+export const markMade = (task: Task) => { madeTask = task; };
+/** Whether `id` is that task: its panel starts on the title. */
+export const isMade = (id: string) => madeTask?.id === id;
+/** The task if it's `id`, and forgets it: its panel has closed. */
+export function takeMade(id: string): Task | null {
+  if (madeTask?.id !== id) return null;
+  const task = madeTask;
+  madeTask = null;
+  return task;
 }
 
 /**

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Route, Switch, useLocation } from "wouter";
+import { useDiscardUntouched } from "../data/queries";
 import type { CommandId } from "../lib/commands";
 import { ContextFilterProvider } from "./contextFilter";
 import { Dashboard } from "./Dashboard";
@@ -8,7 +9,7 @@ import { ListPicker } from "./ListPicker";
 import { Logo, MenuIcon } from "./Logo";
 import { FilterScreen, Home, ListScreen, NotFound, ViewScreen } from "./screens";
 import { SearchScreen } from "./SearchScreen";
-import { useSelectedTask } from "./selection";
+import { takeMade, useSelectedTask } from "./selection";
 import { Shortcuts } from "./Shortcuts";
 import { Sidebar } from "./Sidebar";
 import { TaskDetail } from "./TaskDetail";
@@ -75,6 +76,18 @@ function Shell() {
   useCommand("delete", covered);
   useCommand("toggleCompleted", covered);
   useCommand("capture", covered);
+  useCommand("newTask", covered);
+  useCommand("newSubtask", covered);
+
+  // However a new task's panel closes (Escape, Done, another task, another screen), a task left as it was made goes.
+  const discard = useDiscardUntouched();
+  const shownTask = useRef(selectedId);
+  useEffect(() => {
+    const was = shownTask.current;
+    shownTask.current = selectedId;
+    const made = was && was !== selectedId ? takeMade(was) : null;
+    if (made) void discard(made);
+  }, [selectedId]);
 
   // Going anywhere (a link, a g chord, search) closes the drawer.
   useEffect(() => setDrawerOpen(false), [location]);

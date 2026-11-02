@@ -273,6 +273,8 @@ export function useCreateTask() {
   return useMutation({
     mutationKey: taskWriteKey("create"),
     mutationFn: async (task: TaskCreate) => json(await api("/api/tasks", send("POST", task)), TaskSchema),
+    // So its panel opens at once, before the lists are refetched.
+    onSuccess: (saved) => queryClient.setQueryData(["tasks", "one", saved.id], [saved]),
     onSettled: (_saved, _error, task) => {
       if (task.labels?.length) void queryClient.invalidateQueries({ queryKey: ["labels"] });
       refetchWhenLast(queryClient);
@@ -432,6 +434,33 @@ export function useDeleteTask() {
     onError: (_error, _vars, context) => restoreCached(queryClient, context?.changed),
     onSettled: () => refetchWhenLast(queryClient),
   });
+}
+
+/**
+ * Deletes a task made with `n t` or `n s` if it's still as `made`, with nothing added under it. Anything unsure keeps
+ * the task: a change still saving, or the server not answering. The server has the last word, because deleting takes
+ * subtasks too and the cache may not have caught up.
+ */
+export function useDiscardUntouched() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  const remove = useDeleteTask();
+  return async (made: Task) => {
+    const saving = queryClient.isMutating({
+      predicate: (m) => {
+        const v = m.state.variables as { id?: string; parentId?: string | null } | undefined;
+        return v?.id === made.id || v?.parentId === made.id;
+      },
+    });
+    if (saving > 0) return;
+    try {
+      const [task, subtasks] = await Promise.all([
+        json(await api(`/api/tasks/${made.id}`), TaskSchema),
+        json(await api(`/api/tasks?parentId=${made.id}&status=all&limit=1`), TasksSchema),
+      ]);
+      if (task.updatedAt === made.updatedAt && task.title === made.title && subtasks.length === 0) await remove.mutateAsync({ task });
+    } catch { /* it stays, as an ordinary task */ }
+  };
 }
 
 /**

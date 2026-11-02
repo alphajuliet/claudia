@@ -4,7 +4,7 @@ import { useCreateTask, usePendingCompletions, useTask, useTasks, useTimeZone } 
 import { useComplete, useDelete } from "./TaskList";
 import { DateFields } from "./DateFields";
 import { FieldStatus, LabelsField, ListField, NotesField, RepeatField, TitleField, useSave } from "./TaskFields";
-import { wasFollowed } from "./selection";
+import { isMade, wasFollowed } from "./selection";
 import { InlineMarkdown, plainText } from "./Markdown";
 import { useNarrow, useVisualViewport } from "./useVisualViewport";
 
@@ -117,7 +117,7 @@ function Body({ id, onClose }: { id: string; onClose: () => void }) {
   }
   return (
     <>
-      <TitleField task={task} />
+      <TitleField task={task} startHere={isMade(task.id)} />
       <NotesField task={task} />
       <div className="detail-fields">
         {/* Keyed so a date still being typed can't show on, or save to, the next task. */}
@@ -138,9 +138,10 @@ function Body({ id, onClose }: { id: string; onClose: () => void }) {
  */
 export function TaskDetail({ id, onClose }: { id: string; onClose: () => void }): ReactNode {
   const ref = useRef<HTMLElement>(null);
-  // Opening takes focus, except when the panel follows the keyboard highlight: the row keeps it.
+  // Opening takes focus, except when the panel follows the keyboard highlight (the row keeps it) or a new task's
+  // title takes it.
   useEffect(() => {
-    if (!wasFollowed(id)) ref.current?.focus({ preventScroll: true });
+    if (!wasFollowed(id) && !isMade(id)) ref.current?.focus({ preventScroll: true });
   }, [id]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {

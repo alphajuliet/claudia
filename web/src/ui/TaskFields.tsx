@@ -96,9 +96,16 @@ export function Field({ label, htmlFor, children, group = false }: { label: stri
 const enterPressed = (e: KeyboardEvent) => e.key === "Enter" && !e.nativeEvent.isComposing;
 
 /** The title, large. Saves on Enter or leaving the field; an empty title goes back to the saved one. */
-export function TitleField({ task }: { task: Task }) {
+export function TitleField({ task, startHere = false }: { task: Task; startHere?: boolean }) {
   const { state, patch } = usePatch(task);
   const [draft, setDraft] = useState<string | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  // A new task's placeholder title, ready to type over.
+  useEffect(() => {
+    if (!startHere) return;
+    input.current?.focus({ preventScroll: true });
+    input.current?.select();
+  }, []); // when the field appears
   const finish = () => {
     if (draft === null) return;
     const title = draft.trim();
@@ -108,6 +115,7 @@ export function TitleField({ task }: { task: Task }) {
   return (
     <div className="detail-title">
       <input
+        ref={input}
         type="text"
         className="detail-title-input"
         aria-label="Title"

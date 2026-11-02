@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import type { Task } from "@claudia/shared";
-import { useDeleteTask, useLists, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
+import { useCreateTask, useDeleteTask, useLists, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
 import { displayItems, indentMove, moveFor, outdentMove, placeOf, stepMove, withoutDragged, type Item, type MoveRequest } from "../lib/reorder";
@@ -12,7 +12,7 @@ import { DueField, SnoozeField } from "./DateFields";
 import { useCommand } from "./keyboard";
 import { InlineMarkdown, plainText } from "./Markdown";
 import { Disclosure, TaskRow } from "./TaskRow";
-import { useSelectedTask } from "./selection";
+import { markMade, useSelectedTask } from "./selection";
 import { useToast } from "./Toast";
 import { useDrag, type DragTarget } from "./useDrag";
 
@@ -125,6 +125,9 @@ function pendingRows(rows: Row[], pending: Set<string>): Set<string> {
   }
   return out;
 }
+
+/** A task made with `n t` or `n s` has a title until you give it one: the API needs one. */
+const NEW_TASK_TITLE = "New task";
 
 function TaskSection({ section, pending: pendingIds, selectedId, highlightId, openId, rowNote, ...rest }: RowProps & { section: ShownSection }) {
   const { heading } = section;
@@ -464,6 +467,30 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
   useCommand("delete", () => {
     if (!current) return false;
     onDelete(current, () => { if (selectedId === current.id) select(null); });
+  });
+  // n t and n s make the task and open its panel to fill in; closing it untouched takes the task away again (`Shell`).
+  const create = useCreateTask();
+  const toast = useToast();
+  const make = (fields: { listId: string; parentId: string | null; afterId?: string }) => {
+    if (create.isPending) return;
+    create.mutateAsync({ ...fields, title: NEW_TASK_TITLE }).then((saved) => {
+      markMade(saved);
+      select(saved.id);
+    }, (e: Error) => toast.show({ message: e.message, error: true }));
+  };
+  // The highlighted task, or the one open in the panel.
+  const target = current ?? order.find((t) => t.id === selectedId);
+  useCommand("newTask", () => {
+    if (!target) return false;
+    if (target.kind === "heading") setCollapsed(target.id, false); // It goes first in the section.
+    make({ listId: target.listId, parentId: target.parentId, afterId: target.id });
+  });
+  useCommand("newSubtask", () => {
+    if (!target) return false;
+    // A heading can't have subtasks, and one under a completed task would be out of sight.
+    if (target.kind === "heading" || target.completedAt) return;
+    setCollapsed(target.id, false);
+    make({ listId: target.listId, parentId: target.id });
   });
   useCommand("rename", () => {
     const title = current?.kind === "task" && document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(current.id)}"] .task-title`);
