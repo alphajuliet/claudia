@@ -17,7 +17,16 @@ describe("dashboard", () => {
   it("splits due tasks at the end of today", () => {
     const d = build({ due: [task("later", { dueDate: "2026-11-03" }), task("now", { dueDate: today }), task("late", { dueDate: "2026-11-01" })] });
     expect(ids(d.dueNow)).toEqual(["late", "now"]);
-    expect(ids(d.thisWeek)).toEqual(["later"]);
+    expect(ids(d.nextDays)).toEqual(["later"]);
+  });
+
+  it("takes the next three days, tomorrow first, and leaves the fourth out", () => {
+    const d = build({ due: [
+      task("fourth", { dueDate: "2026-11-06" }),
+      task("third", { dueDate: "2026-11-05" }),
+      task("first", { dueDate: "2026-11-03" }),
+    ] });
+    expect(ids(d.nextDays)).toEqual(["first", "third"]);
   });
 
   it("takes a due time's day in the user's time zone", () => {
@@ -41,11 +50,11 @@ describe("dashboard", () => {
 
   it("shows a task once, in the first section it fits", () => {
     const both = task("both", { dueDate: today });
-    const week = task("week", { dueDate: "2026-11-04" });
-    const d = build({ wip: [both], due: [both, week], waiting: [both, week] });
+    const soon = task("soon", { dueDate: "2026-11-04" });
+    const d = build({ wip: [both], due: [both, soon], waiting: [both, soon] });
     expect(ids(d.wip)).toEqual(["both"]);
     expect(d.dueNow).toEqual([]);
-    expect(ids(d.thisWeek)).toEqual(["week"]);
+    expect(ids(d.nextDays)).toEqual(["soon"]);
     expect(d.waiting).toEqual([]);
   });
 

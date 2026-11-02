@@ -21,12 +21,12 @@ describe("the dashboard", () => {
       task({ title: "Weed", listId: garden.id, dueDate: today }),
       task({ title: "Dig", listId: garden.id, dueDate: addDays(today, 3) }),
       task({ title: "Sam's reply", listId: projects.id, labels: ["waitingOn"], createdAt: new Date(Date.now() - 12 * 86_400_000).toISOString() }),
-      task({ title: "Far off", listId: garden.id, dueDate: addDays(today, 8) }),
+      task({ title: "Far off", listId: garden.id, dueDate: addDays(today, 4) }),
     ]);
     expect(main().getByRole("heading", { level: 1 }).textContent).toMatch(/^[A-Z][a-z]+day \d{1,2} [A-Z][a-z]+$/);
     expect(titles("WIP")).toEqual(["Draft plan"]);
     expect(titles("Overdue and today")).toEqual(["Weed"]);
-    expect(titles("This week")).toEqual(["Dig"]);
+    expect(titles("Next 3 days")).toEqual(["Dig"]);
     expect(titles("Waiting")).toEqual(["Sam's reply"]);
     expect(section("WIP").getByText("Projects")).toBeTruthy();
     expect(section("Waiting").getByText("12d · Projects")).toBeTruthy();
@@ -53,12 +53,12 @@ describe("the dashboard", () => {
     expect(section("Overdue and today").getByRole("link", { name: "2 more" }).getAttribute("href")).toBe("/today");
   });
 
-  it("expands This week in place", async () => {
+  it("expands Next 3 days in place", async () => {
     await open([1, 2, 3, 4, 5, 6].map((n) => task({ title: `Dig ${n}`, listId: garden.id, dueDate: addDays(today, 2) })));
-    expect(titles("This week")).toHaveLength(5);
-    await userEvent.click(section("This week").getByRole("button", { name: "1 more" }));
-    expect(titles("This week")).toHaveLength(6);
-    expect(section("This week").queryByRole("button", { name: "1 more" })).toBeNull();
+    expect(titles("Next 3 days")).toHaveLength(5);
+    await userEvent.click(section("Next 3 days").getByRole("button", { name: "1 more" }));
+    expect(titles("Next 3 days")).toHaveLength(6);
+    expect(section("Next 3 days").queryByRole("button", { name: "1 more" })).toBeNull();
   });
 
   it("follows the context", async () => {
@@ -104,7 +104,7 @@ describe("the dashboard", () => {
     stubApi([water], { lists: [inbox, garden, projects], holdRefetch });
     renderAt("/dashboard");
     await userEvent.click(await main().findByRole("checkbox", { name: "Complete Water pots" }));
-    await waitFor(() => expect(titles("This week")).toEqual(["Water pots"]));
+    await waitFor(() => expect(titles("Next 3 days")).toEqual(["Water pots"]));
     release();
   });
 

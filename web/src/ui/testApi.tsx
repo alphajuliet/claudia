@@ -158,7 +158,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
         await opts.holdComplete;
         if (opts.failComplete) return fail("Boom");
         if (t.recurRule) {
-          const saved = { ...t, dueDate: addDays(t.dueDate!, 7) };
+          const saved = { ...t, dueDate: addDays(t.dueDate!, t.recurRule.includes("DAILY") ? 1 : 7) };
           store.set(t.id, saved);
           return json({ ...saved, subtasks: 0 });
         }

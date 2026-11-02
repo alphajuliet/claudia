@@ -1,10 +1,13 @@
 import type { Task } from "@claudia/shared";
+import { addDays } from "./dates";
 import { dueDateOf } from "./tasks";
 
 /** From the task management rules: no more than three things in progress. It's shown, not enforced. */
 export const WIP_LIMIT = 3;
 /** Rows shown in a Dashboard section before "more". */
 export const SECTION_LIMIT = 5;
+/** Days after today in the Next 3 days section. */
+export const NEXT_DAYS = 3;
 
 const DAY_MS = 86_400_000;
 
@@ -13,7 +16,7 @@ export interface DashboardInput { wip: Task[]; due: Task[]; waiting: Task[]; tod
 export interface Dashboard {
   wip: Task[];
   dueNow: Task[];
-  thisWeek: Task[];
+  nextDays: Task[];
   waiting: Task[];
   /** Before duplicates are removed, so they match the views they link to. */
   counts: { wip: number; overdue: number; today: number };
@@ -26,12 +29,13 @@ export function dashboard({ wip, due, waiting, today, timeZone }: DashboardInput
     .filter((d): d is { task: Task; date: string } => d.date !== null)
     // A day alone sorts before a time on that day.
     .sort((a, b) => a.date.localeCompare(b.date) || (a.task.dueAt ?? "").localeCompare(b.task.dueAt ?? ""));
+  const lastDay = addDays(today, NEXT_DAYS);
   const seen = new Set<string>();
   const fresh = (tasks: Task[]) => tasks.filter((t) => !seen.has(t.id) && Boolean(seen.add(t.id)));
   return {
     wip: fresh(wip),
     dueNow: fresh(dated.filter((d) => d.date <= today).map((d) => d.task)),
-    thisWeek: fresh(dated.filter((d) => d.date > today).map((d) => d.task)),
+    nextDays: fresh(dated.filter((d) => d.date > today && d.date <= lastDay).map((d) => d.task)),
     waiting: fresh([...waiting].sort((a, b) => a.createdAt.localeCompare(b.createdAt))),
     counts: {
       wip: wip.length,

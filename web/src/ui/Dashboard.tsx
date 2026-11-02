@@ -2,7 +2,7 @@ import { useState, type ReactNode } from "react";
 import type { Task } from "@claudia/shared";
 import { Link } from "wouter";
 import { useCounts, useFolders, useLists, useTasks, useTimeZone } from "../data/queries";
-import { ageOf, dashboard, SECTION_LIMIT, WIP_LIMIT } from "../lib/dashboard";
+import { ageOf, dashboard, NEXT_DAYS, SECTION_LIMIT, WIP_LIMIT } from "../lib/dashboard";
 import { addDays, todayIn } from "../lib/dates";
 import { findInbox, viewCount, viewQuery } from "../lib/views";
 import { QuickAdd } from "./QuickAdd";
@@ -50,9 +50,9 @@ export function Dashboard() {
   const ctx = { today, inboxId: inbox?.id };
   const wipQuery = useTasks(viewQuery("wip", ctx), { keepPrevious: true });
   const waitingQuery = useTasks(viewQuery("waiting", ctx), { keepPrevious: true });
-  const dueQuery = useTasks(new URLSearchParams({ status: "open", limit: "500", dueBefore: addDays(today, 7) }).toString(), { keepPrevious: true });
+  const dueQuery = useTasks(new URLSearchParams({ status: "open", limit: "500", dueBefore: addDays(today, NEXT_DAYS) }).toString(), { keepPrevious: true });
   const shown = useTaskFilter();
-  const [weekOpen, setWeekOpen] = useState(false);
+  const [nextOpen, setNextOpen] = useState(false);
   const stateOf = (query: { data?: Task[]; isPending: boolean; error: Error | null; refetch: () => unknown }): SectionState => ({
     ready: Boolean(query.data && listsQuery.data && foldersQuery.data),
     isPending: query.isPending || listsQuery.isPending || foldersQuery.isPending,
@@ -69,7 +69,7 @@ export function Dashboard() {
   /** A count, once there's something to count. */
   const shownCount = (state: SectionState, n: number) => (state.ready ? n : "–");
 
-  const { wip, dueNow, thisWeek, waiting, counts } = dashboard({
+  const { wip, dueNow, nextDays, waiting, counts } = dashboard({
     wip: (wipQuery.data ?? []).filter(shown),
     due: (dueQuery.data ?? []).filter(shown),
     waiting: (waitingQuery.data ?? []).filter(shown),
@@ -95,13 +95,13 @@ export function Dashboard() {
       placeholder: placeholder(dueState, "Nothing overdue"),
     },
     {
-      key: "week",
-      title: "This week",
-      rows: rowsOf(weekOpen ? thisWeek : thisWeek.slice(0, SECTION_LIMIT)),
-      aside: !weekOpen && extra(thisWeek) > 0 && (
-        <button type="button" className="quiet small" onClick={() => setWeekOpen(true)}>{extra(thisWeek)} more</button>
+      key: "next",
+      title: "Next 3 days",
+      rows: rowsOf(nextOpen ? nextDays : nextDays.slice(0, SECTION_LIMIT)),
+      aside: !nextOpen && extra(nextDays) > 0 && (
+        <button type="button" className="quiet small" onClick={() => setNextOpen(true)}>{extra(nextDays)} more</button>
       ),
-      placeholder: placeholder(dueState, "Nothing this week"),
+      placeholder: placeholder(dueState, "Nothing in the next 3 days"),
     },
     {
       key: "waiting",
