@@ -7,6 +7,7 @@ import { listOrder, sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox, viewCount, VIEWS } from "../lib/views";
 import { useSession } from "../session/SessionProvider";
 import { CONTEXT_CHOICES, useContextFilter } from "./contextFilter";
+import { Logo } from "./Logo";
 import { InlineRename, useRenameReported } from "./InlineRename";
 import { useCommand } from "./keyboard";
 import { THEME_CHOICES, useTheme } from "./theme";
@@ -155,6 +156,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   return (
     <nav ref={ref} className="sidebar" aria-label="Sidebar" id="sidebar" onKeyDown={onKeyDown}>
       {CONTEXT_CHOICES.map((c) => <ContextCommand key={c.id} choice={c} onChoose={() => setContext(c.id)} />)}
+      <div className="sidebar-brand"><Logo />Claudia</div>
       <div className="segmented" role="group" aria-label="Context">
         {CONTEXT_CHOICES.map((c) => (
           <button key={c.id} type="button" aria-pressed={context === c.id} onClick={() => setContext(c.id)}>

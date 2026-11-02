@@ -1,7 +1,8 @@
-/** The six-spoked ❉ from the app icon, without its tile. Its colour is `currentColor`. */
+/** The app icon: the six-spoked ❉ in white on its `--logo` tile. */
 export function Logo() {
   return (
-    <svg className="logo" viewBox="64 44 384 424" fill="currentColor" aria-hidden="true">
+    <svg className="logo" viewBox="0 0 512 512" fill="#fff" aria-hidden="true">
+      <rect width="512" height="512" rx="112" fill="var(--logo)" />
       <circle cx="256" cy="256" r="24" />
       <path d="M262 256 272 98H240L250 256Z" />
       <circle cx="256" cy="98" r="44" />

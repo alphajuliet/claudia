@@ -178,6 +178,9 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 }
 
 .topbar { display: none; }
+.topbar-title, .sidebar-brand { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 1.45rem; font-weight: 650; line-height: 1.2; }
+.sidebar-brand { display: flex; padding: 0.85rem 0.85rem 0; }
+.logo { flex: none; width: 1.5rem; height: 1.5rem; }
 .backdrop { display: none; }
 
 .sidebar {
@@ -976,8 +979,7 @@ input.task-title-input {
   }
   button.topbar-menu { display: inline-flex; align-items: center; justify-content: center; min-width: var(--touch); min-height: var(--touch); padding: 0; margin-left: -0.5rem; border-color: transparent; color: var(--fg); }
   .menu-icon { width: 1.6rem; height: 1.6rem; }
-  .topbar-title { display: inline-flex; align-items: center; gap: 0.45rem; font-size: 1.45rem; font-weight: 650; line-height: 1.2; }
-  .logo { flex: none; width: 1.5rem; height: 1.5rem; color: var(--logo); }
+  .sidebar-brand { display: none; } /* The top bar has it. */
 
   .sidebar {
     position: fixed;

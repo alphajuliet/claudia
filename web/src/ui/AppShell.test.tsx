@@ -125,6 +125,15 @@ describe("AppShell", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Not found" })).toBeTruthy();
   });
 
+  it("shows the logo and name above the context buttons in the sidebar", () => {
+    stubApi();
+    const { container } = renderShell();
+    const brand = container.querySelector(".sidebar-brand")!;
+    expect(brand.textContent).toBe("Claudia");
+    expect(brand.querySelector("svg.logo")).not.toBeNull();
+    expect(brand.nextElementSibling?.getAttribute("aria-label")).toBe("Context");
+  });
+
   it("shows the Menu button as an icon, and the logo beside the name", () => {
     stubApi();
     const { container } = renderShell();
