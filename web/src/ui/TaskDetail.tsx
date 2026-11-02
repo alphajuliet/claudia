@@ -3,7 +3,7 @@ import type { Task } from "@claudia/shared";
 import { useCreateTask, usePendingCompletions, useTask, useTasks, useTimeZone } from "../data/queries";
 import { useComplete, useDelete } from "./TaskList";
 import { DateFields } from "./DateFields";
-import { FieldStatus, LabelsField, ListField, NotesField, RepeatField, TitleField, useSave } from "./TaskFields";
+import { FieldStatus, LabelsField, ListField, NotesField, PriorityField, RepeatField, TitleField, useSave } from "./TaskFields";
 import { isMade, wasFollowed } from "./selection";
 import { InlineMarkdown, plainText } from "./Markdown";
 import { useSheet, useVisualViewport } from "./useVisualViewport";
@@ -122,6 +122,7 @@ function Body({ id, onClose }: { id: string; onClose: () => void }) {
       <div className="detail-fields">
         {/* Keyed so a date still being typed can't show on, or save to, the next task. */}
         <DateFields key={task.id} task={task} timeZone={timeZone} onClose={onClose} />
+        {task.kind === "task" && <PriorityField task={task} />}
         <LabelsField task={task} />
         <ListField task={task} />
         <RepeatField task={task} />

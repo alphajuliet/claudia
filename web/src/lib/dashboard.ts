@@ -1,6 +1,6 @@
 import type { Task } from "@claudia/shared";
 import { addDays } from "./dates";
-import { dueDateOf } from "./tasks";
+import { byPriority, dueDateOf } from "./tasks";
 
 /** From the task management rules: no more than three things in progress. It's shown, not enforced. */
 export const WIP_LIMIT = 3;
@@ -22,7 +22,7 @@ export interface Dashboard {
   counts: { wip: number; overdue: number; today: number };
 }
 
-/** Sorts tasks into the Dashboard's sections. A task shows once, in the first section it fits. */
+/** Sorts tasks into the Dashboard's sections, each by priority. A task shows once, in the first section it fits. */
 export function dashboard({ wip, due, waiting, today, timeZone }: DashboardInput): Dashboard {
   const dated = due
     .map((task) => ({ task, date: dueDateOf(task, timeZone) }))
@@ -31,7 +31,7 @@ export function dashboard({ wip, due, waiting, today, timeZone }: DashboardInput
     .sort((a, b) => a.date.localeCompare(b.date) || (a.task.dueAt ?? "").localeCompare(b.task.dueAt ?? ""));
   const lastDay = addDays(today, NEXT_DAYS);
   const seen = new Set<string>();
-  const fresh = (tasks: Task[]) => tasks.filter((t) => !seen.has(t.id) && Boolean(seen.add(t.id)));
+  const fresh = (tasks: Task[]) => tasks.filter((t) => !seen.has(t.id) && Boolean(seen.add(t.id))).sort(byPriority);
   return {
     wip: fresh(wip),
     dueNow: fresh(dated.filter((d) => d.date <= today).map((d) => d.task)),

@@ -14,7 +14,7 @@ const at = "2026-10-31T00:00:00.000Z";
 const list: List = { id: "01JA0000000000000000000001", name: "Home", folderId: null, position: "a0", archivedAt: null, createdAt: at, updatedAt: at };
 const task: Task = {
   id: "01JB0000000000000000000001", listId: list.id, parentId: null, kind: "task", position: "a0", title: "Water the plants",
-  notes: null, dueDate: null, dueAt: null, startDate: null, snoozedUntil: null, recurRule: null, recurFrom: null,
+  notes: null, dueDate: null, dueAt: null, startDate: null, snoozedUntil: null, recurRule: null, recurFrom: null, priority: "normal",
   completedAt: null, labels: [], metadata: null, createdAt: at, updatedAt: at,
 };
 

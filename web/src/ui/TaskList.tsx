@@ -483,6 +483,14 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
     if (!current || current.kind !== "task") return false;
     if (!pending.has(current.id)) void onComplete(current);
   });
+  const update = useUpdateTask();
+  const setPriority = (priority: Task["priority"]) => () => {
+    if (current?.kind !== "task") return false;
+    if (current.priority !== priority) update.mutateAsync({ id: current.id, patch: { priority } }).catch((e: Error) => toast.show({ message: e.message, error: true }));
+  };
+  useCommand("priorityHigh", setPriority("high"));
+  useCommand("priorityNormal", setPriority("normal"));
+  useCommand("priorityLow", setPriority("low"));
   const onDelete = useDelete();
   useCommand("delete", () => {
     if (!current) return false;

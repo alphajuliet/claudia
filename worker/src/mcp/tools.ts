@@ -117,7 +117,7 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: "update_task",
     description:
-      "Change a task's title, notes, dates or recurrence, or replace its labels. Only the fields you send change; send null to clear a date or notes. labels replaces the whole set. To change which list or position it is in, use move_task." + CONVENTIONS,
+      "Change a task's title, notes, dates, recurrence or priority, or replace its labels. Only the fields you send change; send null to clear a date or notes. labels replaces the whole set. To change which list or position it is in, use move_task." + CONVENTIONS,
     access: "write",
     input: z.object(taskFieldShapes).partial().extend({ id: id("task") }).strict(),
     request: (a) => ({ method: "PATCH", path: `/api/tasks/${a.id}`, body: noId(a) }),

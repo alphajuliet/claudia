@@ -45,6 +45,13 @@ describe("schema", () => {
     expect(row?.deletedAt).toBeNull();
   });
 
+  it("defaults a task to normal priority and rejects any other value", async () => {
+    await seed();
+    const [row] = await db.select().from(tasks);
+    expect(row?.priority).toBe("normal");
+    await reject(db.update(tasks).set({ priority: "urgent" as never }));
+  });
+
   it("rejects an invalid folder context", async () => {
     await reject(db.insert(folders).values({ ...folder, id: "F2", context: "school" as never }));
   });

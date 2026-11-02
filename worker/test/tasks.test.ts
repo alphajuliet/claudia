@@ -71,6 +71,21 @@ describe("update", () => {
   });
 });
 
+describe("priority", () => {
+  it("is normal unless set, can be changed and can be filtered on", async () => {
+    const plain = await task("Plain");
+    expect(plain.priority).toBe("normal");
+    const urgent = await task("Urgent", { priority: "high" });
+    expect(urgent.priority).toBe("high");
+    expect((await api("PATCH", `/api/tasks/${plain.id}`, { priority: "low" })).body.priority).toBe("low");
+    expect(await query("?priority=high")).toEqual(["Urgent"]);
+  });
+
+  it("refuses an unknown priority", async () => {
+    expect((await api("POST", "/api/tasks", { listId: inbox.id, title: "Odd", priority: "urgent" })).status).toBe(400);
+  });
+});
+
 describe("labels", () => {
   it("creates missing labels, reuses existing ones case-insensitively and replaces the set", async () => {
     const t = await task("T", { labels: ["wip", "Next"] });

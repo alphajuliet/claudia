@@ -167,7 +167,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
   };
   return (
     <li
-      className={["task-row", pending && "pending", selected && "selected", highlighted && "highlighted", task.completedAt && "completed"].filter(Boolean).join(" ")}
+      className={["task-row", pending && "pending", selected && "selected", highlighted && "highlighted", task.completedAt && "completed", task.kind === "task" && task.priority !== "normal" && `priority-${task.priority}`].filter(Boolean).join(" ")}
       aria-current={selected ? "true" : undefined}
       tabIndex={-1}
       data-task-id={task.id}
@@ -201,6 +201,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
         />
         <TaskTitle task={task} onRename={onRename} onOpen={onSelect && (() => onSelect(task))} pointerType={pointerType} />
         <span className="task-meta">
+          {task.kind === "task" && task.priority !== "normal" && <span className="sr-only">{task.priority === "high" ? "High priority" : "Low priority"}</span>}
           {task.labels.map((l) => <span key={l} className="chip">{l}</span>)}
           {label && <span className={label.overdue ? "due overdue" : "due"}>{label.text}</span>}
           {task.recurRule && (

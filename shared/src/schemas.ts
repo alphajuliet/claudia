@@ -9,6 +9,7 @@ extendZodWithOpenApi(z);
 export const CONTEXTS = ["work", "personal", "home"] as const;
 export const TASK_KINDS = ["task", "heading"] as const;
 export const RECUR_FROM = ["due", "completion"] as const;
+export const PRIORITIES = ["low", "normal", "high"] as const;
 export const ACTORS = ["web", "mcp", "shortcut", "cli", "import", "system"] as const;
 export const SCOPES = ["read", "write", "admin"] as const;
 
@@ -164,6 +165,7 @@ export const TaskSchema = z
     snoozedUntil: Timestamp.nullable(),
     recurRule: z.string().nullable().openapi({ example: "FREQ=WEEKLY;BYDAY=MO" }),
     recurFrom: z.enum(RECUR_FROM).nullable(),
+    priority: z.enum(PRIORITIES),
     completedAt: Timestamp.nullable(),
     labels: z.array(z.string()).openapi({ description: "Label names" }),
     metadata: z.record(z.unknown()).nullable(),
@@ -185,6 +187,7 @@ export const taskFieldShapes = {
   snoozedUntil: Timestamp.nullable(),
   recurRule: z.string().min(1).nullable(),
   recurFrom: z.enum(RECUR_FROM).nullable(),
+  priority: z.enum(PRIORITIES).openapi({ description: "Normal unless set" }),
   labels: z.array(LabelNameSchema).openapi({ description: "Replaces the task's labels; missing ones are created" }),
   metadata: z.record(z.unknown()).nullable(),
 };
@@ -201,6 +204,7 @@ export const taskCreateShape = {
   snoozedUntil: taskFieldShapes.snoozedUntil.optional(),
   recurRule: taskFieldShapes.recurRule.optional(),
   recurFrom: taskFieldShapes.recurFrom.optional(),
+  priority: taskFieldShapes.priority.optional(),
   labels: taskFieldShapes.labels.optional(),
   metadata: taskFieldShapes.metadata.optional(),
 };
@@ -230,6 +234,7 @@ export const TaskQuerySchema = z.object({
   parentId: IdSchema.optional(),
   status: z.enum(["open", "completed", "all"]).default("open"),
   label: z.string().optional().openapi({ description: "Only tasks with this label (name, case-insensitive)" }),
+  priority: z.enum(PRIORITIES).optional().openapi({ description: "Only tasks with this priority" }),
   dueBefore: DateOnly.optional().openapi({ description: "Due date, or due time in the user's time zone, on or before this date" }),
   dueAfter: DateOnly.optional().openapi({ description: "Due date, or due time in the user's time zone, on or after this date" }),
   q: z.string().optional().openapi({ description: "Case-insensitive match on title or notes" }),
@@ -296,7 +301,7 @@ const ImportTask = z.object({
   position: z.string().min(1), title: z.string().min(1), notes: z.string().nullable(),
   dueDate: DateOnly.nullable(), dueAt: Timestamp.nullable(), startDate: DateOnly.nullable(),
   snoozedUntil: Timestamp.nullable(), recurRule: z.string().min(1).nullable(),
-  recurFrom: z.enum(RECUR_FROM).nullable(), completedAt: Timestamp.nullable(),
+  recurFrom: z.enum(RECUR_FROM).nullable(), priority: z.enum(PRIORITIES).default("normal"), completedAt: Timestamp.nullable(),
   metadata: z.record(z.unknown()).nullable(), labelIds: z.array(IdSchema),
   createdAt: Timestamp, updatedAt: Timestamp,
 }).refine((t) => (t.recurRule === null) === (t.recurFrom === null), "recurRule and recurFrom must be set together");

@@ -1,5 +1,5 @@
 export type CommandId =
-  | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "rename" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
+  | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "priorityHigh" | "priorityNormal" | "priorityLow" | "rename" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
   | "contextAll" | "contextWork" | "contextPersonal" | "contextHome"
   | "goList" | "goDashboard" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
@@ -26,6 +26,9 @@ export const COMMANDS: Command[] = [
   { id: "open", label: "Open task details", keys: ["Enter", "o"] },
   { id: "close", label: "Close task details", keys: ["Escape"] },
   { id: "complete", label: "Complete task", keys: ["x"] },
+  { id: "priorityHigh", label: "Set priority to High", keys: ["p h"] },
+  { id: "priorityNormal", label: "Set priority to Normal", keys: ["p n"] },
+  { id: "priorityLow", label: "Set priority to Low", keys: ["p l"] },
   { id: "rename", label: "Rename task", keys: ["e"] },
   { id: "delete", label: "Delete task", keys: ["Delete", "Backspace"] },
   { id: "toggleCompleted", label: "Show or hide completed tasks", keys: ["C"] },

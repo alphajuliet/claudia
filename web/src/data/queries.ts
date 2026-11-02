@@ -251,7 +251,7 @@ export function useSetCompleted() {
 
 /** The task fields a create or update can set. `null` clears; `labels` replaces the set. */
 export type TaskPatch = Partial<
-  Pick<Task, "title" | "notes" | "dueDate" | "dueAt" | "startDate" | "snoozedUntil" | "recurRule" | "recurFrom" | "labels" | "metadata">
+  Pick<Task, "title" | "notes" | "dueDate" | "dueAt" | "startDate" | "snoozedUntil" | "recurRule" | "recurFrom" | "priority" | "labels" | "metadata">
 >;
 
 export interface TaskCreate extends TaskPatch {

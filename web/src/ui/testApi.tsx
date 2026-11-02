@@ -35,7 +35,7 @@ let seq = 0;
  */
 export const task = (fields: Partial<Task> & Pick<Task, "title" | "listId">): Task => ({
   id: `01JB00000000000000000${String(++seq).padStart(5, "0")}`, parentId: null, kind: "task", position: `a${String(seq).padStart(5, "0")}V`,
-  notes: null, dueDate: null, dueAt: null, startDate: null, snoozedUntil: null, recurRule: null, recurFrom: null,
+  notes: null, dueDate: null, dueAt: null, startDate: null, snoozedUntil: null, recurRule: null, recurFrom: null, priority: "normal",
   completedAt: null, labels: [], metadata: null, createdAt: at, updatedAt: at, ...fields,
 });
 

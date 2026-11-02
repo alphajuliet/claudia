@@ -4,7 +4,7 @@ import { ageOf, dashboard } from "./dashboard";
 
 const task = (id: string, fields: Partial<Task> = {}): Task => ({
   id, listId: "l", parentId: null, kind: "task", title: id, notes: null, position: "a0",
-  dueDate: null, dueAt: null, startDate: null, snoozedUntil: null, recurRule: null, recurFrom: null,
+  dueDate: null, dueAt: null, startDate: null, snoozedUntil: null, recurRule: null, recurFrom: null, priority: "normal",
   completedAt: null, labels: [], metadata: null, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-01T00:00:00.000Z", ...fields,
 } as Task);
 
@@ -62,6 +62,15 @@ describe("dashboard", () => {
     const both = task("both", { dueDate: today });
     const d = build({ wip: [both], due: [both, task("late", { dueDate: "2026-10-30" })] });
     expect(d.counts).toEqual({ wip: 1, overdue: 1, today: 1 });
+  });
+
+  it("puts High first and Low last in each section, by date within them", () => {
+    const d = build({ due: [
+      task("low", { dueDate: "2026-11-01", priority: "low" }),
+      task("overdue", { dueDate: "2026-11-01" }),
+      task("high", { dueDate: "2026-11-02", priority: "high" }),
+    ] });
+    expect(ids(d.dueNow)).toEqual(["high", "overdue", "low"]);
   });
 
   it("keeps WIP's order and puts the oldest waiting task first", () => {

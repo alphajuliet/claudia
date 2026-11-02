@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { flushSync } from "react-dom";
-import type { Task } from "@claudia/shared";
+import { PRIORITIES, type Task } from "@claudia/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { useFolders, useLabels, useLists, useMoveTask, useUpdateTask, type TaskPatch } from "../data/queries";
 import { PRESETS, presetFor, ruleFor, type Preset } from "../lib/repeat";
@@ -298,6 +298,25 @@ export function ListField({ task }: { task: Task }) {
         ))}
       </select>
       <FieldStatus state={save.state} />
+    </Field>
+  );
+}
+
+const PRIORITY_NAMES: Record<Task["priority"], string> = { low: "Low", normal: "Normal", high: "High" };
+
+/** Low, Normal or High. Views sort by it; a list keeps its manual order. */
+export function PriorityField({ task }: { task: Task }) {
+  const { state, patch } = usePatch(task);
+  return (
+    <Field label="Priority" group>
+      <div className="segmented priority-field">
+        {PRIORITIES.map((priority) => (
+          <button key={priority} type="button" aria-pressed={task.priority === priority} onClick={() => { if (task.priority !== priority) void patch({ priority }); }}>
+            {PRIORITY_NAMES[priority]}
+          </button>
+        ))}
+      </div>
+      <FieldStatus state={state} />
     </Field>
   );
 }

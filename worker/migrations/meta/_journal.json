@@ -15,6 +15,13 @@
       "when": 1792897276864,
       "tag": "0001_events_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793653378957,
+      "tag": "0002_task_priority",
+      "breakpoints": true
     }
   ]
 }

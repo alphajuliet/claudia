@@ -257,6 +257,7 @@ export async function transformTasks(
       dueDate, dueAt, startDate, snoozedUntil,
       recurRule: rec && !("error" in rec) ? rec.recurRule : null,
       recurFrom: rec && !("error" in rec) ? rec.recurFrom : null,
+      priority: "normal",
       completedAt: done ? iso(t.completed_at ?? t.cleared_at ?? t.updated_at) : null,
       metadata: { godspeed },
       labelIds: [...new Set(t.label_ids.map((id) => labelRemap.get(id)).filter((id): id is string => !!id))],

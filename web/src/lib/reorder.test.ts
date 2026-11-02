@@ -14,7 +14,7 @@ const task = (overrides: Partial<Task> & Pick<Task, "id">): Task => ({
   startDate: null,
   snoozedUntil: null,
   recurRule: null,
-  recurFrom: null,
+  recurFrom: null, priority: "normal",
   completedAt: null,
   labels: [],
   metadata: null,

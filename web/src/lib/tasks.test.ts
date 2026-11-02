@@ -1,6 +1,6 @@
 import type { List, Task } from "@claudia/shared";
 import { describe, expect, it } from "vitest";
-import { collapseRows, groupByList, isSnoozed, parentsIn, rowsUnder, treeRows } from "./tasks";
+import { collapseRows, groupByList, isSnoozed, parentsIn, rowsUnder, treeRows, type Row } from "./tasks";
 
 const task = (overrides: Partial<Task> & Pick<Task, "id">): Task => ({
   listId: "L1",
@@ -14,7 +14,7 @@ const task = (overrides: Partial<Task> & Pick<Task, "id">): Task => ({
   startDate: null,
   snoozedUntil: null,
   recurRule: null,
-  recurFrom: null,
+  recurFrom: null, priority: "normal",
   completedAt: null,
   labels: [],
   metadata: null,
@@ -120,5 +120,34 @@ describe("collapsing", () => {
     expect(rowsUnder(rows, "B")).toEqual(["C"]);
     expect(rowsUnder(rows, "E")).toEqual([]);
     expect(rowsUnder(rows, "Z")).toEqual([]);
+  });
+});
+
+describe("priority order", () => {
+  const tasks = [
+    task({ id: "low", position: "a0", priority: "low" }),
+    task({ id: "plain", position: "a1" }),
+    task({ id: "high", position: "a2", priority: "high" }),
+    task({ id: "alsoHigh", position: "a3", priority: "high" }),
+  ];
+  const ids = (rows: Row[]) => rows.map((r) => r.task.id);
+
+  it("keeps a list's manual order", () => {
+    expect(ids(treeRows(tasks))).toEqual(["low", "plain", "high", "alsoHigh"]);
+  });
+
+  it("puts High first and Low last in a view, keeping position within each", () => {
+    const [group] = groupByList(tasks, [], ["L1"]);
+    expect(ids(group!.rows)).toEqual(["high", "alsoHigh", "plain", "low"]);
+  });
+
+  it("sorts subtasks among themselves, under their parent", () => {
+    const nested = [
+      task({ id: "parent", position: "a0" }),
+      task({ id: "sub", parentId: "parent", position: "a0" }),
+      task({ id: "urgent", parentId: "parent", position: "a1", priority: "high" }),
+      task({ id: "next", position: "a1" }),
+    ];
+    expect(ids(treeRows(nested, true))).toEqual(["parent", "urgent", "sub", "next"]);
   });
 });

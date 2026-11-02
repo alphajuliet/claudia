@@ -19,6 +19,7 @@ import {
 export const CONTEXTS = ["work", "personal", "home"] as const;
 export const TASK_KINDS = ["task", "heading"] as const;
 export const RECUR_FROM = ["due", "completion"] as const;
+export const PRIORITIES = ["low", "normal", "high"] as const;
 export const ACTORS = ["web", "mcp", "shortcut", "cli", "import", "system"] as const;
 export const ENTITY_TYPES = ["folder", "list", "task", "label", "filter", "setting", "token"] as const;
 
@@ -81,6 +82,7 @@ export const tasks = sqliteTable(
     snoozedUntil: text("snoozed_until"),
     recurRule: text("recur_rule"),
     recurFrom: text("recur_from", { enum: RECUR_FROM }),
+    priority: text("priority", { enum: PRIORITIES }).notNull().default("normal"),
     completedAt: text("completed_at"),
     metadata: text("metadata", { mode: "json" }).$type<Record<string, unknown>>(),
     createdAt: createdAt(),
@@ -93,6 +95,7 @@ export const tasks = sqliteTable(
     index("tasks_due_date_idx").on(t.dueDate),
     index("tasks_completed_idx").on(t.completedAt),
     check("tasks_kind_check", oneOf("kind", TASK_KINDS)),
+    check("tasks_priority_check", oneOf("priority", PRIORITIES)),
     check(
       "tasks_recur_from_check",
       sql`${t.recurFrom} IS NULL OR ${oneOf("recur_from", RECUR_FROM)}`,
