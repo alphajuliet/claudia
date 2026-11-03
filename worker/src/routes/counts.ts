@@ -12,7 +12,7 @@ export const countRoutes = newRouter().openapi(
     tags: ["Tasks"],
     summary: "Open-task counts per list",
     description:
-      "For each list: its open, unsnoozed tasks (not headings, subtasks included), how many are due today or earlier, " +
+      "For each list: its open, unsnoozed tasks (not headings, subtasks included), how many are started or due today or earlier, " +
       "and how many carry each label. The web app's sidebar adds these up for the lists in the chosen context.",
     responses: { 200: jsonResponse(CountsSchema, "Counts per list"), ...commonErrors },
   }),
@@ -27,10 +27,10 @@ export const countRoutes = newRouter().openapi(
       eq(tasks.kind, "task"),
       or(isNull(tasks.snoozedUntil), lte(tasks.snoozedUntil, at)),
     );
-    const due = or(lte(tasks.dueDate, todayIn(timeZone)), lt(tasks.dueAt, tomorrow));
+    const active = or(lte(tasks.dueDate, todayIn(timeZone)), lt(tasks.dueAt, tomorrow), lte(tasks.startDate, todayIn(timeZone)));
     const [perList, perLabel] = await Promise.all([
       db
-        .select({ listId: tasks.listId, open: sql<number>`count(*)`, today: sql<number>`sum(case when ${due} then 1 else 0 end)` })
+        .select({ listId: tasks.listId, open: sql<number>`count(*)`, today: sql<number>`sum(case when ${active} then 1 else 0 end)` })
         .from(tasks)
         .where(open)
         .groupBy(tasks.listId),

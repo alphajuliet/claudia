@@ -18,7 +18,7 @@ const ctx = { today: "2026-10-31", inboxId: "IN" };
 describe("viewQuery", () => {
   it("builds each built-in view's query", () => {
     expect(viewQuery("inbox", ctx)).toBe("status=open&limit=500&listId=IN");
-    expect(viewQuery("today", ctx)).toBe("status=open&limit=500&dueBefore=2026-10-31");
+    expect(viewQuery("today", ctx)).toBe("status=open&limit=500&activeBy=2026-10-31");
     expect(viewQuery("next", ctx)).toBe("status=open&limit=500&label=next");
     expect(viewQuery("wip", ctx)).toBe("status=open&limit=500&label=wip");
     expect(viewQuery("waiting", ctx)).toBe("status=open&limit=500&label=waitingOn");

@@ -127,7 +127,7 @@ export const MeSchema = z
 export const ListCountsSchema = z
   .object({
     open: z.number().int().openapi({ description: "Open, unsnoozed tasks (not headings), subtasks included" }),
-    today: z.number().int().openapi({ description: "Of those, due today or earlier (a due date, or a due time by its day in the user's time zone)" }),
+    today: z.number().int().openapi({ description: "Of those, started or due today or earlier (a start date, a due date, or a due time by its day in the user's time zone)" }),
     labels: z.record(z.string(), z.number().int()).openapi({ description: "Of those, how many carry each label, keyed by lower-case label name" }),
   })
   .openapi("ListCounts");
@@ -237,6 +237,7 @@ export const TaskQuerySchema = z.object({
   priority: z.enum(PRIORITIES).optional().openapi({ description: "Only tasks with this priority" }),
   dueBefore: DateOnly.optional().openapi({ description: "Due date, or due time in the user's time zone, on or before this date" }),
   dueAfter: DateOnly.optional().openapi({ description: "Due date, or due time in the user's time zone, on or after this date" }),
+  activeBy: DateOnly.optional().openapi({ description: "Due, as for dueBefore, or with a start date, on or before this date. This is the Today view" }),
   q: z.string().optional().openapi({ description: "Case-insensitive match on title or notes" }),
   limit: z.coerce.number().int().min(1).max(500).default(100),
   offset: z.coerce.number().int().min(0).default(0),

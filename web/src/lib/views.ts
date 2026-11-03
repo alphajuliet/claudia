@@ -40,7 +40,7 @@ export function viewQuery(id: ViewId, ctx: { today: string; inboxId: string | un
   if (id === "inbox") {
     if (!ctx.inboxId) return null;
     q.set("listId", ctx.inboxId);
-  } else if (id === "today") q.set("dueBefore", ctx.today);
+  } else if (id === "today") q.set("activeBy", ctx.today);
   else q.set("label", LABELS[id]!);
   return q.toString();
 }

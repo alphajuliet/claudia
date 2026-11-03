@@ -200,15 +200,17 @@ async function moveWithSection(db: Db, actor: Actor, before: Row, input: z.infer
  * Due ranges match a due date, or a due time by its day in the user's time zone.
  */
 export async function findTasks(db: Db, q: z.infer<typeof TaskQuerySchema>) {
-  const timeZone = q.dueBefore || q.dueAfter ? await userTimeZone(db) : null;
+  const timeZone = q.dueBefore || q.dueAfter || q.activeBy ? await userTimeZone(db) : null;
   const dayStart = (date: string) => startOfDayIn(date, timeZone!).toISOString();
+  const dueBy = (date: string) => or(lte(tasks.dueDate, date), lt(tasks.dueAt, dayStart(addDays(date, 1))));
   const where = and(
     live,
     q.listId ? eq(tasks.listId, q.listId) : undefined,
     q.parentId ? eq(tasks.parentId, q.parentId) : undefined,
     q.priority ? eq(tasks.priority, q.priority) : undefined,
     q.status === "open" ? isNull(tasks.completedAt) : q.status === "completed" ? isNotNull(tasks.completedAt) : undefined,
-    q.dueBefore ? or(lte(tasks.dueDate, q.dueBefore), lt(tasks.dueAt, dayStart(addDays(q.dueBefore, 1)))) : undefined,
+    q.dueBefore ? dueBy(q.dueBefore) : undefined,
+    q.activeBy ? or(dueBy(q.activeBy), lte(tasks.startDate, q.activeBy)) : undefined,
     q.dueAfter ? or(gte(tasks.dueDate, q.dueAfter), gte(tasks.dueAt, dayStart(q.dueAfter))) : undefined,
     q.q ? sql`(instr(lower(${tasks.title}), lower(${q.q})) > 0 OR instr(lower(coalesce(${tasks.notes}, '')), lower(${q.q})) > 0)` : undefined,
     q.label

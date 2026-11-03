@@ -52,6 +52,14 @@ describe("GET /api/counts", () => {
     expect(res.body.lists[garden.id]).toBeUndefined();
   });
 
+  it("counts a task started by today in Today, whatever its due date", async () => {
+    await task(inbox.id, "Started, due later", { startDate: addDays(today, -1), dueDate: addDays(today, 30) });
+    await task(inbox.id, "Starts today", { startDate: today });
+    await task(inbox.id, "Starts tomorrow", { startDate: addDays(today, 1) });
+    const res = await api("GET", "/api/counts");
+    expect(res.body.lists[inbox.id]).toEqual({ open: 3, today: 2, labels: {} });
+  });
+
   it("is open to read tokens", async () => {
     const read = client(await makeToken(["read"]));
     expect((await read("GET", "/api/counts")).status).toBe(200);

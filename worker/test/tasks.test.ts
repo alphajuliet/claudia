@@ -158,6 +158,22 @@ describe("queries", () => {
   });
 });
 
+describe("activeBy", () => {
+  it("finds tasks due or started by the date, whatever the other date is", async () => {
+    await task("Overdue", { dueDate: "2026-11-01" });
+    await task("Due that day", { dueDate: "2026-11-03" });
+    await task("Timed", { dueAt: "2026-11-03T01:00:00.000Z" });
+    await task("Started, due later", { startDate: "2026-11-02", dueDate: "2026-12-25" });
+    await task("Starts that day, no due date", { startDate: "2026-11-03" });
+    await task("Starts later", { startDate: "2026-11-04" });
+    await task("Due later", { dueDate: "2026-11-04" });
+    await task("No dates");
+    expect((await query("?activeBy=2026-11-03")).sort()).toEqual([
+      "Due that day", "Overdue", "Started, due later", "Starts that day, no due date", "Timed",
+    ]);
+  });
+});
+
 describe("completion", () => {
   it("completes and reopens idempotently, logging once each", async () => {
     const t = await task("T");

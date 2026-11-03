@@ -57,7 +57,7 @@ export interface StubOptions {
 }
 
 /**
- * A small fake of the API: tasks are filtered by listId, parentId, label, dueBefore, q (title or notes) and status; complete/uncomplete
+ * A small fake of the API: tasks are filtered by listId, parentId, label, dueBefore, activeBy, q (title or notes) and status; complete/uncomplete
  * change them along with their subtasks; POST /api/tasks creates, GET /api/tasks/{id} reads, PATCH updates (a
  * recurRule not starting "FREQ=" is refused with a 422, as is a rule without recurFrom), move places a task as the
  * server does (see `moveIn`) and DELETE removes a task and its subtasks. `holdRefetch`
@@ -119,6 +119,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
         && (!q.get("parentId") || t.parentId === q.get("parentId"))
         && (!q.get("label") || t.labels.includes(q.get("label")!))
         && (!q.get("dueBefore") || (t.dueDate !== null && t.dueDate <= q.get("dueBefore")!))
+        && (!q.get("activeBy") || (t.dueDate !== null && t.dueDate <= q.get("activeBy")!) || (t.startDate !== null && t.startDate <= q.get("activeBy")!))
         && (!q.get("q") || `${t.title}\n${t.notes ?? ""}`.toLowerCase().includes(q.get("q")!.toLowerCase())));
       return json(out);
     }
@@ -222,7 +223,7 @@ function countsOf(tasks: Task[]) {
     if (t.kind !== "task" || t.completedAt !== null) continue;
     const c = (lists[t.listId] ??= { open: 0, today: 0, labels: {} });
     c.open++;
-    if (t.dueDate !== null && t.dueDate <= today) c.today++;
+    if ((t.dueDate !== null && t.dueDate <= today) || (t.startDate !== null && t.startDate <= today)) c.today++;
     for (const l of t.labels) c.labels[l.toLowerCase()] = (c.labels[l.toLowerCase()] ?? 0) + 1;
   }
   return { lists };

@@ -49,7 +49,7 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: "search_tasks",
     description:
-      "Find tasks. Returns open tasks by default, in list order, up to 50 at a time (use offset to page). Combine filters to build smart lists: list, label, due range, text." + CONVENTIONS,
+      "Find tasks. Returns open tasks by default, in list order, up to 50 at a time (use offset to page). Combine filters to build smart lists: list, label, due range, activeBy (due or started by a date, as the Today view), text." + CONVENTIONS,
     access: "read",
     input: TaskQuerySchema.extend({
       limit: z.number().int().min(1).max(500).default(50),
