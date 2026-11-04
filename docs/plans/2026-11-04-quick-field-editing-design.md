@@ -1,6 +1,6 @@
 # Quick editing of task fields from the keyboard
 
-Date: 2026-11-04. Status: approved; building.
+Date: 2026-11-04. Status: approved; built (3ed573e).
 
 Board cards: "Highlight the first task when a list is selected" and "Quick editing of task fields" (#Desktop).
 
