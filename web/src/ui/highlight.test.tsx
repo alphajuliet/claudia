@@ -21,16 +21,23 @@ describe("the keyboard highlight", () => {
   it("moves with j and k and wraps at both ends", async () => {
     threeTasks();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("j");
-    expect(document.activeElement).toBe(row("Weed the beds"));
     expect(row("Weed the beds").classList).toContain("highlighted");
-    await userEvent.keyboard("k");
+    await userEvent.keyboard("j");
+    expect(document.activeElement).toBe(row("Plant tomatoes"));
+    await userEvent.keyboard("kk");
     expect(document.activeElement).toBe(row("Mulch the roses"));
     expect(row("Weed the beds").classList).not.toContain("highlighted");
     await userEvent.keyboard("j");
     expect(document.activeElement).toBe(row("Weed the beds"));
     await userEvent.keyboard("{ArrowDown}");
     expect(document.activeElement).toBe(row("Plant tomatoes"));
+  });
+
+  it("highlights the first row on a new screen, to move on from", async () => {
+    threeTasks();
+    await main().findByText("Weed the beds");
+    expect(row("Weed the beds").classList).toContain("highlighted");
+    expect(row("Plant tomatoes").classList).not.toContain("highlighted");
   });
 
   it("starts from the last row on k", async () => {
@@ -43,7 +50,7 @@ describe("the keyboard highlight", () => {
   it("opens the panel on Enter, follows the highlight while open without adding history, and gives focus back on Escape", async () => {
     const { tasks, href, location } = threeTasks();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("j{Enter}");
+    await userEvent.keyboard("{Enter}");
     expect(href()).toBe(`/list/${garden.id}?task=${tasks[0]!.id}`);
     expect(await screen.findByRole("textbox", { name: "Title" })).toHaveProperty("value", "Weed the beds");
     const entries = location.history!.length;
@@ -84,7 +91,7 @@ describe("the keyboard highlight", () => {
   it("completes with x and passes the highlight to the next row", async () => {
     const { tasks, fetchMock } = threeTasks();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     await userEvent.keyboard("x");
     expect(fetchMock.mock.calls.some(([p, init]) => p === `/api/tasks/${tasks[1]!.id}/complete` && init?.method === "POST")).toBe(true);
     await waitFor(() => expect(main().queryByText("Plant tomatoes")).toBeNull());
@@ -92,11 +99,10 @@ describe("the keyboard highlight", () => {
     expect(row("Mulch the roses").classList).toContain("highlighted");
   });
 
-  it("renames with e", async () => {
+  it("renames with e t", async () => {
     const { fetchMock, tasks } = threeTasks();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("j");
-    await userEvent.keyboard("e");
+    await userEvent.keyboard("et");
     const field = main().getByRole("textbox", { name: "Title" }) as HTMLInputElement;
     expect(document.activeElement).toBe(field);
     await userEvent.clear(field);
@@ -130,7 +136,7 @@ describe("the keyboard highlight", () => {
     ]);
     renderAt(`/list/${garden.id}`);
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     expect(document.activeElement).toBe(main().getByRole("button", { name: "Spring" }));
     // Headings can't be completed.
     await userEvent.keyboard("x");
@@ -142,7 +148,7 @@ describe("the keyboard highlight", () => {
   it("completes once when x is held down", async () => {
     const { fetchMock } = threeTasks();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("j{x>4/}");
+    await userEvent.keyboard("{x>4/}");
     await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
     const completes = fetchMock.mock.calls.filter(([p, init]) => String(p).endsWith("/complete") && init?.method === "POST");
     expect(completes).toHaveLength(1);
@@ -192,7 +198,7 @@ describe("the keyboard highlight", () => {
     stubApi([task({ title: "Weed the beds", listId: inbox.id, labels: ["next"] }), task({ title: "Plant tomatoes", listId: inbox.id, labels: ["next"] })]);
     renderAt("/next");
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     expect(document.activeElement).toBe(row("Plant tomatoes"));
     await userEvent.keyboard("gi");
     await main().findByRole("heading", { name: "Inbox" });
@@ -200,8 +206,9 @@ describe("the keyboard highlight", () => {
     await main().findByRole("heading", { name: "Next" });
     await main().findByText("Weed the beds");
     expect(row("Plant tomatoes").classList).not.toContain("highlighted");
+    expect(row("Weed the beds").classList).toContain("highlighted");
     await userEvent.keyboard("j");
-    expect(document.activeElement).toBe(row("Weed the beds"));
+    expect(document.activeElement).toBe(row("Plant tomatoes"));
   });
 
   it("deletes the highlighted task with Delete or Backspace after asking, and moves the highlight on", async () => {
@@ -209,7 +216,7 @@ describe("the keyboard highlight", () => {
     const confirm = vi.fn(() => true);
     vi.stubGlobal("confirm", confirm);
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("j{Delete}");
+    await userEvent.keyboard("{Delete}");
     expect(confirm).toHaveBeenCalledWith("Delete “Weed the beds” and its subtasks? This can't be undone.");
     await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
     expect(fetchMock.mock.calls.some(([p, init]) => p === `/api/tasks/${tasks[0]!.id}` && init?.method === "DELETE")).toBe(true);
@@ -227,7 +234,7 @@ describe("the keyboard highlight", () => {
     const { href } = threeTasks();
     vi.stubGlobal("confirm", () => true);
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("j{Enter}");
+    await userEvent.keyboard("{Enter}");
     await screen.findByRole("textbox", { name: "Title" });
     // Focus is in the panel (not a field): Backspace still deletes the highlighted task.
     await userEvent.keyboard("{Backspace}");

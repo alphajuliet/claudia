@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useCommand } from "./keyboard";
 
 /** Labels to offer: those not on the task whose names contain the typed text (ignoring case), alphabetically. */
 export function labelOptions(all: string[], taken: string[], text: string): string[] {
@@ -33,6 +34,9 @@ export function LabelPicker({ all, taken, onAdd }: {
   const expanded = open && options.length > 0;
   const optionId = (i: number) => `${id}-${i}`;
   const list = useRef<HTMLUListElement>(null);
+  const input = useRef<HTMLInputElement>(null);
+  // e l: into the field, which opens the list.
+  useCommand("editLabels", () => { input.current?.focus({ preventScroll: true }); });
   // On a phone the list may open below the keyboard: bring it into view, and keep the highlighted option in view.
   useEffect(() => {
     if (expanded) list.current?.scrollIntoView?.({ block: "nearest" });
@@ -71,6 +75,7 @@ export function LabelPicker({ all, taken, onAdd }: {
   return (
     <div className="label-picker">
       <input
+        ref={input}
         type="text"
         className="detail-inline-input"
         role="combobox"

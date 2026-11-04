@@ -29,7 +29,7 @@ describe("Shift+H, J, K and L", () => {
   it("moves the highlighted task with J and K", async () => {
     const { tasks: [a, b], fetchMock } = threeTasks();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("j");
+    await userEvent.keyboard("jk");
     await userEvent.keyboard("{Shift>}J{/Shift}");
     await waitFor(() => expect(titles()).toEqual(["Plant tomatoes", "Weed the beds", "Mulch the roses"]));
     expect(moves(fetchMock, a!)).toHaveLength(1);
@@ -42,7 +42,7 @@ describe("Shift+H, J, K and L", () => {
   it("indents the task under the one above with L, and out again after its parent with H", async () => {
     const { tasks: [a, b], fetchMock } = threeTasks();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     await userEvent.keyboard("{Shift>}L{/Shift}");
     await waitFor(() => expect(row("Plant tomatoes").dataset.depth).toBe("1"));
     expect(moves(fetchMock, b!)).toEqual([{ parentId: a!.id }]);
@@ -71,7 +71,7 @@ describe("Shift+H, J, K and L", () => {
   it("does nothing on the first task, or at the top level with H", async () => {
     const { fetchMock } = threeTasks();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("j");
+    await userEvent.keyboard("jk");
     await userEvent.keyboard("{Shift>}LH{/Shift}");
     await new Promise((r) => setTimeout(r));
     expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
@@ -93,7 +93,7 @@ describe("Alt+↑ and Alt+↓", () => {
   it("moves the highlighted task past its neighbour and keeps it highlighted and focused", async () => {
     const { tasks: [a, b], fetchMock } = threeTasks();
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     expect(document.activeElement).toBe(row("Plant tomatoes"));
     await altUp();
     await waitFor(() => expect(titles()).toEqual(["Plant tomatoes", "Weed the beds", "Mulch the roses"]));
@@ -114,7 +114,7 @@ describe("Alt+↑ and Alt+↓", () => {
     let gated = false;
     const { tasks: [a, , c], fetchMock } = threeTasks({ gate: (method) => (method === "POST" && !gated ? ((gated = true), first) : undefined) });
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("j");
+    await userEvent.keyboard("jk");
     await altDown();
     await altDown();
     await waitFor(() => expect(titles()).toEqual(["Plant tomatoes", "Mulch the roses", "Weed the beds"]));
@@ -146,7 +146,7 @@ describe("Alt+↑ and Alt+↓", () => {
     const fetchMock = stubApi(tasks);
     renderAt(`/list/${garden.id}`);
     await main().findByText("Plant tomatoes");
-    await userEvent.keyboard("jjj");
+    await userEvent.keyboard("jj");
     expect(document.activeElement).toBe(row("Plant tomatoes"));
     await altUp();
     await waitFor(() => expect(section("Spring").queryByText("Plant tomatoes")).toBeNull());
@@ -174,7 +174,7 @@ describe("Alt+↑ and Alt+↓", () => {
     const fetchMock = stubApi(tasks);
     renderAt(`/list/${garden.id}`);
     await main().findByText("Plant tomatoes");
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     expect(document.activeElement?.textContent).toBe("Spring");
     await altDown();
     await waitFor(() => expect(headings()).toEqual(["Summer", "Spring"]));
@@ -190,7 +190,7 @@ describe("Alt+↑ and Alt+↓", () => {
     const held = new Promise<void>((_resolve, reject) => { fail = () => reject(new Error("no")); });
     threeTasks({ gate: (method) => (method === "POST" ? held : undefined) });
     await main().findByText("Weed the beds");
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     await altUp();
     await waitFor(() => expect(titles()).toEqual(["Plant tomatoes", "Weed the beds", "Mulch the roses"]));
     fail();
@@ -206,7 +206,7 @@ describe("Alt+↑ and Alt+↓", () => {
     const fetchMock = stubApi(tasks);
     renderAt("/next");
     await main().findByText("Plant tomatoes");
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     expect(document.activeElement).toBe(row("Plant tomatoes"));
     await altUp();
     expect(moves(fetchMock, tasks[1]!)).toEqual([]);

@@ -52,7 +52,7 @@ describe("collapsing", () => {
   it("collapses with h, goes to the parent with h again, and expands with l", async () => {
     outline();
     await main().findByText("Dig");
-    await userEvent.keyboard("jj");
+    await userEvent.keyboard("j");
     expect(document.activeElement).toBe(row("Dig"));
     // Dig has nothing under it: h goes to Plan.
     await userEvent.keyboard("h");
@@ -82,7 +82,7 @@ describe("collapsing", () => {
   it("hands the highlight to the item collapsed over it", async () => {
     outline();
     await main().findByText("Sow");
-    await userEvent.keyboard("jjj");
+    await userEvent.keyboard("jj");
     expect(document.activeElement).toBe(row("Sow"));
     await userEvent.click(main().getByRole("button", { name: "Collapse Plan" }));
     expect(row("Plan").classList).toContain("highlighted");

@@ -199,6 +199,15 @@ function TaskSection({ section, pending: pendingIds, selectedId, highlightId, op
   );
 }
 
+/** Puts the cursor at the end of the open panel's title. False when no panel is showing. */
+export function focusPanelTitle(): boolean {
+  const input = document.querySelector<HTMLInputElement>(".detail-title-input");
+  if (!input) return false;
+  input.focus({ preventScroll: true });
+  input.setSelectionRange(input.value.length, input.value.length);
+  return true;
+}
+
 /** Focuses the row (or heading) showing a task, if it's on screen. */
 export function focusTask(id: string, preventScroll = false) {
   document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(id)}"]`)?.focus({ preventScroll });
@@ -244,6 +253,13 @@ function useHighlight(order: Task[]) {
     // change may have come from elsewhere).
     if (document.activeElement === document.body || !document.activeElement) focusTask(next.id, true);
   }, [ids, highlightId]); // when the rows or the highlight change
+
+  // A screen starts on its first row, so there is somewhere to move from. Not on a touch screen, where a highlight
+  // has no key to follow, and not when a task is already open (j and k start from that one).
+  useEffect(() => {
+    if (highlightId || selectedId || order.length === 0 || window.matchMedia?.("(pointer: coarse)").matches) return;
+    setState({ path: location, id: order[0]!.id });
+  }, [ids, highlightId, selectedId, location]);
 
   const move = (delta: 1 | -1) => {
     if (order.length === 0) return false;
@@ -477,6 +493,8 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
     // Enter on a button or link keeps its own meaning: it opens only from the row itself (or nothing focused).
     const active = document.activeElement;
     if (e.key === "Enter" && !(active === document.body || active?.getAttribute("data-task-id") === current.id)) return false;
+    // Already open: Enter again goes on to the title.
+    if (e.key === "Enter" && selectedId === current.id && focusPanelTitle()) return;
     select(current.id);
   });
   useCommand("complete", () => {
@@ -525,6 +543,7 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
     make({ listId: reorder.listId, parentId: null, kind: "heading", title: NEW_HEADING_TITLE, ...headingPlace(order, target) });
   } : undefined);
   useCommand("rename", () => {
+    if (document.querySelector(".detail-title-input")) return false; // The panel's title takes it.
     const title = current?.kind === "task" && document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(current.id)}"] .task-title`);
     if (!title) return false;
     title.click();

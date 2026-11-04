@@ -64,7 +64,7 @@ describe("show completed", () => {
     const { fetchMock, tasks } = garden3();
     await userEvent.click(await main().findByRole("button", { name: "Show completed" }));
     await main().findByText("Plan");
-    await userEvent.keyboard("j");
+    await userEvent.keyboard("jk");
     expect(document.activeElement).toBe(row("Weed the beds"));
     await userEvent.keyboard("x");
     expect(posts(fetchMock, "/complete")).toEqual([`/api/tasks/${tasks[0]!.id}/complete`]);

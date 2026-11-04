@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from "react";
 import type { Task } from "@claudia/shared";
 import { useCreateTask, usePendingCompletions, useTask, useTasks, useTimeZone } from "../data/queries";
-import { useComplete, useDelete } from "./TaskList";
+import { focusPanelTitle, useComplete, useDelete } from "./TaskList";
+import { useCommand } from "./keyboard";
 import { DateFields } from "./DateFields";
 import { FieldStatus, LabelsField, ListField, NotesField, PriorityField, RepeatField, TitleField, useSave } from "./TaskFields";
 import { isMade, wasFollowed } from "./selection";
@@ -144,6 +145,12 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
   useEffect(() => {
     if (!wasFollowed(id) && !isMade(id)) ref.current?.focus({ preventScroll: true });
   }, [id]);
+
+  // Enter with focus on the panel itself goes on to the title.
+  useCommand("open", (e) => {
+    if (e.key !== "Enter" || document.activeElement !== ref.current) return false;
+    focusPanelTitle();
+  });
 
   const onKeyDown = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key !== "Escape") return;

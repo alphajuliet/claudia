@@ -6,6 +6,7 @@ import { useFolders, useLabels, useLists, useMoveTask, useUpdateTask, type TaskP
 import { PRESETS, presetFor, ruleFor, type Preset } from "../lib/repeat";
 import { sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox } from "../lib/views";
+import { useCommand } from "./keyboard";
 import { LabelPicker } from "./LabelPicker";
 import { BlockMarkdown } from "./Markdown";
 import { useToast, type ToastMessage } from "./Toast";
@@ -109,6 +110,13 @@ export function TitleField({ task, startHere = false }: { task: Task; startHere?
     input.current?.focus({ preventScroll: true });
     input.current?.select();
   }, []); // when the field appears
+  // e t: the cursor to the end of the title.
+  useCommand("rename", () => {
+    const el = input.current;
+    if (!el) return false;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(el.value.length, el.value.length);
+  });
   const finish = () => {
     if (draft === null) return;
     const title = draft.trim();
@@ -130,7 +138,11 @@ export function TitleField({ task, startHere = false }: { task: Task; startHere?
         onKeyDown={(e) => {
           if (enterPressed(e)) {
             e.preventDefault();
-            finish();
+            // Back to the panel, where the edit keys work again; leaving the field saves it. (On touch the keyboard
+            // stays up for the next field, so save here.)
+            const panel = coarsePointer() ? null : e.currentTarget.closest<HTMLElement>("aside");
+            if (panel) panel.focus({ preventScroll: true });
+            else finish();
           }
         }}
         onBlur={finish}
@@ -173,6 +185,17 @@ export function NotesField({ task }: { task: Task }) {
     el.focus();
     el.setSelectionRange(el.value.length, el.value.length);
   };
+
+  // e n: into the editor, formatted notes included.
+  useCommand("editNotes", () => {
+    if (!editing && value.trim() !== "") edit();
+    else {
+      const el = ref.current;
+      if (!el) return false;
+      el.focus({ preventScroll: true });
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  });
 
   // Notes show formatted until clicked (links still open); empty notes are the editor already.
   const formatted = !editing && value.trim() !== "";

@@ -16,6 +16,16 @@ async function list(tasks: Task[]) {
   await main().findByText(tasks[0]!.title);
   return { fetchMock, ...view };
 }
+/** Runs a test as on a touch screen, where no row starts highlighted. */
+async function onTouchScreen(run: () => Promise<void>) {
+  const matchMedia = window.matchMedia;
+  window.matchMedia = ((q: string) => ({ matches: q === "(pointer: coarse)", addEventListener() {}, removeEventListener() {} })) as unknown as typeof window.matchMedia;
+  try {
+    await run();
+  } finally {
+    window.matchMedia = matchMedia;
+  }
+}
 const a = () => task({ title: "Weed the beds", listId: garden.id });
 const b = () => task({ title: "Plant tomatoes", listId: garden.id });
 
@@ -23,7 +33,7 @@ describe("n t", () => {
   it("makes a task after the highlighted one and opens it with the title ready to type over", async () => {
     const first = a();
     const { fetchMock, href } = await list([first, b()]);
-    await userEvent.keyboard("jnt");
+    await userEvent.keyboard("nt");
     const field = await titleField();
     expect(creates(fetchMock)).toEqual([{ listId: garden.id, parentId: null, afterId: first.id, title: "New task" }]);
     await waitFor(() => expect(document.activeElement).toBe(field));
@@ -88,7 +98,7 @@ describe("n t", () => {
     const parent = a();
     const sub = task({ title: "Dig", listId: garden.id, parentId: parent.id });
     const { fetchMock } = await list([parent, sub]);
-    await userEvent.keyboard("jjnt");
+    await userEvent.keyboard("jnt");
     await titleField();
     expect(creates(fetchMock)).toEqual([{ listId: garden.id, parentId: parent.id, afterId: sub.id, title: "New task" }]);
   });
@@ -103,12 +113,12 @@ describe("n t", () => {
     expect(creates(fetchMock)).toEqual([{ listId: garden.id, parentId: null, afterId: shown.id, title: "New task" }]);
   });
 
-  it("does nothing with nothing selected", async () => {
+  it("does nothing with nothing selected", () => onTouchScreen(async () => {
     const { fetchMock } = await list([a()]);
     await userEvent.keyboard("nt");
     await settle();
     expect(creates(fetchMock)).toEqual([]);
-  });
+  }));
 });
 
 describe("n s", () => {
@@ -140,7 +150,7 @@ describe("n h", () => {
   it("starts a section after the highlighted task, with the title ready to type over", async () => {
     const first = a();
     const { fetchMock } = await list([first, b()]);
-    await userEvent.keyboard("jnh");
+    await userEvent.keyboard("nh");
     const field = await titleField();
     expect(creates(fetchMock)).toEqual([{ ...newHeading, afterId: first.id }]);
     await waitFor(() => expect(document.activeElement).toBe(field));
@@ -160,17 +170,17 @@ describe("n h", () => {
     const beds = heading("Beds");
     const pots = heading("Pots");
     const { fetchMock } = await list([beds, a(), pots]);
-    await userEvent.keyboard("jnh");
+    await userEvent.keyboard("nh");
     await titleField();
     expect(creates(fetchMock)).toEqual([{ ...newHeading, beforeId: pots.id }]);
   });
 
-  it("goes last on the last heading, and with nothing highlighted", async () => {
+  it("goes last on the last heading, and with nothing highlighted", () => onTouchScreen(async () => {
     const { fetchMock } = await list([a(), heading("Beds")]);
     await userEvent.keyboard("nh");
     await titleField();
     expect(creates(fetchMock)).toEqual([newHeading]);
-  });
+  }));
 
   it("is what Add heading does, and works in an empty list", async () => {
     const fetchMock = stubApi([]);
