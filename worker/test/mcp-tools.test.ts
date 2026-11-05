@@ -19,8 +19,8 @@ describe("tool list", () => {
     expect(TOOLS.map((t) => t.name).sort()).toEqual([
       "complete_task", "create_folder", "create_filter", "create_label", "create_list", "create_task",
       "get_task", "list_filters", "list_folders", "list_labels", "list_lists", "move_folder", "move_list",
-      "move_task", "rename_label", "run_filter", "search_tasks", "uncomplete_task", "update_filter",
-      "update_folder", "update_list", "update_task",
+      "move_task", "run_filter", "search_tasks", "uncomplete_task", "update_filter",
+      "update_folder", "update_label", "update_list", "update_task",
     ].sort());
     for (const t of TOOLS) expect(t.name).not.toMatch(/delete|remove|token|import|setting/);
   });
@@ -66,7 +66,8 @@ describe("request mapping", () => {
     expect(req("move_task", { id: ID, withSection: true, beforeId: ID2 }).body).toEqual({ withSection: true, beforeId: ID2 });
     expect(req("move_list", { id: ID, folderId: null })).toEqual({ method: "POST", path: `/api/lists/${ID}/move`, body: { folderId: null } });
     expect(req("update_list", { id: ID, archived: true })).toEqual({ method: "PATCH", path: `/api/lists/${ID}`, body: { archived: true } });
-    expect(req("rename_label", { id: ID, name: "doing" })).toEqual({ method: "PATCH", path: `/api/labels/${ID}`, body: { name: "doing" } });
+    expect(req("update_label", { id: ID, name: "doing" })).toEqual({ method: "PATCH", path: `/api/labels/${ID}`, body: { name: "doing" } });
+    expect(req("update_label", { id: ID, color: "sky" })).toEqual({ method: "PATCH", path: `/api/labels/${ID}`, body: { color: "sky" } });
   });
 
   it("complete and uncomplete post with no body", () => {

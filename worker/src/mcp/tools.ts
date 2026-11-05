@@ -2,6 +2,8 @@
 import {
   CONTEXTS,
   IdSchema,
+  LABEL_COLOURS,
+  LabelColourSchema,
   LabelNameSchema,
   TaskQuerySchema,
   placementShape,
@@ -203,10 +205,10 @@ export const TOOLS: ToolDef[] = [
     request: (a) => ({ method: "POST", path: "/api/labels", body: a }),
   }),
   tool({
-    name: "rename_label",
-    description: "Rename a label everywhere it is used.",
+    name: "update_label",
+    description: `Rename a label everywhere it is used, and/or set its colour: one of ${LABEL_COLOURS.join(", ")}, or null for the default grey.`,
     access: "write",
-    input: strict({ id: id("label"), name: LabelNameSchema }),
+    input: strict({ id: id("label"), name: LabelNameSchema.optional(), color: LabelColourSchema.optional() }),
     request: (a) => ({ method: "PATCH", path: `/api/labels/${a.id}`, body: noId(a) }),
   }),
   tool({

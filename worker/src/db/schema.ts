@@ -21,6 +21,10 @@ export const TASK_KINDS = ["task", "heading"] as const;
 export const RECUR_FROM = ["due", "completion"] as const;
 export const PRIORITIES = ["low", "normal", "high"] as const;
 export const ACTORS = ["web", "mcp", "shortcut", "cli", "import", "system"] as const;
+export const LABEL_COLOURS = [
+  "red", "orange", "amber", "yellow", "lime", "green", "teal", "cyan",
+  "sky", "blue", "indigo", "violet", "purple", "pink", "rose", "brown",
+] as const;
 export const ENTITY_TYPES = ["folder", "list", "task", "label", "filter", "setting", "token"] as const;
 
 const id = () => text("id").primaryKey();
@@ -110,10 +114,12 @@ export const labels = sqliteTable(
   {
     id: id(),
     name: text("name").notNull(),
+    // A palette name (LABEL_COLOURS); null is the default grey.
+    color: text("color", { enum: LABEL_COLOURS }),
     createdAt: createdAt(),
     deletedAt: deletedAt(),
   },
-  (t) => [uniqueIndex("labels_name_unique").on(sql`lower(${t.name})`)],
+  (t) => [uniqueIndex("labels_name_unique").on(sql`lower(${t.name})`), check("labels_color_check", oneOf("color", LABEL_COLOURS))],
 );
 
 export const taskLabels = sqliteTable(

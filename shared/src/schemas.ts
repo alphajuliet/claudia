@@ -10,6 +10,11 @@ export const CONTEXTS = ["work", "personal", "home"] as const;
 export const TASK_KINDS = ["task", "heading"] as const;
 export const RECUR_FROM = ["due", "completion"] as const;
 export const PRIORITIES = ["low", "normal", "high"] as const;
+/** A label's colour, a name from the palette; null is the default grey. The shades for light and dark are in the web app's CSS. */
+export const LABEL_COLOURS = [
+  "red", "orange", "amber", "yellow", "lime", "green", "teal", "cyan",
+  "sky", "blue", "indigo", "violet", "purple", "pink", "rose", "brown",
+] as const;
 export const ACTORS = ["web", "mcp", "shortcut", "cli", "import", "system"] as const;
 export const SCOPES = ["read", "write", "admin"] as const;
 
@@ -143,11 +148,15 @@ export type Me = z.infer<typeof MeSchema>;
 
 // Labels
 export const LabelNameSchema = z.string().trim().min(1).max(64);
+export const LabelColourSchema = z.enum(LABEL_COLOURS).nullable().openapi({ description: "A palette colour, or null for the default grey" });
 export const LabelSchema = z
-  .object({ id: IdSchema, name: z.string(), createdAt: Timestamp })
+  .object({ id: IdSchema, name: z.string(), color: LabelColourSchema, createdAt: Timestamp })
   .openapi("Label");
-export const LabelCreateSchema = z.object({ name: LabelNameSchema }).openapi("LabelCreate");
-export const LabelUpdateSchema = LabelCreateSchema.openapi("LabelUpdate");
+export const LabelCreateSchema = z.object({ name: LabelNameSchema, color: LabelColourSchema.optional() }).openapi("LabelCreate");
+export const LabelUpdateSchema = z
+  .object({ name: LabelNameSchema.optional(), color: LabelColourSchema.optional() })
+  .refine((b) => b.name !== undefined || b.color !== undefined, "Send a name or a color")
+  .openapi("LabelUpdate");
 
 // Tasks. `kind: "heading"` rows are section headings within a list.
 export const TaskSchema = z
@@ -246,6 +255,7 @@ export const TaskQuerySchema = z.object({
 export type Task = z.infer<typeof TaskSchema>;
 export type TaskCompletion = z.infer<typeof TaskCompletionSchema>;
 export type Label = z.infer<typeof LabelSchema>;
+export type LabelColour = (typeof LABEL_COLOURS)[number];
 
 // Saved filters (smart lists). `query` is a query string for GET /api/tasks,
 // e.g. "label=next&dueBefore=2026-11-01".

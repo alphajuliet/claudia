@@ -18,7 +18,7 @@ import {
 
 const tag = ["Labels"];
 type Row = typeof labels.$inferSelect;
-const toLabel = (r: Row) => ({ id: r.id, name: r.name, createdAt: r.createdAt });
+const toLabel = (r: Row) => ({ id: r.id, name: r.name, color: r.color ?? null, createdAt: r.createdAt });
 const live = isNull(labels.deletedAt);
 
 async function getLabel(db: Db, id: string): Promise<Row> {
@@ -59,12 +59,19 @@ export const labelRoutes = newRouter()
       responses: { 201: jsonResponse(LabelSchema, "Created"), ...commonErrors, ...conflictError },
     }),
     async (c) => {
-      const { name } = c.req.valid("json");
+      const { name, color } = c.req.valid("json");
       const db = c.var.db;
       await assertNameFree(db, name);
       const { ids, pending } = await resolveLabelIds(db, [name], c.var.actor);
       await runBatch(db, pending);
-      return c.json(toLabel(await getLabel(db, ids[0]!)), 201);
+      const id = ids[0]!;
+      if (color) {
+        await db.batch([
+          db.update(labels).set({ color }).where(eq(labels.id, id)),
+          eventQuery(db, { entityType: "label", entityId: id, type: "updated", before: { color: null }, after: { color }, actor: c.var.actor }),
+        ]);
+      }
+      return c.json(toLabel(await getLabel(db, id)), 201);
     },
   )
   .openapi(
@@ -72,25 +79,40 @@ export const labelRoutes = newRouter()
       method: "patch",
       path: "/api/labels/{id}",
       tags: tag,
-      summary: "Rename a label",
+      summary: "Rename a label or change its colour",
       request: { params: IdParam, body: jsonBody(LabelUpdateSchema) },
-      responses: { 200: jsonResponse(LabelSchema, "Renamed"), ...commonErrors, ...notFoundError, ...conflictError },
+      responses: { 200: jsonResponse(LabelSchema, "Updated"), ...commonErrors, ...notFoundError, ...conflictError },
     }),
     async (c) => {
       const { id } = c.req.valid("param");
-      const { name } = c.req.valid("json");
+      const { name, color } = c.req.valid("json");
       const db = c.var.db;
       const before = await getLabel(db, id);
-      const clash = await assertNameFree(db, name, id);
-      if (clash?.deletedAt) {
-        // Free the name held by a deleted label.
-        await db.update(labels).set({ name: `${clash.name} (deleted ${clash.id})` }).where(eq(labels.id, clash.id));
+      const renamed = name !== undefined && name !== before.name;
+      const recoloured = color !== undefined && color !== before.color;
+      if (renamed) {
+        const clash = await assertNameFree(db, name, id);
+        if (clash?.deletedAt) {
+          // Free the name held by a deleted label.
+          await db.update(labels).set({ name: `${clash.name} (deleted ${clash.id})` }).where(eq(labels.id, clash.id));
+        }
       }
-      await db.batch([
-        db.update(labels).set({ name }).where(eq(labels.id, id)),
-        eventQuery(db, { entityType: "label", entityId: id, type: "renamed", before: { name: before.name }, after: { name }, actor: c.var.actor }),
-      ]);
-      return c.json(toLabel({ ...before, name }), 200);
+      const after = { ...before, ...(renamed ? { name } : {}), ...(recoloured ? { color } : {}) };
+      if (renamed || recoloured) {
+        await db.batch([
+          db.update(labels).set({ name: after.name, color: after.color }).where(eq(labels.id, id)),
+          eventQuery(db, {
+            entityType: "label",
+            entityId: id,
+            // A rename keeps its own event type, so history reads as before.
+            type: renamed ? "renamed" : "updated",
+            before: { ...(renamed ? { name: before.name } : {}), ...(recoloured ? { color: before.color } : {}) },
+            after: { ...(renamed ? { name } : {}), ...(recoloured ? { color } : {}) },
+            actor: c.var.actor,
+          }),
+        ]);
+      }
+      return c.json(toLabel(after), 200);
     },
   )
   .openapi(

@@ -118,6 +118,32 @@ describe("labels", () => {
     // The name is free again.
     expect((await api("POST", "/api/labels", { name: "doing" })).status).toBe(201);
   });
+
+  it("sets and clears a colour, and logs it", async () => {
+    const created = await api("POST", "/api/labels", { name: "errand", color: "teal" });
+    expect(created.status).toBe(201);
+    expect(created.body.color).toBe("teal");
+    const id = created.body.id;
+    expect((await api("PATCH", `/api/labels/${id}`, { color: "rose" })).body).toMatchObject({ name: "errand", color: "rose" });
+    expect((await api("GET", "/api/labels")).body.find((l: { id: string }) => l.id === id).color).toBe("rose");
+    expect((await api("PATCH", `/api/labels/${id}`, { color: null })).body.color).toBeNull();
+    // Both at once.
+    expect((await api("PATCH", `/api/labels/${id}`, { name: "errands", color: "sky" })).body).toMatchObject({ name: "errands", color: "sky" });
+
+    const log = (await db.select().from(events).where(eq(events.entityId, id))).map((e) => [e.type, e.after]);
+    expect(log).toContainEqual(["updated", { color: "rose" }]);
+    expect(log).toContainEqual(["updated", { color: null }]);
+    expect(log).toContainEqual(["renamed", { name: "errands", color: "sky" }]);
+  });
+
+  it("starts labels grey and refuses colours outside the palette", async () => {
+    const t = await task("T", { labels: ["wip"] });
+    const [label] = (await api("GET", "/api/labels")).body;
+    expect(label.color).toBeNull();
+    expect((await api("PATCH", `/api/labels/${label.id}`, { color: "magenta" })).status).toBe(400);
+    expect((await api("PATCH", `/api/labels/${label.id}`, {})).status).toBe(400);
+    expect((await api("GET", `/api/tasks/${t.id}`)).body.labels).toEqual(["wip"]);
+  });
 });
 
 describe("queries", () => {
