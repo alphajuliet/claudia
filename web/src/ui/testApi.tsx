@@ -5,7 +5,7 @@ import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { vi } from "vitest";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
-import type { Filter, Folder, List, Task } from "@claudia/shared";
+import type { Filter, Folder, Label, LabelColour, List, Task } from "@claudia/shared";
 import { todayIn } from "../lib/dates";
 import { listPosition, type ListMove } from "../lib/listMove";
 import { SessionProvider } from "../session/SessionProvider";
@@ -52,8 +52,9 @@ export interface StubOptions {
   gate?: (method: string, path: string, body: unknown) => Promise<void> | undefined;
   filters?: Filter[];
   lists?: List[];
-  /** Label names served by GET /api/labels. */
-  labels?: string[];
+  /** Labels served by GET /api/labels: names, or names with a colour. */
+  labels?: (string | { name: string; color: LabelColour | null })[];
+  failLabel?: boolean;
 }
 
 /**
@@ -71,7 +72,9 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     "/api/lists": opts.lists ?? [inbox, errands, projects, garden],
     "/api/filters": opts.filters ?? [],
     "/api/settings": {},
-    "/api/labels": (opts.labels ?? []).map((name, i) => ({ id: `01JD${String(i).padStart(22, "0")}`, name, createdAt: at })),
+    "/api/labels": (opts.labels ?? []).map((l, i) => ({
+      id: `01JD${String(i).padStart(22, "0")}`, ...(typeof l === "string" ? { name: l, color: null } : l), createdAt: at,
+    })),
   };
   const descendants = (id: string): Task[] =>
     [...store.values()].filter((t) => t.parentId === id).flatMap((t) => [t, ...descendants(t.id)]);
@@ -89,6 +92,37 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
       const { name } = JSON.parse(String(init.body)) as { name: string };
       bodies[`/api/${renamed[1]}`] = items.map((x) => (x.id === renamed[2] ? { ...x, name } : x));
       return json((bodies[`/api/${renamed[1]}`] as { id: string }[]).find((x) => x.id === renamed[2]));
+    }
+    // Labels: POST creates (a taken name is a 409), PATCH renames or recolours (a rename reaches the tasks) and DELETE
+    // takes it off every task.
+    if (path === "/api/labels" && init?.method === "POST") {
+      if (opts.failLabel) return fail("Boom");
+      const items = bodies["/api/labels"] as Label[];
+      const body = JSON.parse(String(init.body)) as { name: string; color?: LabelColour | null };
+      if (items.some((l) => l.name.toLowerCase() === body.name.toLowerCase()))
+        return json({ error: { code: "name_taken", message: `A label named '${body.name}' already exists` } }, 409);
+      const made: Label = { id: `01JE${String(items.length).padStart(22, "0")}`, name: body.name, color: body.color ?? null, createdAt: at };
+      bodies["/api/labels"] = [...items, made];
+      return json(made, 201);
+    }
+    const label = path.match(/^\/api\/labels\/(\w+)$/);
+    if (label && (init?.method === "PATCH" || init?.method === "DELETE")) {
+      if (opts.failLabel) return fail("Boom");
+      const items = bodies["/api/labels"] as Label[];
+      const before = items.find((l) => l.id === label[1]);
+      if (!before) return json({ error: { code: "not_found", message: "Label not found" } }, 404);
+      const has = (t: Task) => t.labels.some((n) => n.toLowerCase() === before.name.toLowerCase());
+      if (init.method === "DELETE") {
+        bodies["/api/labels"] = items.filter((l) => l !== before);
+        for (const t of store.values()) if (has(t)) store.set(t.id, { ...t, labels: t.labels.filter((n) => n.toLowerCase() !== before.name.toLowerCase()) });
+        return new Response(null, { status: 204 });
+      }
+      const change = JSON.parse(String(init.body)) as { name?: string; color?: LabelColour | null };
+      const after = { ...before, ...change };
+      bodies["/api/labels"] = items.map((l) => (l === before ? after : l));
+      if (change.name !== undefined)
+        for (const t of store.values()) if (has(t)) store.set(t.id, { ...t, labels: t.labels.map((n) => (n.toLowerCase() === before.name.toLowerCase() ? after.name : n)) });
+      return json(after);
     }
     const movedList = path.match(/^\/api\/lists\/(\w+)\/move$/);
     if (movedList && init?.method === "POST") {

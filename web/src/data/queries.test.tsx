@@ -113,7 +113,7 @@ describe("queries", () => {
   });
 
   it("useLabels fetches and parses the labels", async () => {
-    const label: Label = { id: "01JC0000000000000000000001", name: "next", createdAt: at };
+    const label: Label = { id: "01JC0000000000000000000001", name: "next", color: null, createdAt: at };
     stubApi(async (path) => (path === "/api/labels" ? json([label]) : json({}, 404)));
     const { wrapper } = signedIn();
     const { result } = renderHook(() => useLabels(), { wrapper });

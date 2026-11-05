@@ -169,6 +169,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
         <ul className="nav-list">
           <li><NavLink href="/dashboard" onNavigate={onNavigate}>Dashboard</NavLink></li>
           <li><NavLink href="/search" onNavigate={onNavigate}>Search</NavLink></li>
+          <li><NavLink href="/labels" onNavigate={onNavigate}>Labels</NavLink></li>
           {VIEWS.filter((v) => v.id !== "inbox" || inboxId).map((v) => (
             <li key={v.id}>
               <NavLink href={`/${v.id}`} count={counts && viewCount(v.id, counts, shown, inboxId)} onNavigate={onNavigate}

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useCommand } from "./keyboard";
+import { useLabelColour } from "./LabelChip";
 
 /** Labels to offer: those not on the task whose names contain the typed text (ignoring case), alphabetically. */
 export function labelOptions(all: string[], taken: string[], text: string): string[] {
@@ -34,6 +35,7 @@ export function LabelPicker({ all, taken, onAdd }: {
   const expanded = open && options.length > 0;
   const optionId = (i: number) => `${id}-${i}`;
   const list = useRef<HTMLUListElement>(null);
+  const colourOf = useLabelColour();
   const input = useRef<HTMLInputElement>(null);
   // e l: into the field, which opens the list.
   useCommand("editLabels", () => { input.current?.focus({ preventScroll: true }); });
@@ -108,7 +110,13 @@ export function LabelPicker({ all, taken, onAdd }: {
             className={creates(i) ? "label-option create" : "label-option"}
             onClick={() => pick(option)}
           >
-            {creates(i) ? `Create “${option}”` : option}
+            {creates(i) ? `Create “${option}”` : (
+              <>
+                {/* Its colour, as a dot; grey ones get the plain dot. */}
+                <span className="label-dot" data-color={colourOf(option)} aria-hidden="true" />
+                {option}
+              </>
+            )}
           </li>
         ))}
       </ul>

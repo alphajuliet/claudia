@@ -2,6 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent
 import { flushSync } from "react-dom";
 import { PRIORITIES, type Task } from "@claudia/shared";
 import { useQueryClient } from "@tanstack/react-query";
+import { LabelChip, useLabelColour } from "./LabelChip";
 import { useFolders, useLabels, useLists, useMoveTask, useUpdateTask, type TaskPatch } from "../data/queries";
 import { PRESETS, presetFor, ruleFor, type Preset } from "../lib/repeat";
 import { sidebarTree, type FolderNode } from "../lib/sidebar";
@@ -243,6 +244,7 @@ export function LabelsField({ task }: { task: Task }) {
   const { state, patch } = usePatch(task);
   const queryClient = useQueryClient();
   const all = (useLabels().data ?? []).map((l) => l.name);
+  const colourOf = useLabelColour();
   const current = () => queryClient.getQueryData<Task[]>(["tasks", "one", task.id])?.[0]?.labels ?? task.labels;
   const add = (name: string) => {
     const labels = current();
@@ -255,8 +257,7 @@ export function LabelsField({ task }: { task: Task }) {
       {task.labels.length > 0 && (
         <ul className="detail-chips">
           {task.labels.map((l) => (
-            <li key={l} className="chip chip-removable">
-              {l}
+            <LabelChip key={l} as="li" name={l} color={colourOf(l)} className="chip-removable">
               <button
                 type="button"
                 className="chip-remove"
@@ -265,7 +266,7 @@ export function LabelsField({ task }: { task: Task }) {
               >
                 <span aria-hidden="true">×</span>
               </button>
-            </li>
+            </LabelChip>
           ))}
         </ul>
       )}

@@ -1,7 +1,7 @@
 export type CommandId =
   | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "priorityHigh" | "priorityNormal" | "priorityLow" | "rename" | "editNotes" | "editLabels" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
   | "contextAll" | "contextWork" | "contextPersonal" | "contextHome"
-  | "goList" | "goDashboard" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
+  | "goList" | "goDashboard" | "goLabels" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
 export interface Command { id: CommandId; label: string; keys: string[] }
 
@@ -48,5 +48,6 @@ export const COMMANDS: Command[] = [
   { id: "goWip", label: "Go to WIP", keys: ["g w"] },
   { id: "goWaiting", label: "Go to Waiting", keys: ["g o"] },
   { id: "goSomeday", label: "Go to Someday", keys: ["g s"] },
+  { id: "goLabels", label: "Go to Labels", keys: ["g #"] },
   { id: "help", label: "Keyboard shortcuts", keys: ["?"] },
 ];

@@ -1185,3 +1185,60 @@ kbd {
 /* So without the label column, the choices and inputs sit in rows as in the panel. */
 .bottom-sheet .detail-field { grid-template-columns: minmax(0, 1fr); }
 .bottom-sheet-body { padding-bottom: 1rem; }
+
+/* Label colours: 16 palette shades, each with text and background for light and dark (light-dark() follows color-scheme, which the theme sets). Every pair passes WCAG AA, 5.9:1 or more. Grey labels have no data-color and keep the plain chip. */
+[data-color="red"] { --chip-bg: light-dark(#fde2e1, #4a2424); --chip-fg: light-dark(#8f1d1d, #f8c4c1); }
+[data-color="orange"] { --chip-bg: light-dark(#fde6d4, #4a2f1e); --chip-fg: light-dark(#8a3a0c, #f8cfae); }
+[data-color="amber"] { --chip-bg: light-dark(#fcefd0, #46371a); --chip-fg: light-dark(#7a4b06, #f3d89b); }
+[data-color="yellow"] { --chip-bg: light-dark(#f8f1c4, #413c19); --chip-fg: light-dark(#6b5a05, #ece08f); }
+[data-color="lime"] { --chip-bg: light-dark(#e9f3cf, #333f1d); --chip-fg: light-dark(#46600f, #d3e8a0); }
+[data-color="green"] { --chip-bg: light-dark(#dcf1e0, #1f3d2a); --chip-fg: light-dark(#1e6234, #aee0bb); }
+[data-color="teal"] { --chip-bg: light-dark(#d5efea, #1b3d39); --chip-fg: light-dark(#145e55, #a3ded4); }
+[data-color="cyan"] { --chip-bg: light-dark(#d4eef4, #1a3a42); --chip-fg: light-dark(#0f5866, #a4dce9); }
+[data-color="sky"] { --chip-bg: light-dark(#dbeefb, #1c3548); --chip-fg: light-dark(#135680, #acd6f3); }
+[data-color="blue"] { --chip-bg: light-dark(#dfe7fb, #222f4f); --chip-fg: light-dark(#1f4596, #b5c8f6); }
+[data-color="indigo"] { --chip-bg: light-dark(#e5e4fa, #2c2b50); --chip-fg: light-dark(#3a3591, #c6c3f4); }
+[data-color="violet"] { --chip-bg: light-dark(#ece2fb, #352a4f); --chip-fg: light-dark(#5b2d99, #d3c0f5); }
+[data-color="purple"] { --chip-bg: light-dark(#f3e0f6, #3d2643); --chip-fg: light-dark(#772a85, #e2bdea); }
+[data-color="pink"] { --chip-bg: light-dark(#fbe1ef, #462337); --chip-fg: light-dark(#8e1f5b, #f3bbd9); }
+[data-color="rose"] { --chip-bg: light-dark(#fbe3e6, #472630); --chip-fg: light-dark(#8f2338, #f5bfca); }
+[data-color="brown"] { --chip-bg: light-dark(#efe5dc, #3b2f26); --chip-fg: light-dark(#66412a, #e2cfbf); }
+.chip[data-color] { border-color: color-mix(in srgb, var(--chip-fg) 18%, transparent); background: var(--chip-bg); color: var(--chip-fg); }
+/* A label's colour as a dot (the picker's options, the Colour button). */
+.label-dot {
+  display: inline-block;
+  flex: none;
+  width: 0.7rem;
+  height: 0.7rem;
+  margin-right: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--row-hover);
+  vertical-align: -0.05rem;
+}
+.label-dot[data-color] { border-color: transparent; background: color-mix(in srgb, var(--chip-fg) 55%, var(--chip-bg)); }
+
+/* The Labels screen */
+.labels-screen { max-width: 44rem; }
+.label-new { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+.label-new input { flex: 1; max-width: 20rem; }
+.label-rows { display: grid; }
+.label-row { padding: 0.2rem 0.5rem; border-radius: var(--radius); outline: none; }
+.label-row:hover { background: var(--row-hover); }
+.label-row:focus-visible, .label-row:focus { box-shadow: inset 0 0 0 2px var(--focus); }
+.label-row-main { display: flex; align-items: center; gap: 0.5rem; min-height: var(--row-height); }
+button.label-name-button { padding: 0.1rem 0; border: 0; background: none; color: inherit; font-weight: inherit; cursor: text; }
+button.label-name-button:hover { filter: none; }
+.label-name-button .chip { font-size: 0.85rem; }
+input.label-rename { width: 14rem; padding: 0.1rem 0.4rem; font-size: 0.9rem; }
+.label-count { margin-right: auto; font-size: 0.85rem; white-space: nowrap; }
+.label-colour-button { display: inline-flex; align-items: center; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: 0.35rem; padding: 0.5rem 0 0.6rem; }
+button.swatch { display: flex; justify-content: flex-start; padding: 0.15rem; border: 1px solid transparent; border-radius: var(--radius); background: none; color: inherit; font-weight: inherit; }
+button.swatch:hover { background: var(--row-hover); filter: none; }
+button.swatch[aria-pressed="true"] { border-color: var(--accent); }
+.swatch .chip { font-size: 0.8rem; }
+@media (pointer: coarse) {
+  .label-row-main { flex-wrap: wrap; min-height: var(--touch); }
+  button.swatch { min-height: var(--touch); align-items: center; }
+}

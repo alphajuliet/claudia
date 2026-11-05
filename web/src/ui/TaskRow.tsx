@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, ty
 import type { Task } from "@claudia/shared";
 import { formatDue } from "../lib/dates";
 import { dueDateOf } from "../lib/tasks";
+import { LabelChip, useLabelColour } from "./LabelChip";
 import { InlineMarkdown, plainText } from "./Markdown";
 import { useSwipe } from "./useSwipe";
 
@@ -148,6 +149,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
   onSnooze?: (task: Task) => void;
 }) {
   const due = dueDateOf(task, timeZone);
+  const colourOf = useLabelColour();
   const label = due ? formatDue(due, today) : null;
   // The pointer type of the last press in the row: a tap on the title opens the task instead of renaming it.
   const pointerType = useRef<string | null>(null);
@@ -202,7 +204,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
         <TaskTitle task={task} onRename={onRename} onOpen={onSelect && (() => onSelect(task))} pointerType={pointerType} />
         <span className="task-meta">
           {task.kind === "task" && task.priority !== "normal" && <span className="sr-only">{task.priority === "high" ? "High priority" : "Low priority"}</span>}
-          {task.labels.map((l) => <span key={l} className="chip">{l}</span>)}
+          {task.labels.map((l) => <LabelChip key={l} name={l} color={colourOf(l)} />)}
           {label && <span className={label.overdue ? "due overdue" : "due"}>{label.text}</span>}
           {task.recurRule && (
             <span className="repeat" title="Repeats">

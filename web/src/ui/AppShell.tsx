@@ -5,6 +5,7 @@ import type { CommandId } from "../lib/commands";
 import { ContextFilterProvider } from "./contextFilter";
 import { Dashboard } from "./Dashboard";
 import { KeyboardProvider, useCommand } from "./keyboard";
+import { LabelsScreen } from "./LabelsScreen";
 import { ListPicker } from "./ListPicker";
 import { Logo, MenuIcon } from "./Logo";
 import { FilterScreen, Home, ListScreen, NotFound, ViewScreen } from "./screens";
@@ -17,7 +18,7 @@ import { focusTask } from "./TaskList";
 import { ToastProvider } from "./Toast";
 
 const GO: [CommandId, string][] = [
-  ["goDashboard", "/dashboard"], ["goInbox", "/inbox"], ["goToday", "/today"], ["goNext", "/next"], ["goWip", "/wip"], ["goWaiting", "/waiting"], ["goSomeday", "/someday"],
+  ["goDashboard", "/dashboard"], ["goInbox", "/inbox"], ["goToday", "/today"], ["goNext", "/next"], ["goWip", "/wip"], ["goWaiting", "/waiting"], ["goSomeday", "/someday"], ["goLabels", "/labels"],
 ];
 
 /** A `g` chord: go to a view. */
@@ -121,6 +122,7 @@ function Shell() {
               <Route path="/filter/:id">{(p) => <FilterScreen id={p.id} />}</Route>
               <Route path="/search"><SearchScreen /></Route>
               <Route path="/dashboard"><Dashboard /></Route>
+              <Route path="/labels"><LabelsScreen /></Route>
               <Route path="/:view">{(p) => <ViewScreen id={p.view} />}</Route>
               <Route><NotFound /></Route>
             </Switch>

@@ -1,4 +1,4 @@
-import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, type List, type Task } from "@claudia/shared";
+import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, type Label, type LabelColour, type List, type Task } from "@claudia/shared";
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
@@ -512,4 +512,48 @@ export function useRename(kind: "lists" | "folders") {
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: [kind] }),
   });
+}
+
+type LabelChange = { name?: string; color?: LabelColour | null };
+
+/**
+ * Creating, renaming, recolouring and deleting labels. A rename or delete changes the names tasks carry, so task lists
+ * and counts refetch afterwards. Changes show at once in the labels list and come back on failure.
+ */
+export function useLabelChanges() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  const optimistic = async (change: (labels: Label[]) => Label[]) => {
+    await queryClient.cancelQueries({ queryKey: ["labels"] });
+    const before = queryClient.getQueryData<Label[]>(["labels"]);
+    queryClient.setQueryData<Label[]>(["labels"], (labels) => labels && change(labels));
+    return { before };
+  };
+  const restore = (_e: unknown, _vars: unknown, context?: { before?: Label[] }) => {
+    if (context?.before) queryClient.setQueryData(["labels"], context.before);
+  };
+  const refresh = (tasksToo: boolean) => () => {
+    void queryClient.invalidateQueries({ queryKey: ["labels"] });
+    if (tasksToo) {
+      void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      void queryClient.invalidateQueries({ queryKey: ["counts"] });
+    }
+  };
+  const create = useMutation({
+    mutationFn: async (body: { name: string; color?: LabelColour | null }) => json(await api("/api/labels", send("POST", body)), LabelSchema),
+    onSettled: refresh(false),
+  });
+  const update = useMutation({
+    mutationFn: async ({ id, ...change }: LabelChange & { id: string }) => json(await api(`/api/labels/${id}`, send("PATCH", change)), LabelSchema),
+    onMutate: ({ id, ...change }) => optimistic((labels) => labels.map((l) => (l.id === id ? { ...l, ...change } : l))),
+    onError: restore,
+    onSettled: (_d, _e, vars) => refresh(vars.name !== undefined)(),
+  });
+  const remove = useMutation({
+    mutationFn: async (id: string) => json(await api(`/api/labels/${id}`, { method: "DELETE" }), NoContent),
+    onMutate: (id) => optimistic((labels) => labels.filter((l) => l.id !== id)),
+    onError: restore,
+    onSettled: refresh(true),
+  });
+  return { create, update, remove };
 }
