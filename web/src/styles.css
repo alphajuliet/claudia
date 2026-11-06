@@ -1242,3 +1242,7 @@ button.swatch[aria-pressed="true"] { border-color: var(--accent); }
   .label-row-main { flex-wrap: wrap; min-height: var(--touch); }
   button.swatch { min-height: var(--touch); align-items: center; }
 }
+
+/* Shake to undo, in the sidebar footer on touch screens: a full-width row above who's signed in. */
+.footer-switch { display: flex; flex-basis: 100%; align-items: center; gap: 0.5rem; min-height: var(--touch); color: var(--muted); font-size: 0.9rem; }
+.footer-switch input { width: 1.1rem; height: 1.1rem; margin: 0; accent-color: var(--accent); }

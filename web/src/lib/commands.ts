@@ -1,5 +1,5 @@
 export type CommandId =
-  | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "priorityHigh" | "priorityNormal" | "priorityLow" | "rename" | "editNotes" | "editLabels" | "delete" | "toggleCompleted" | "capture" | "search" | "help"
+  | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "priorityHigh" | "priorityNormal" | "priorityLow" | "rename" | "editNotes" | "editLabels" | "delete" | "toggleCompleted" | "undo" | "capture" | "search" | "help"
   | "contextAll" | "contextWork" | "contextPersonal" | "contextHome"
   | "goList" | "goDashboard" | "goLabels" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
@@ -34,6 +34,7 @@ export const COMMANDS: Command[] = [
   { id: "editLabels", label: "Add a label in the task details", keys: ["e l"] },
   { id: "delete", label: "Delete task", keys: ["Delete", "Backspace"] },
   { id: "toggleCompleted", label: "Show or hide completed tasks", keys: ["C"] },
+  { id: "undo", label: "Undo the last change (complete, snooze or move)", keys: ["z"] },
   { id: "capture", label: "Add a task", keys: ["c"] },
   { id: "search", label: "Search", keys: ["/"] },
   { id: "contextAll", label: "Show all contexts", keys: ["1"] },

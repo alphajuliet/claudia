@@ -286,7 +286,7 @@ describe("dropping on a sidebar list", () => {
     await waitFor(() => expect(moves(fetchMock, b!)).toEqual([{ listId: errands.id, parentId: null }]));
     await waitFor(() => expect(titles()).toEqual(["Weed the beds", "Mulch the roses"]));
     const toast = await screen.findByRole("status");
-    await waitFor(() => expect(toast.textContent).toContain("Moved to Errands"));
+    await waitFor(() => expect(toast.textContent).toContain("Moved “Plant tomatoes” to Errands"));
     fireEvent.click(within(toast).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(moves(fetchMock, b!).at(-1)).toEqual({ listId: garden.id, parentId: null, beforeId: c!.id }));
     await waitFor(() => expect(titles()).toEqual(["Weed the beds", "Plant tomatoes", "Mulch the roses"]));

@@ -6,6 +6,7 @@ import { formatWhen, nowIn, splitIn, zonedToUtc, type When } from "../lib/dates"
 import { isSnoozed } from "../lib/tasks";
 import { dueFields, quickDates } from "../lib/when";
 import { Field, FieldStatus, usePatch, type SaveState } from "./TaskFields";
+import { plainText } from "./Markdown";
 import { useToast } from "./Toast";
 import { useCompact } from "./useVisualViewport";
 
@@ -268,15 +269,12 @@ export function SnoozeField({ task, timeZone, onClose, collapsible }: { task: Ta
       if (!saved) return;
       const current = nowIn(timeZone);
       toast.show({
-        message: `Snoozed until ${formatWhen(when, current.date, current.time).text}`,
-        action: {
-          label: "Undo",
-          run: () => {
-            // Only while the task still has this snooze: a later change wins.
-            const now = cachedTask(queryClient, task.id)?.snoozedUntil;
-            if (!now || Date.parse(now) !== Date.parse(snoozedUntil)) return;
-            update.mutateAsync({ id: task.id, patch: { snoozedUntil: previous } }).catch((e: Error) => toast.show({ message: e.message, error: true }));
-          },
+        message: `Snoozed “${plainText(task.title)}” until ${formatWhen(when, current.date, current.time).text}`,
+        undo: () => {
+          // Only while the task still has this snooze: a later change wins.
+          const now = cachedTask(queryClient, task.id)?.snoozedUntil;
+          if (!now || Date.parse(now) !== Date.parse(snoozedUntil)) return;
+          update.mutateAsync({ id: task.id, patch: { snoozedUntil: previous } }).catch((e: Error) => toast.show({ message: e.message, error: true }));
         },
       });
     });

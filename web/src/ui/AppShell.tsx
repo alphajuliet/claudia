@@ -10,6 +10,7 @@ import { ListPicker } from "./ListPicker";
 import { Logo, MenuIcon } from "./Logo";
 import { FilterScreen, Home, ListScreen, NotFound, ViewScreen } from "./screens";
 import { SearchScreen } from "./SearchScreen";
+import { UndoCommands } from "./shakeToUndo";
 import { takeMade, useSelectedTask } from "./selection";
 import { Shortcuts } from "./Shortcuts";
 import { Sidebar } from "./Sidebar";
@@ -131,6 +132,7 @@ function Shell() {
           {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
           {pickerOpen && <ListPicker onClose={() => setPickerOpen(false)} onGo={(href) => { setPickerOpen(false); navigate(href); }} />}
           {GO.map(([id, to]) => <GoCommand key={id} id={id} to={to} />)}
+          <UndoCommands />
         </div>
       </ToastProvider>
     </ContextFilterProvider>

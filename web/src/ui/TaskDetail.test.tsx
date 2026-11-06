@@ -168,7 +168,7 @@ describe("the detail panel", () => {
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ snoozedUntil: zonedToUtc(addDays(today, 1), "00:00", tz) }]));
     expect(view.href()).toBe(`/list/${garden.id}`);
     expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Snoozed until Tomorrow"));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Snoozed “Weed the beds” until Tomorrow"));
     expect(main().queryByText("Weed the beds")).toBeNull();
     await userEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ snoozedUntil: null }));
@@ -180,7 +180,7 @@ describe("the detail panel", () => {
     let patches = 0;
     const { p } = await openOn(weed, [weed], { gate: () => (++patches > 1 ? Promise.reject(new Error("no")) : undefined) });
     await userEvent.click(within(p.getByRole("group", { name: "Snooze" })).getByRole("button", { name: "Snooze: Tomorrow" }));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Snoozed until Tomorrow"));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Snoozed “Weed the beds” until Tomorrow"));
     await userEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Boom"));
     await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
@@ -193,7 +193,7 @@ describe("the detail panel", () => {
     expect(view.href()).toBe(`/list/${garden.id}`);
     expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Boom"));
-    expect(screen.getByRole("status").textContent).not.toContain("Snoozed until");
+    expect(screen.getByRole("status").textContent).not.toContain("Snoozed “Weed the beds” until");
     expect(await main().findByText("Weed the beds")).toBeTruthy();
   });
 
@@ -205,7 +205,7 @@ describe("the detail panel", () => {
     fireEvent.change(date, { target: { value: day } });
     fireEvent.blur(date);
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ snoozedUntil: zonedToUtc(day, "00:00", tz) }]));
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain(`Snoozed until ${formatDue(day, todayIn(tz)).text}`));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain(`Snoozed “Weed the beds” until ${formatDue(day, todayIn(tz)).text}`));
     expect(view.href()).toBe(`/list/${garden.id}?task=${weed.id}`);
     expect(screen.getByRole("complementary", { name: "Task details" })).toBeTruthy();
   });
@@ -217,7 +217,7 @@ describe("the detail panel", () => {
     const date = snooze.getByLabelText("Snooze date");
     fireEvent.change(date, { target: { value: addDays(todayIn(tz), 3) } });
     fireEvent.blur(date);
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Snoozed until"));
+    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Snoozed “Weed the beds” until"));
     await userEvent.click(await snooze.findByRole("button", { name: "Clear snooze" }));
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toHaveLength(2));
     await userEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "Undo" }));

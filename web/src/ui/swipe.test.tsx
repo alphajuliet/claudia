@@ -215,7 +215,7 @@ describe("swiping a task left on a touch screen", () => {
     expect(sheet("Snooze")).toBeNull();
     await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
     const toast = screen.getByRole("status");
-    await waitFor(() => expect(toast.textContent).toContain("Snoozed until Tomorrow"));
+    await waitFor(() => expect(toast.textContent).toContain("Snoozed “Weed the beds” until Tomorrow"));
     await userEvent.click(within(toast).getByRole("button", { name: "Undo" }));
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`).at(-1)).toEqual({ snoozedUntil: null }));
     expect(await main().findByText("Weed the beds")).toBeTruthy();

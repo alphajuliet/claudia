@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import type { Counts, List } from "@claudia/shared";
 import { useCounts, useFilters, useFolders, useLists, useMoveList } from "../data/queries";
@@ -10,6 +10,7 @@ import { CONTEXT_CHOICES, useContextFilter } from "./contextFilter";
 import { Logo } from "./Logo";
 import { InlineRename, useRenameReported } from "./InlineRename";
 import { useCommand } from "./keyboard";
+import { canShake, useShakeSetting } from "./shakeToUndo";
 import { THEME_CHOICES, useTheme } from "./theme";
 import { useToast } from "./Toast";
 import { useListDrag } from "./useListDrag";
@@ -127,6 +128,8 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
 
   const { state, signOut } = useSession();
   const [theme, setTheme] = useTheme();
+  const [shake, setShake] = useShakeSetting();
+  const [shakeable] = useState(canShake);
   const { context, setContext } = useContextFilter();
   const folders = useFolders().data ?? [];
   const lists = useLists().data ?? [];
@@ -210,6 +213,22 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
             </button>
           ))}
         </div>
+        {shakeable && (
+          <label className="footer-switch">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={shake}
+              onChange={(e) => {
+                const next = e.target.checked;
+                void setShake(next).then((ok) => {
+                  if (!ok) toast.show({ message: "Motion access wasn't allowed, so shaking can't undo. Reopen Claudia and try again.", error: true });
+                });
+              }}
+            />
+            Shake to undo
+          </label>
+        )}
         {state.status === "signedIn" && (
           <span className="who" title={`Signed in with the token “${state.me.name}”`}>
             <span className="who-name">{state.me.name}</span>

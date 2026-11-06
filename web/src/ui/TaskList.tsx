@@ -48,11 +48,8 @@ export function useComplete() {
       }
       toast.show({
         message: `Completed “${plainText(task.title)}”${saved.subtasks > 0 ? ` and ${saved.subtasks} ${saved.subtasks === 1 ? "subtask" : "subtasks"}` : ""}`,
-        action: {
-          label: "Undo",
-          run: () => {
-            setCompleted.mutateAsync({ task: saved, done: false }).catch((e: Error) => toast.show({ message: e.message, error: true }));
-          },
+        undo: () => {
+          setCompleted.mutateAsync({ task: saved, done: false }).catch((e: Error) => toast.show({ message: e.message, error: true }));
         },
       });
     } catch (e) {
@@ -391,7 +388,7 @@ function useDropMove(listId: string | undefined) {
       const back = { ...placeOf(items, task), listId, ...section };
       const name = lists?.find((l) => l.id === target.listId)?.name ?? "another list";
       move.mutateAsync({ id: task.id, listId: target.listId, parentId: null, ...section }).catch(fail);
-      toast.show({ message: `Moved to ${name}`, action: { label: "Undo", run: () => { move.mutateAsync({ id: task.id, ...back }).catch(fail); } } });
+      toast.show({ message: `Moved “${plainText(task.title)}” to ${name}`, undo: () => { move.mutateAsync({ id: task.id, ...back }).catch(fail); } });
       return;
     }
     const request = moveFor(withoutDragged(items, task), task, target, items);
