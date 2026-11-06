@@ -18,6 +18,7 @@ import { countRoutes } from "./routes/counts";
 import { meRoutes } from "./routes/me";
 import { settingRoutes } from "./routes/settings";
 import { taskRoutes } from "./routes/tasks";
+import { captureRoutes } from "./routes/capture";
 import { tokenRoutes } from "./routes/tokens";
 
 export const app = newRouter();
@@ -58,6 +59,7 @@ app.route("/", tokenRoutes);
 app.route("/", folderRoutes);
 app.route("/", listRoutes);
 app.route("/", taskRoutes);
+app.route("/", captureRoutes);
 app.route("/", countRoutes);
 app.route("/", labelRoutes);
 app.route("/", filterRoutes);

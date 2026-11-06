@@ -335,3 +335,11 @@ export const ImportResultSchema = z
   .object({ inserted: Counts, skipped: Counts })
   .openapi("ImportResult");
 export type ImportBatch = z.infer<typeof ImportSchema>;
+
+// Capture: one line of text into the Inbox, read as quick add reads it (for the iOS Shortcut and other quick clients).
+export const CaptureSchema = z
+  .object({
+    text: z.string().trim().min(1).max(1000).openapi({ example: "Buy milk #errand tomorrow 5pm" }),
+    notes: z.string().max(100_000).nullable().optional().openapi({ description: "Notes, such as a URL from the share sheet" }),
+  })
+  .openapi("Capture");

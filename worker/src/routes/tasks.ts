@@ -221,6 +221,47 @@ export async function findTasks(db: Db, q: z.infer<typeof TaskQuerySchema>) {
   return present(db, rows);
 }
 
+/** Creates a task or heading (checking its list and parent) with its labels, and logs it. Used by POST /api/tasks and /api/capture. */
+export async function createTask(db: Db, actor: Actor, input: z.infer<typeof TaskCreateSchema>) {
+  const kind = input.kind ?? "task";
+  const parentId = input.parentId ?? null;
+  await assertList(db, input.listId);
+  await checkParent(db, { kind }, input.listId, parentId);
+
+  const at = now();
+  const row: Row = {
+    id: newId(),
+    listId: input.listId,
+    parentId,
+    kind,
+    position: await positionFor(db, tasks, and(live, inScope(input.listId, parentId)), input),
+    title: input.title,
+    notes: input.notes ?? null,
+    dueDate: input.dueDate ?? null,
+    dueAt: input.dueAt ?? null,
+    startDate: input.startDate ?? null,
+    snoozedUntil: input.snoozedUntil ?? null,
+    recurRule: input.recurRule ?? null,
+    recurFrom: input.recurFrom ?? null,
+    priority: input.priority ?? "normal",
+    completedAt: null,
+    metadata: input.metadata ?? null,
+    createdAt: at,
+    updatedAt: at,
+    deletedAt: null,
+  };
+  checkRecurrence(row);
+
+  const { ids, names, pending } = await resolveLabelIds(db, input.labels ?? [], actor);
+  await runBatch(db, [
+    ...pending,
+    db.insert(tasks).values(row),
+    ...(ids.length ? [db.insert(taskLabels).values(ids.map((labelId) => ({ taskId: row.id, labelId })))] : []),
+    eventQuery(db, { entityType: "task", entityId: row.id, type: "created", after: snapshot(row, names), actor }),
+  ]);
+  return toTask(row, names);
+}
+
 export const taskRoutes = newRouter()
   .openapi(
     createRoute({
@@ -245,48 +286,7 @@ export const taskRoutes = newRouter()
       request: { body: jsonBody(TaskCreateSchema) },
       responses: { 201: jsonResponse(TaskSchema, "Created"), ...commonErrors, ...notFoundError },
     }),
-    async (c) => {
-      const input = c.req.valid("json");
-      const db = c.var.db;
-      const actor: Actor = c.var.actor;
-      const kind = input.kind ?? "task";
-      const parentId = input.parentId ?? null;
-      await assertList(db, input.listId);
-      await checkParent(db, { kind }, input.listId, parentId);
-
-      const at = now();
-      const row: Row = {
-        id: newId(),
-        listId: input.listId,
-        parentId,
-        kind,
-        position: await positionFor(db, tasks, and(live, inScope(input.listId, parentId)), input),
-        title: input.title,
-        notes: input.notes ?? null,
-        dueDate: input.dueDate ?? null,
-        dueAt: input.dueAt ?? null,
-        startDate: input.startDate ?? null,
-        snoozedUntil: input.snoozedUntil ?? null,
-        recurRule: input.recurRule ?? null,
-        recurFrom: input.recurFrom ?? null,
-        priority: input.priority ?? "normal",
-        completedAt: null,
-        metadata: input.metadata ?? null,
-        createdAt: at,
-        updatedAt: at,
-        deletedAt: null,
-      };
-      checkRecurrence(row);
-
-      const { ids, names, pending } = await resolveLabelIds(db, input.labels ?? [], actor);
-      await runBatch(db, [
-        ...pending,
-        db.insert(tasks).values(row),
-        ...(ids.length ? [db.insert(taskLabels).values(ids.map((labelId) => ({ taskId: row.id, labelId })))] : []),
-        eventQuery(db, { entityType: "task", entityId: row.id, type: "created", after: snapshot(row, names), actor }),
-      ]);
-      return c.json(toTask(row, names), 201);
-    },
+    async (c) => c.json(await createTask(c.var.db, c.var.actor, c.req.valid("json")), 201),
   )
   .openapi(
     createRoute({
