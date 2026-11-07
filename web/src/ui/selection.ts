@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useLocation, useSearch } from "wouter";
 import type { Task } from "@claudia/shared";
 
@@ -51,4 +52,34 @@ export function useSelectedTask(): { selectedId: string | null; select: (id: str
     navigate(query ? `${path}?${query}` : path, { replace: Boolean(opts.follow) });
   };
   return { selectedId, select };
+}
+
+/** A field to edit as soon as `id`'s panel shows it: `e n` or `e l` pressed while the panel was closed. */
+export type PendingField = "notes" | "labels";
+let pendingEdit: { id: string; field: PendingField } | null = null;
+
+/** Opens `id`'s panel on `field`: call before selecting the task. */
+export const requestEdit = (id: string, field: PendingField) => { pendingEdit = { id, field }; };
+
+/** True once if `field` of `id` was asked for, and forgets it. */
+export function takeEdit(id: string, field: PendingField): boolean {
+  if (pendingEdit?.id !== id || pendingEdit.field !== field) return false;
+  pendingEdit = null;
+  return true;
+}
+
+/**
+ * Runs `start` when the field appears, if its edit was asked for before the panel opened. It runs just after the
+ * panel's effects (which would otherwise take focus), and outside them, so `start` may flush a render of its own.
+ */
+export function usePendingEdit(id: string, field: PendingField, start: () => void) {
+  const latest = useRef(start);
+  latest.current = start;
+  useEffect(() => {
+    if (pendingEdit?.id !== id || pendingEdit.field !== field) return;
+    // Taken only when it runs, so StrictMode's throwaway first mount leaves it for the real one.
+    let live = true;
+    queueMicrotask(() => { if (live && takeEdit(id, field)) latest.current(); });
+    return () => { live = false; };
+  }, [id]);
 }

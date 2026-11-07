@@ -3,6 +3,7 @@ import { flushSync } from "react-dom";
 import { PRIORITIES, type Task } from "@claudia/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { LabelChip, useLabelColour } from "./LabelChip";
+import { usePendingEdit } from "./selection";
 import { useFolders, useLabels, useLists, useMoveTask, useUpdateTask, type TaskPatch } from "../data/queries";
 import { PRESETS, presetFor, ruleFor, type Preset } from "../lib/repeat";
 import { sidebarTree, type FolderNode } from "../lib/sidebar";
@@ -188,7 +189,7 @@ export function NotesField({ task }: { task: Task }) {
   };
 
   // e n: into the editor, formatted notes included.
-  useCommand("editNotes", () => {
+  const startEditing = () => {
     if (!editing && value.trim() !== "") edit();
     else {
       const el = ref.current;
@@ -196,7 +197,10 @@ export function NotesField({ task }: { task: Task }) {
       el.focus({ preventScroll: true });
       el.setSelectionRange(el.value.length, el.value.length);
     }
-  });
+  };
+  useCommand("editNotes", startEditing);
+  // Or e n pressed with the panel closed, which opened it.
+  usePendingEdit(task.id, "notes", startEditing);
 
   // Notes show formatted until clicked (links still open); empty notes are the editor already.
   const formatted = !editing && value.trim() !== "";
@@ -270,7 +274,7 @@ export function LabelsField({ task }: { task: Task }) {
           ))}
         </ul>
       )}
-      <LabelPicker all={all} taken={task.labels} onAdd={add} />
+      <LabelPicker all={all} taken={task.labels} onAdd={add} taskId={task.id} />
       <FieldStatus state={state} />
     </Field>
   );

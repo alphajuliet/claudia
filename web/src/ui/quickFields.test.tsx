@@ -93,11 +93,36 @@ describe("quick editing from the keyboard", () => {
     expect(field.getAttribute("aria-expanded")).toBe("true");
   });
 
-  it("does nothing with the panel closed but rename on e t", async () => {
-    await openFirst();
+  it("opens the highlighted task's panel on its notes with e n when the panel is closed", async () => {
+    const { tasks } = await openFirst("Start with the **roses**");
     await userEvent.keyboard("en");
-    expect(screen.queryByRole("textbox", { name: "Notes" })).toBeNull();
+    const notes = await screen.findByRole("textbox", { name: "Notes" });
+    await waitFor(() => expect(document.activeElement).toBe(notes));
+    expect(notes).toHaveProperty("value", "Start with the **roses**");
+    expect(screen.getByRole("textbox", { name: "Title" })).toHaveProperty("value", tasks[0]!.title);
+  });
+
+  it("opens the panel on Add a label, with its list open, with e l when the panel is closed", async () => {
+    await openFirst();
+    await userEvent.keyboard("jel"); // The second row.
+    const field = await screen.findByRole("combobox", { name: "Add a label" });
+    await waitFor(() => expect(document.activeElement).toBe(field));
+    expect(field.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("textbox", { name: "Title" })).toHaveProperty("value", "Plant tomatoes");
+  });
+
+  it("opens nothing on a heading, and only the field asked for", async () => {
+    stubApi([task({ title: "Beds", listId: garden.id, kind: "heading" })]);
+    renderAt(`/list/${garden.id}`);
+    await main().findByText("Beds");
+    await userEvent.keyboard("en");
+    expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
+  });
+
+  it("still renames the row in place with e t when the panel is closed", async () => {
+    await openFirst();
     await userEvent.keyboard("et");
     expect(document.activeElement).toBe(main().getByRole("textbox", { name: "Title" }));
+    expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
   });
 });

@@ -12,7 +12,7 @@ import { DueField, SnoozeField } from "./DateFields";
 import { useCommand } from "./keyboard";
 import { InlineMarkdown, plainText } from "./Markdown";
 import { Disclosure, TaskRow } from "./TaskRow";
-import { markMade, useSelectedTask } from "./selection";
+import { markMade, requestEdit, useSelectedTask, type PendingField } from "./selection";
 import { useToast } from "./Toast";
 import { useDrag, type DragTarget } from "./useDrag";
 
@@ -539,6 +539,15 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
   useCommand("newHeading", reorder ? () => {
     make({ listId: reorder.listId, parentId: null, kind: "heading", title: NEW_HEADING_TITLE, ...headingPlace(order, target) });
   } : undefined);
+  // e n and e l with the panel closed: open the highlighted task's panel on that field. (With the panel open, its
+  // fields take these first.)
+  const editIn = (field: PendingField) => () => {
+    if (!current || current.kind !== "task") return false;
+    requestEdit(current.id, field);
+    select(current.id);
+  };
+  useCommand("editNotes", editIn("notes"));
+  useCommand("editLabels", editIn("labels"));
   useCommand("rename", () => {
     if (document.querySelector(".detail-title-input")) return false; // The panel's title takes it.
     const title = current?.kind === "task" && document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(current.id)}"] .task-title`);

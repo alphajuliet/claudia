@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { useCommand } from "./keyboard";
 import { useLabelColour } from "./LabelChip";
+import { usePendingEdit } from "./selection";
 
 /** Labels to offer: those not on the task whose names contain the typed text (ignoring case), alphabetically. */
 export function labelOptions(all: string[], taken: string[], text: string): string[] {
@@ -17,9 +18,11 @@ export function labelOptions(all: string[], taken: string[], text: string): stri
  * Enter adds the highlighted label, or else the typed name. A name that isn't a label yet gets a last option to create
  * it. Escape closes an open list and goes no further, so the panel stays; with the list closed it reaches the panel.
  */
-export function LabelPicker({ all, taken, onAdd }: {
+export function LabelPicker({ all, taken, onAdd, taskId }: {
   all: string[];
   taken: string[];
+  /** The task whose labels these are, so `e l` pressed before its panel opened lands here. */
+  taskId?: string;
   /** Adds a name (already trimmed, without a leading #). False when it fails: the name goes back in the field. */
   onAdd: (name: string) => Promise<boolean>;
 }) {
@@ -37,8 +40,10 @@ export function LabelPicker({ all, taken, onAdd }: {
   const list = useRef<HTMLUListElement>(null);
   const colourOf = useLabelColour();
   const input = useRef<HTMLInputElement>(null);
-  // e l: into the field, which opens the list.
-  useCommand("editLabels", () => { input.current?.focus({ preventScroll: true }); });
+  // e l: into the field, which opens the list; or e l pressed with the panel closed, which opened it.
+  const startEditing = () => { input.current?.focus({ preventScroll: true }); };
+  useCommand("editLabels", startEditing);
+  usePendingEdit(taskId ?? "", "labels", startEditing);
   // On a phone the list may open below the keyboard: bring it into view, and keep the highlighted option in view.
   useEffect(() => {
     if (expanded) list.current?.scrollIntoView?.({ block: "nearest" });

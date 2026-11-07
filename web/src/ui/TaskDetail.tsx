@@ -143,7 +143,9 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
   // Opening takes focus, except when the panel follows the keyboard highlight (the row keeps it) or a new task's
   // title takes it.
   useEffect(() => {
-    if (!wasFollowed(id) && !isMade(id)) ref.current?.focus({ preventScroll: true });
+    // A field may already have it (e n or e l opened the panel): the panel's fields mount, and so focus, first.
+    const within = ref.current?.contains(document.activeElement) ?? false;
+    if (!wasFollowed(id) && !isMade(id) && !within) ref.current?.focus({ preventScroll: true });
   }, [id]);
 
   // Enter with focus on the panel itself goes on to the title.
