@@ -34,6 +34,16 @@
 			"migrations_dir": "migrations"
 		}
 	],
+	"r2_buckets": [
+		{
+			"binding": "BACKUPS",
+			"bucket_name": "claudia-backups"
+		}
+	],
+	// The nightly backup: 16:00 UTC is 3 am in Sydney in summer, 2 am in winter.
+	"triggers": {
+		"crons": ["0 16 * * *"]
+	},
 	"kv_namespaces": [
 		{
 			"binding": "OAUTH_KV",

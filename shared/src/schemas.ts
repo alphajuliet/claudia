@@ -336,6 +336,15 @@ export const ImportResultSchema = z
   .openapi("ImportResult");
 export type ImportBatch = z.infer<typeof ImportSchema>;
 
+// Backup: the whole database as SQL in R2 (made nightly; POST /api/backup makes one now).
+export const BackupResultSchema = z
+  .object({
+    key: z.string().openapi({ example: "nightly/claudia-2026-11-08.sql" }),
+    bytes: z.number().int(),
+    rows: z.record(z.string(), z.number().int()).openapi({ description: "Rows written per table" }),
+  })
+  .openapi("BackupResult");
+
 // Capture: one line of text into the Inbox, read as quick add reads it (for the iOS Shortcut and other quick clients).
 export const CaptureSchema = z
   .object({

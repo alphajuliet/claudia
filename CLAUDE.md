@@ -64,6 +64,8 @@ npm workspaces monorepo: `shared` (Zod schemas), `worker` (Hono API, wrangler co
 - `npm run db:generate -w @claudia/worker`: generate a migration from `worker/src/db/schema.ts` (add `--custom` for hand-written SQL such as triggers)
 - `npm run db:migrate:local -w @claudia/worker`: apply migrations to the local D1 (`db:migrate:remote` for production)
 
+- Backups: a cron makes a nightly SQL dump in the R2 bucket `claudia-backups` (kept 30 days); `POST /api/backup` (admin) makes one now. CI records a D1 Time Travel bookmark before applying migrations. Restoring: `docs/backups.md`.
+
 - `npm run token:create -w @claudia/worker -- --remote --name laptop --scopes admin`: mint an API token straight into D1 (the first admin token; later ones come from `POST /api/tokens`). The secret is shown once.
 
 - `npm run godspeed:fetch -w @claudia/worker`: download the whole Godspeed account (needs `GODSPEED_API_KEY`; open tasks only, so under a minute. Add `--include-completed` for history, which takes about 5 minutes because of the rate limit) into the git-ignored `worker/godspeed-export/`

@@ -20,6 +20,8 @@ import { settingRoutes } from "./routes/settings";
 import { taskRoutes } from "./routes/tasks";
 import { captureRoutes } from "./routes/capture";
 import { tokenRoutes } from "./routes/tokens";
+import { backupRoutes } from "./routes/backup";
+import { backUp } from "./backup";
 
 export const app = newRouter();
 
@@ -65,6 +67,7 @@ app.route("/", labelRoutes);
 app.route("/", filterRoutes);
 app.route("/", settingRoutes);
 app.route("/", importRoutes);
+app.route("/", backupRoutes);
 app.route("/", consentRoutes);
 
 app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
@@ -131,4 +134,13 @@ export const provider = new OAuthProvider<Cloudflare.Env>({
   },
 });
 
-export default provider;
+/** The nightly backup (the cron in wrangler.jsonc). A failure shows in the Worker's logs and fails the run. */
+async function scheduled(controller: ScheduledController, env: Cloudflare.Env): Promise<void> {
+  const result = await backUp(env, new Date(controller.scheduledTime));
+  console.log(`Backed up to ${result.key}: ${result.bytes} bytes`, result.rows);
+}
+
+export default {
+  fetch: (req: Request, env: Cloudflare.Env, ctx: ExecutionContext) => provider.fetch(req, env, ctx),
+  scheduled,
+} satisfies ExportedHandler<Cloudflare.Env>;
