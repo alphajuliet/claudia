@@ -130,7 +130,7 @@ function Shell() {
           </main>
           {selectedId && <TaskDetail key={selectedId} id={selectedId} onClose={closePanel} />}
           {helpOpen && <Shortcuts onClose={() => setHelpOpen(false)} />}
-          {pickerOpen && <ListPicker onClose={() => setPickerOpen(false)} onGo={(href) => { setPickerOpen(false); navigate(href); }} />}
+          {pickerOpen && <ListPicker onClose={() => setPickerOpen(false)} onPick={(c) => { setPickerOpen(false); navigate(c.href); }} />}
           {GO.map(([id, to]) => <GoCommand key={id} id={id} to={to} />)}
           <UndoCommands />
         </div>

@@ -54,8 +54,8 @@ export function useSelectedTask(): { selectedId: string | null; select: (id: str
   return { selectedId, select };
 }
 
-/** A field to edit as soon as `id`'s panel shows it: `e n` or `e l` pressed while the panel was closed. */
-export type PendingField = "notes" | "labels";
+/** A field to edit as soon as `id`'s panel shows it: `e n`, `e l` or `e m` pressed while the panel was closed. */
+export type PendingField = "notes" | "labels" | "list";
 let pendingEdit: { id: string; field: PendingField } | null = null;
 
 /** Opens `id`'s panel on `field`: call before selecting the task. */

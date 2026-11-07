@@ -10,6 +10,7 @@ import { sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox } from "../lib/views";
 import { useCommand } from "./keyboard";
 import { LabelPicker } from "./LabelPicker";
+import { ListPicker } from "./ListPicker";
 import { BlockMarkdown } from "./Markdown";
 import { useToast, type ToastMessage } from "./Toast";
 
@@ -307,6 +308,10 @@ export function ListField({ task }: { task: Task }) {
   const live = new Set([...top, ...groups.flatMap((g) => g.node.lists)].map((l) => l.id));
   // An archived (or not yet loaded) list still needs an option to show as chosen.
   const current = live.has(task.listId) ? null : lists.find((l) => l.id === task.listId);
+  // e m: pick the list by name, with the panel open or (opening it) closed.
+  const [picking, setPicking] = useState(false);
+  useCommand("moveToList", () => setPicking(true));
+  usePendingEdit(task.id, "list", () => setPicking(true));
   const onChange = (listId: string) => {
     if (listId === task.listId) return;
     const mine = ++latestMove.current;
@@ -315,6 +320,7 @@ export function ListField({ task }: { task: Task }) {
     void save.run(move.mutateAsync({ id: task.id, listId })).finally(() => { if (mine === latestMove.current) setMoving(null); });
   };
   return (
+    <>
     <Field label="List" htmlFor={id}>
       <select id={id} className="detail-select" value={moving ?? task.listId} onChange={(e) => onChange(e.target.value)}>
         {!live.has(task.listId) && <option value={task.listId}>{current?.name ?? "…"}</option>}
@@ -327,6 +333,12 @@ export function ListField({ task }: { task: Task }) {
       </select>
       <FieldStatus state={save.state} />
     </Field>
+    {/* Outside the field, whose label would take its clicks. */}
+    {picking && (
+      <ListPicker title="Move to a list" exclude={task.listId} onClose={() => setPicking(false)}
+        onPick={(c) => { setPicking(false); onChange(c.id); }} />
+    )}
+    </>
   );
 }
 

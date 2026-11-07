@@ -1,7 +1,7 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
-import { garden, main, renderAt, sentBodies, stubApi, task } from "./testApi";
+import { errands, garden, main, renderAt, sentBodies, stubApi, task } from "./testApi";
 
 const titleBox = () => screen.findByRole("textbox", { name: "Title" }) as Promise<HTMLInputElement>;
 const panel = () => screen.getByRole("complementary", { name: "Task details" });
@@ -117,6 +117,42 @@ describe("quick editing from the keyboard", () => {
     await main().findByText("Beds");
     await userEvent.keyboard("en");
     expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
+  });
+
+  it("moves the task to a list picked by name with e m, with the panel open", async () => {
+    const { fetchMock, tasks } = await openFirst();
+    await userEvent.keyboard("{Enter}");
+    await titleBox();
+    await userEvent.keyboard("em");
+    const picker = await screen.findByRole("dialog", { name: "Move to a list" });
+    const field = screen.getByRole("combobox", { name: "List name" });
+    expect(document.activeElement).toBe(field);
+    // The task's own list isn't offered.
+    expect(within(picker).queryByRole("option", { name: /^Garden/ })).toBeNull();
+    await userEvent.keyboard("err{Enter}");
+    expect(sentBodies(fetchMock, "POST", `/api/tasks/${tasks[0]!.id}/move`)).toEqual([{ listId: errands.id }]);
+    expect(screen.queryByRole("dialog", { name: "Move to a list" })).toBeNull();
+    await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
+  });
+
+  it("opens the panel and the list picker with e m when the panel is closed, and Escape moves nothing", async () => {
+    const { fetchMock, tasks } = await openFirst();
+    await userEvent.keyboard("jem");
+    await screen.findByRole("dialog", { name: "Move to a list" });
+    expect(screen.getByRole("textbox", { name: "Title" })).toHaveProperty("value", tasks[1]!.title);
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "Move to a list" })).toBeNull();
+    // Escape was the picker's: the panel stays open.
+    expect(panel()).toBeTruthy();
+    expect(fetchMock.mock.calls.filter(([p]) => String(p).endsWith("/move"))).toEqual([]);
+  });
+
+  it("opens no picker for a heading", async () => {
+    stubApi([task({ title: "Beds", listId: garden.id, kind: "heading" })]);
+    renderAt(`/list/${garden.id}`);
+    await main().findByText("Beds");
+    await userEvent.keyboard("em");
+    expect(screen.queryByRole("dialog", { name: "Move to a list" })).toBeNull();
   });
 
   it("still renames the row in place with e t when the panel is closed", async () => {
