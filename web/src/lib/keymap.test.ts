@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { COMMANDS } from "./commands";
-import { createMatcher, ignoresKeys, wrapIndex } from "./keymap";
+import { createMatcher, ignoresKeys, keyName, wrapIndex } from "./keymap";
 
 describe("the default keys", () => {
   it("keeps a key that starts a chord from being a command of its own, which it would silently stop running", () => {
@@ -28,7 +28,9 @@ describe("createMatcher", () => {
     const m = createMatcher(COMMANDS);
     expect(m.match("Alt+ArrowUp", 0)).toBe("moveUp");
     expect(m.match("Alt+ArrowDown", 0)).toBe("moveDown");
-    expect(m.match("Alt+j", 0)).toBeNull();
+    expect(m.match("Alt+j", 0)).toBe("nextList");
+    expect(m.match("Alt+k", 0)).toBe("previousList");
+    expect(m.match("Alt+q", 0)).toBeNull();
   });
 
   it("matches a chord typed within the time limit", () => {
@@ -62,22 +64,41 @@ describe("createMatcher", () => {
   });
 });
 
+describe("keyName", () => {
+  it("names keys as the bindings do", () => {
+    expect(keyName({ altKey: false, key: "j" })).toBe("j");
+    expect(keyName({ altKey: false, shiftKey: true, key: "J" })).toBe("J");
+    expect(keyName({ altKey: false, key: "J" })).toBe("j"); // Caps Lock
+    expect(keyName({ altKey: true, key: "ArrowUp" })).toBe("Alt+ArrowUp");
+    expect(keyName({ altKey: true, shiftKey: true, key: "ArrowUp" })).toBe("Alt+Shift+ArrowUp");
+  });
+
+  it("reads a letter typed with Alt from its code, as a Mac types a symbol for it", () => {
+    expect(keyName({ altKey: true, key: "∆", code: "KeyJ" })).toBe("Alt+j");
+    expect(keyName({ altKey: true, key: "˚", code: "KeyK" })).toBe("Alt+k");
+    expect(keyName({ altKey: true, shiftKey: true, key: "Ô", code: "KeyJ" })).toBe("Alt+J");
+  });
+});
+
 describe("ignoresKeys", () => {
-  const press = (target: EventTarget | null, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; key: string }> = {}) =>
+  const press = (target: EventTarget | null, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; key: string; code: string }> = {}) =>
     ignoresKeys({ ctrlKey: false, metaKey: false, altKey: false, key: "j", target, ...mods });
   const el = (tag: string, props: { type?: string } = {}): HTMLElement => Object.assign(document.createElement(tag), props);
 
   it("ignores keys with Ctrl, ⌘ or Alt", () => {
     expect(press(document.body, { metaKey: true })).toBe(true);
     expect(press(document.body, { ctrlKey: true })).toBe(true);
-    expect(press(document.body, { altKey: true })).toBe(true);
+    expect(press(document.body, { altKey: true, key: "q" })).toBe(true);
     expect(press(document.body)).toBe(false);
   });
 
   it("lets Alt through only for keys bound with it, and not in text fields", () => {
     expect(press(document.body, { altKey: true, key: "ArrowUp" })).toBe(false);
     expect(press(document.body, { altKey: true, key: "ArrowDown" })).toBe(false);
-    expect(press(document.body, { altKey: true, key: "j" })).toBe(true);
+    expect(press(document.body, { altKey: true, key: "q" })).toBe(true);
+    // ⌥J on a Mac types "∆": the letter comes from the code.
+    expect(press(document.body, { altKey: true, key: "∆", code: "KeyJ" })).toBe(false);
+    expect(press(document.body, { altKey: true, key: "œ", code: "KeyQ" })).toBe(true);
     expect(press(document.body, { altKey: true, ctrlKey: true, key: "ArrowUp" })).toBe(true);
     expect(press(document.createElement("textarea"), { altKey: true, key: "ArrowUp" })).toBe(true);
   });

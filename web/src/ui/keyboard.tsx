@@ -1,12 +1,12 @@
 import { createContext, useContext, useEffect, useRef, type ReactNode } from "react";
 import { COMMANDS, type CommandId } from "../lib/commands";
-import { createMatcher, ignoresKeys } from "../lib/keymap";
+import { createMatcher, ignoresKeys, keyName } from "../lib/keymap";
 
 /** Runs a command; returning false means "not mine here", and the key keeps its usual effect. */
 export type CommandHandler = (e: KeyboardEvent) => boolean | void;
 
 /** Commands that may run again while their key is held down; the rest run once per press. */
-const REPEATS = new Set<CommandId>(["next", "previous", "moveUp", "moveDown"]);
+const REPEATS = new Set<CommandId>(["next", "previous", "moveUp", "moveDown", "nextList", "previousList"]);
 
 type Registry = Map<CommandId, CommandHandler[]>;
 
@@ -26,11 +26,7 @@ export function KeyboardProvider({ children }: { children: ReactNode }) {
         matcher.reset();
         return;
       }
-      // Caps Lock gives capitals without Shift: read them as the lower-case key (Shift+C stays C).
-      const base = e.key.length === 1 && !e.shiftKey ? e.key.toLowerCase() : e.key;
-      // Shift is part of a printable key already, so it only shows here for the likes of the arrows.
-      const key = e.altKey ? `Alt+${e.shiftKey && e.key.length > 1 ? "Shift+" : ""}${base}` : base;
-      const id = matcher.match(key, Date.now());
+      const id = matcher.match(keyName(e), Date.now());
       if (id === "pending") {
         e.preventDefault();
         return;

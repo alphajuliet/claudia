@@ -10,6 +10,7 @@ import { CONTEXT_CHOICES, useContextFilter } from "./contextFilter";
 import { Logo } from "./Logo";
 import { InlineRename, useRenameReported } from "./InlineRename";
 import { useCommand } from "./keyboard";
+import { wrapIndex } from "../lib/keymap";
 import { canShake, useShakeSetting } from "./shakeToUndo";
 import { THEME_CHOICES, useTheme } from "./theme";
 import { useToast } from "./Toast";
@@ -145,7 +146,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   };
   const drag = useListDrag({ plan: (id, drop) => moveForDrop(tree, id, drop), onMove: move });
   // The open list moves with Alt+Shift+↑ and Alt+Shift+↓.
-  const [location] = useLocation();
+  const [location, navigate] = useLocation();
   const openList = location.match(/^\/list\/([^/]+)$/)?.[1];
   const step = (delta: 1 | -1) => () => {
     const to = openList && moveForStep(tree, openList, delta);
@@ -153,6 +154,24 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   };
   useCommand("moveListUp", openList ? step(-1) : undefined);
   useCommand("moveListDown", openList ? step(1) : undefined);
+  // ⌥J and ⌥K open the next or previous list as the sidebar shows them (the Inbox, then the context's lists,
+  // skipping folders and lists in collapsed ones), wrapping at the ends. The list takes the keyboard, as any does.
+  const revealCurrent = useRef(false);
+  const stepList = (delta: 1 | -1) => () => {
+    const hidden = (id: string) => Boolean(ref.current?.querySelector(`[data-list-row="${CSS.escape(id)}"]`)?.closest("details:not([open])"));
+    const hrefs = [...(inboxId ? ["/inbox"] : []), ...listOrder(tree).filter((id) => !hidden(id)).map((id) => `/list/${id}`)];
+    const next = hrefs[wrapIndex(hrefs.indexOf(location), hrefs.length, delta)];
+    if (!next) return false;
+    revealCurrent.current = true;
+    navigate(next);
+  };
+  useCommand("nextList", stepList(1));
+  useCommand("previousList", stepList(-1));
+  useEffect(() => {
+    if (!revealCurrent.current) return;
+    revealCurrent.current = false;
+    ref.current?.querySelector('.sidebar-scroll [aria-current="page"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [location]);
   // Views count the lists they show: every list, or the Inbox and the context's lists.
   const shown = context === "all" ? "all" : [...(inboxId ? [inboxId] : []), ...listOrder(tree)];
 
