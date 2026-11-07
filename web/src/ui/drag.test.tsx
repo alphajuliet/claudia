@@ -81,13 +81,16 @@ describe("dragging in a list", () => {
     await waitFor(() => expect(titles()).toEqual(["Mulch the roses", "Weed the beds", "Plant tomatoes"]));
   });
 
-  it("leaves a press without movement to rename and select", async () => {
-    const { fetchMock, href } = threeTasks();
+  it("leaves a press without movement to select, and a double click to rename", async () => {
+    const { fetchMock, href, tasks } = threeTasks();
     const title = await main().findByText("Plant tomatoes");
     fireEvent.pointerDown(title, { ...mouse, clientX: 50, clientY: yOf(1) });
     fireEvent.pointerMove(document.body, { ...mouse, clientX: 52, clientY: yOf(1) + 2 });
     fireEvent.pointerUp(document.body, { ...mouse, clientX: 52, clientY: yOf(1) + 2 });
     fireEvent.click(title);
+    expect(href()).toContain(`?task=${tasks[1]!.id}`);
+    expect(main().queryByRole("textbox", { name: "Title" })).toBeNull();
+    fireEvent.dblClick(title);
     const input = main().getByRole("textbox", { name: "Title" });
     fireEvent.keyDown(input, { key: "Escape" });
 
@@ -213,12 +216,11 @@ describe("dragging in a list", () => {
     moveTo(50, yOf(2));
     release(50, yOf(2));
     fireEvent.click(title);
-    expect(main().queryByRole("textbox", { name: "Title" })).toBeNull();
     expect(href()).not.toContain("?task=");
     await new Promise((r) => setTimeout(r, 5));
-    // Only that one: the next click renames.
+    // Only that one: the next click selects.
     fireEvent.click(title);
-    expect(main().getByRole("textbox", { name: "Title" })).toBeTruthy();
+    expect(href()).toContain("?task=");
   });
 
   it("draws the line at the next row's top edge, not across the dragged rows", async () => {

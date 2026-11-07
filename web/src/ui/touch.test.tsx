@@ -18,15 +18,22 @@ describe("tapping a task on a touch screen", () => {
     expect(within(main().getByText("Weed the beds").closest("li")!).queryByRole("textbox")).toBeNull();
   });
 
-  it("still renames inline on a mouse click", async () => {
-    const weed = task({ title: "Weed the beds", listId: garden.id });
-    stubApi([weed]);
-    const { href } = renderAt(`/list/${garden.id}`);
+  it("doesn't rename on a double tap", async () => {
+    stubApi([task({ title: "Weed the beds", listId: garden.id })]);
+    renderAt(`/list/${garden.id}`);
+    const title = await main().findByText("Weed the beds");
+    fireEvent.pointerDown(title, { pointerType: "touch" });
+    fireEvent.dblClick(title);
+    expect(main().queryByRole("textbox", { name: "Title" })).toBeNull();
+  });
+
+  it("renames inline on a mouse double click", async () => {
+    stubApi([task({ title: "Weed the beds", listId: garden.id })]);
+    renderAt(`/list/${garden.id}`);
     const title = await main().findByText("Weed the beds");
     fireEvent.pointerDown(title, { pointerType: "mouse" });
-    fireEvent.click(title);
+    fireEvent.dblClick(title);
     expect(main().getByRole("textbox", { name: "Title" })).toHaveProperty("value", "Weed the beds");
-    expect(href()).toBe(`/list/${garden.id}`);
   });
 
   it("closes the panel with Done", async () => {

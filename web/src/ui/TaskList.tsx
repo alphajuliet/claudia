@@ -11,7 +11,7 @@ import { BottomSheet } from "./BottomSheet";
 import { DueField, SnoozeField } from "./DateFields";
 import { useCommand } from "./keyboard";
 import { InlineMarkdown, plainText } from "./Markdown";
-import { Disclosure, TaskRow } from "./TaskRow";
+import { Disclosure, RENAME_EVENT, TaskRow } from "./TaskRow";
 import { markMade, requestEdit, useSelectedTask, type PendingField } from "./selection";
 import { useToast } from "./Toast";
 import { useDrag, type DragTarget } from "./useDrag";
@@ -552,7 +552,7 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
     if (document.querySelector(".detail-title-input")) return false; // The panel's title takes it.
     const title = current?.kind === "task" && document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(current.id)}"] .task-title`);
     if (!title) return false;
-    title.click();
+    title.dispatchEvent(new Event(RENAME_EVENT));
   });
 
   if (query.error) {

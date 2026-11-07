@@ -53,7 +53,7 @@ describe("Markdown in titles", () => {
   it("edits the raw title", async () => {
     stubApi([task({ title: "Buy **compost**", listId: garden.id })]);
     renderAt(`/list/${garden.id}`);
-    await userEvent.click(await main().findByRole("button", { name: "Buy compost" }));
+    await userEvent.dblClick(await main().findByRole("button", { name: "Buy compost" }));
     expect((main().getByRole("textbox", { name: "Title" }) as HTMLInputElement).value).toBe("Buy **compost**");
   });
 });

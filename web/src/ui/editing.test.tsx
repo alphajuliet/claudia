@@ -328,11 +328,11 @@ describe("dates in quick add", () => {
 });
 
 describe("inline title editing", () => {
-  it("edits a title in place and saves on Enter", async () => {
+  it("edits a title in place on a double click and saves on Enter", async () => {
     const t = task({ title: "Plant tomatoes", listId: garden.id });
     const fetchMock = stubApi([t]);
     renderAt(`/list/${garden.id}`);
-    await userEvent.click(await main().findByRole("button", { name: "Plant tomatoes" }));
+    await userEvent.dblClick(await main().findByRole("button", { name: "Plant tomatoes" }));
     const input = main().getByRole("textbox", { name: "Title" }) as HTMLInputElement;
     expect(input.value).toBe("Plant tomatoes");
     expect(document.activeElement).toBe(input);
@@ -361,13 +361,13 @@ describe("inline title editing", () => {
     renderAt(`/list/${garden.id}`);
     const title = await main().findByRole("button", { name: "Plant tomatoes" });
 
-    await userEvent.click(title);
+    await userEvent.dblClick(title);
     await userEvent.type(main().getByRole("textbox", { name: "Title" }), " later{Escape}");
     expect(main().getByRole("button", { name: "Plant tomatoes" })).toBeTruthy();
 
-    await userEvent.click(main().getByRole("button", { name: "Plant tomatoes" }));
+    await userEvent.dblClick(main().getByRole("button", { name: "Plant tomatoes" }));
     await userEvent.keyboard("{Enter}");
-    await userEvent.click(main().getByRole("button", { name: "Plant tomatoes" }));
+    await userEvent.dblClick(main().getByRole("button", { name: "Plant tomatoes" }));
     await userEvent.clear(main().getByRole("textbox", { name: "Title" }));
     await userEvent.keyboard("{Enter}");
     expect(main().getByRole("button", { name: "Plant tomatoes" })).toBeTruthy();
@@ -377,7 +377,7 @@ describe("inline title editing", () => {
   it("puts the old title back and shows the error when saving fails", async () => {
     stubApi([task({ title: "Plant tomatoes", listId: garden.id })], { failUpdate: true });
     renderAt(`/list/${garden.id}`);
-    await userEvent.click(await main().findByRole("button", { name: "Plant tomatoes" }));
+    await userEvent.dblClick(await main().findByRole("button", { name: "Plant tomatoes" }));
     await userEvent.type(main().getByRole("textbox", { name: "Title" }), " now{Enter}");
     await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Boom"));
     expect(main().getByRole("button", { name: "Plant tomatoes" })).toBeTruthy();

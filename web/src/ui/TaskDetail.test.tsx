@@ -47,11 +47,14 @@ describe("selecting a task", () => {
     expect((await inPanel()).getByRole("textbox", { name: "Title" })).toHaveProperty("value", "Weed the beds");
   });
 
-  it("doesn't select when the checkbox or title is clicked", async () => {
-    stubApi([task({ title: "Weed the beds", listId: garden.id })]);
+  it("selects without renaming when the title is clicked, and not when the checkbox is", async () => {
+    const weed = task({ title: "Weed the beds", listId: garden.id });
+    stubApi([weed]);
     const { href } = renderAt(`/list/${garden.id}`);
     await userEvent.click(await main().findByText("Weed the beds"));
-    expect(href()).toBe(`/list/${garden.id}`);
+    expect(href()).toBe(`/list/${garden.id}?task=${weed.id}`);
+    expect(main().queryByRole("textbox", { name: "Title" })).toBeNull();
+    await inPanel();
   });
 
   it("closes with the Done button or Escape in the panel, keeping the path", async () => {

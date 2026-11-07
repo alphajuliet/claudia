@@ -6,11 +6,14 @@ import { LabelChip, useLabelColour } from "./LabelChip";
 import { InlineMarkdown, plainText } from "./Markdown";
 import { useSwipe } from "./useSwipe";
 
+/** Sent to a row's `.task-title` to edit it in place. */
+export const RENAME_EVENT = "claudia:rename";
+
 /**
  * The title (inline Markdown), as a button that turns into a text input showing the raw text. Enter or leaving the field saves a changed,
  * non-empty title through `onRename`; Escape cancels. After a keyboard save or cancel, focus returns to the title.
- * A tap (the row's last pointer was touch or pen) calls `onOpen` instead, when given, so a phone opens the task
- * rather than bringing up the keyboard.
+ * A click or tap calls `onOpen`, when given, so it selects the task (and opens its panel) rather than editing it.
+ * A double click with a mouse, Enter on the focused title or `e t` edits it in place; without `onOpen`, a click does.
  */
 function TaskTitle({ task, onRename, onOpen, pointerType }: {
   task: Task;
@@ -22,6 +25,18 @@ function TaskTitle({ task, onRename, onOpen, pointerType }: {
   const done = useRef(false);
   const refocus = useRef(false);
   const button = useRef<HTMLSpanElement>(null);
+
+  // `e t` asks for the edit with this event on the title.
+  useEffect(() => {
+    const el = button.current;
+    if (!el) return;
+    const start = () => {
+      done.current = false;
+      setDraft(task.title);
+    };
+    el.addEventListener(RENAME_EVENT, start);
+    return () => el.removeEventListener(RENAME_EVENT, start);
+  }, [draft, task.title]);
 
   useEffect(() => {
     if (draft === null && refocus.current) {
@@ -51,10 +66,11 @@ function TaskTitle({ task, onRename, onOpen, pointerType }: {
         role="button"
         tabIndex={0}
         className="task-title"
-        onClick={() => {
+        onClick={() => (onOpen ? onOpen() : edit())}
+        onDoubleClick={() => {
+          // A double tap would bring up the keyboard on a phone: there the panel is the place to rename.
           const type = pointerType.current;
-          if (onOpen && (type === "touch" || type === "pen")) onOpen();
-          else edit();
+          if (type !== "touch" && type !== "pen") edit();
         }}
         onKeyDown={(e) => {
           // Keys on a link inside the title are the link's.
@@ -117,7 +133,7 @@ export function Disclosure({ title, collapsed, onToggle }: { title: string; coll
 
 /**
  * One task. While `pending` (a complete or reopen is running), its checkbox is disabled so a double click sends one.
- * `onSelect` is called for clicks on the row outside the checkbox and title, and for taps on the title (it opens the detail panel); `selected`
+ * `onSelect` is called for clicks on the row outside the checkbox, including the title (it opens the detail panel); `selected`
  * marks the row whose details are showing. The row can take focus (the keyboard highlight), and focus anywhere in
  * it calls `onHighlight`. On touch, a swipe right completes or reopens it, as the checkbox does (`useSwipe`); on an
  * open task, a swipe left calls `onReveal`, and while `open` the row shows Date and Snooze (`onDate`, `onSnooze`).
@@ -151,7 +167,7 @@ export function TaskRow({ task, depth, today, timeZone, pending, selected = fals
   const due = dueDateOf(task, timeZone);
   const colourOf = useLabelColour();
   const label = due ? formatDue(due, today) : null;
-  // The pointer type of the last press in the row: a tap on the title opens the task instead of renaming it.
+  // The pointer type of the last press in the row: a double tap on the title doesn't rename.
   const pointerType = useRef<string | null>(null);
   const allowLeft = Boolean(onDate && onSnooze) && task.kind === "task" && !task.completedAt;
   const swipe = useSwipe<HTMLLIElement>({
