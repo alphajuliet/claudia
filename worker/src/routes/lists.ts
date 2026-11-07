@@ -13,6 +13,7 @@ import { ApiError, notFound } from "../lib/errors";
 import { eventQuery } from "../lib/events";
 import { newId, now } from "../lib/ids";
 import { positionFor } from "../lib/position";
+import { retryOnConflict } from "../lib/db";
 import {
   commonErrors,
   conflictError,
@@ -81,7 +82,7 @@ export const listRoutes = newRouter()
       request: { body: jsonBody(ListCreateSchema) },
       responses: { 201: jsonResponse(ListSchema, "Created"), ...commonErrors, ...notFoundError },
     }),
-    async (c) => {
+    async (c) => retryOnConflict(async () => {
       const input = c.req.valid("json");
       const db = c.var.db;
       const folderId = input.folderId ?? null;
@@ -102,7 +103,7 @@ export const listRoutes = newRouter()
         eventQuery(db, { entityType: "list", entityId: row.id, type: "created", after: toList(row), actor: c.var.actor }),
       ]);
       return c.json(toList(row), 201);
-    },
+    }),
   )
   .openapi(
     createRoute({
@@ -149,7 +150,7 @@ export const listRoutes = newRouter()
       request: { params: IdParam, body: jsonBody(ListMoveSchema) },
       responses: { 200: jsonResponse(ListSchema, "Moved"), ...commonErrors, ...notFoundError },
     }),
-    async (c) => {
+    async (c) => retryOnConflict(async () => {
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
       const db = c.var.db;
@@ -167,7 +168,7 @@ export const listRoutes = newRouter()
         eventQuery(db, { entityType: "list", entityId: id, type: "moved", before: toList(before), after: toList(after), actor: c.var.actor }),
       ]);
       return c.json(toList(after), 200);
-    },
+    }),
   )
   .openapi(
     createRoute({

@@ -12,7 +12,7 @@ import {
   TaskUpdateSchema,
 } from "@claudia/shared";
 import { labels, lists, taskLabels, tasks } from "../db/schema";
-import { runBatch, type Db } from "../lib/db";
+import { retryOnConflict, runBatch, type Db } from "../lib/db";
 import { ApiError, notFound } from "../lib/errors";
 import { eventQuery } from "../lib/events";
 import { newId, now } from "../lib/ids";
@@ -221,8 +221,15 @@ export async function findTasks(db: Db, q: z.infer<typeof TaskQuerySchema>) {
   return present(db, rows);
 }
 
-/** Creates a task or heading (checking its list and parent) with its labels, and logs it. Used by POST /api/tasks and /api/capture. */
-export async function createTask(db: Db, actor: Actor, input: z.infer<typeof TaskCreateSchema>) {
+/**
+ * Creates a task or heading (checking its list and parent) with its labels, and logs it. Used by POST /api/tasks and
+ * /api/capture. Tried again if another request took its position or made one of its new labels first.
+ */
+export function createTask(db: Db, actor: Actor, input: z.infer<typeof TaskCreateSchema>) {
+  return retryOnConflict(() => insertTask(db, actor, input));
+}
+
+async function insertTask(db: Db, actor: Actor, input: z.infer<typeof TaskCreateSchema>) {
   const kind = input.kind ?? "task";
   const parentId = input.parentId ?? null;
   await assertList(db, input.listId);
@@ -309,7 +316,8 @@ export const taskRoutes = newRouter()
       request: { params: IdParam, body: jsonBody(TaskUpdateSchema) },
       responses: { 200: jsonResponse(TaskSchema, "Updated"), ...commonErrors, ...notFoundError },
     }),
-    async (c) => {
+    // Again if another request made one of its new labels first.
+    async (c) => retryOnConflict(async () => {
       const { id } = c.req.valid("param");
       const { labels: newLabels, ...fields } = c.req.valid("json");
       const db = c.var.db;
@@ -334,7 +342,7 @@ export const taskRoutes = newRouter()
         eventQuery(db, { entityType: "task", entityId: id, type: "updated", before: snapshot(before, beforeNames), after: snapshot(after, afterNames), actor }),
       ]);
       return c.json(toTask(after, afterNames), 200);
-    },
+    }),
   )
   .openapi(
     createRoute({
@@ -346,7 +354,8 @@ export const taskRoutes = newRouter()
       request: { params: IdParam, body: jsonBody(TaskMoveSchema) },
       responses: { 200: jsonResponse(TaskSchema, "Moved"), ...commonErrors, ...notFoundError },
     }),
-    async (c) => {
+    // Again if another request took the position first.
+    async (c) => retryOnConflict(async () => {
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
       const db = c.var.db;
@@ -382,7 +391,7 @@ export const taskRoutes = newRouter()
       }
       await runBatch(db, statements);
       return c.json(toTask(after, names), 200);
-    },
+    }),
   )
   .openapi(
     createRoute({

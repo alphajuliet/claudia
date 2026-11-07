@@ -51,6 +51,15 @@ describe("import", () => {
     expect((await api("GET", `/api/lists/${id(20)}`)).body.archivedAt).toBe(T1);
   });
 
+  it("keeps imported positions, but puts clashing ones after the tasks already in the list, in order", async () => {
+    await api("POST", "/api/import", { lists: [list(20)], tasks: [task(40, { position: "a0" }), task(41, { position: "a1" })] });
+    expect((await api("GET", `/api/tasks/${id(41)}`)).body.position).toBe("a1");
+    const mine = (await api("POST", "/api/tasks", { listId: id(20), title: "Mine" })).body;
+    await api("POST", "/api/import", { lists: [list(20)], tasks: [task(43, { position: "a1" }), task(42, { position: "a0" })] });
+    const titles = (await api("GET", `/api/tasks?listId=${id(20)}`)).body.map((t: { title: string }) => t.title);
+    expect(titles).toEqual(["T40", "T41", mine.title, "T42", "T43"]);
+  });
+
   it("is idempotent and does not overwrite later edits", async () => {
     const batch = { folders: [], lists: [list(20)], labels: [label(30, "next")], tasks: [task(40, { labelIds: [id(30)] })] };
     await api("POST", "/api/import", batch);

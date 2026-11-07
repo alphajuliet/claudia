@@ -64,10 +64,22 @@ describe("schema", () => {
 
   it("requires recur_rule and recur_from together", async () => {
     await seed();
-    await reject(db.insert(tasks).values({ ...task, id: "T2", recurRule: "FREQ=DAILY" }));
-    await reject(db.insert(tasks).values({ ...task, id: "T3", recurFrom: "due" }));
-    await reject(db.insert(tasks).values({ ...task, id: "T4", recurRule: "FREQ=DAILY", recurFrom: "never" as never }));
-    await db.insert(tasks).values({ ...task, id: "T5", recurRule: "FREQ=DAILY", recurFrom: "completion" });
+    await reject(db.insert(tasks).values({ ...task, id: "T2", position: "a2", recurRule: "FREQ=DAILY" }));
+    await reject(db.insert(tasks).values({ ...task, id: "T3", position: "a3", recurFrom: "due" }));
+    await reject(db.insert(tasks).values({ ...task, id: "T4", position: "a4", recurRule: "FREQ=DAILY", recurFrom: "never" as never }));
+    await db.insert(tasks).values({ ...task, id: "T5", position: "a5", recurRule: "FREQ=DAILY", recurFrom: "completion" });
+  });
+
+  it("keeps live siblings' positions unique, top level included, but not deleted ones'", async () => {
+    await seed();
+    await reject(db.insert(tasks).values({ ...task, id: "T2" }));
+    await db.insert(tasks).values({ ...task, id: "T3", parentId: "T1" }); // Another scope: under T1.
+    await reject(db.insert(tasks).values({ ...task, id: "T4", parentId: "T1" }));
+    await db.insert(tasks).values({ ...task, id: "T5", deletedAt: now });
+    await reject(db.insert(lists).values({ ...list, id: "L2" }));
+    await db.insert(lists).values({ ...list, id: "L3", folderId: null, position: "z" });
+    await reject(db.insert(lists).values({ ...list, id: "L4", folderId: null, position: "z" })); // Unfiled lists too.
+    await reject(db.insert(folders).values({ ...folder, id: "F2" }));
   });
 
   it("treats label names as unique ignoring case", async () => {

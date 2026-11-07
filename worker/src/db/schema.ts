@@ -49,6 +49,8 @@ export const folders = sqliteTable(
   },
   (t) => [
     index("folders_parent_idx").on(t.parentId, t.position),
+    // Siblings never share a position, so requests placing items at once can't tie (they retry instead).
+    uniqueIndex("folders_position_unique").on(sql`coalesce(${t.parentId}, '')`, t.position).where(sql`${t.deletedAt} IS NULL`),
     check("folders_context_check", oneOf("context", CONTEXTS)),
   ],
 );
@@ -65,7 +67,10 @@ export const lists = sqliteTable(
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
   },
-  (t) => [index("lists_folder_idx").on(t.folderId, t.position)],
+  (t) => [
+    index("lists_folder_idx").on(t.folderId, t.position),
+    uniqueIndex("lists_position_unique").on(sql`coalesce(${t.folderId}, '')`, t.position).where(sql`${t.deletedAt} IS NULL`),
+  ],
 );
 
 export const tasks = sqliteTable(
@@ -95,6 +100,7 @@ export const tasks = sqliteTable(
   },
   (t) => [
     index("tasks_list_idx").on(t.listId, t.position),
+    uniqueIndex("tasks_position_unique").on(t.listId, sql`coalesce(${t.parentId}, '')`, t.position).where(sql`${t.deletedAt} IS NULL`),
     index("tasks_parent_idx").on(t.parentId),
     index("tasks_due_date_idx").on(t.dueDate),
     index("tasks_completed_idx").on(t.completedAt),

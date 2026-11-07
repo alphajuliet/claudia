@@ -13,6 +13,7 @@ import { ApiError, notFound } from "../lib/errors";
 import { eventQuery } from "../lib/events";
 import { newId, now } from "../lib/ids";
 import { positionFor } from "../lib/position";
+import { retryOnConflict } from "../lib/db";
 import {
   commonErrors,
   conflictError,
@@ -76,7 +77,7 @@ export const folderRoutes = newRouter()
       request: { body: jsonBody(FolderCreateSchema) },
       responses: { 201: jsonResponse(FolderSchema, "Created"), ...commonErrors, ...notFoundError },
     }),
-    async (c) => {
+    async (c) => retryOnConflict(async () => {
       const input = c.req.valid("json");
       const db = c.var.db;
       const parentId = input.parentId ?? null;
@@ -97,7 +98,7 @@ export const folderRoutes = newRouter()
         eventQuery(db, { entityType: "folder", entityId: row.id, type: "created", after: toFolder(row), actor: c.var.actor }),
       ]);
       return c.json(toFolder(row), 201);
-    },
+    }),
   )
   .openapi(
     createRoute({
@@ -141,7 +142,7 @@ export const folderRoutes = newRouter()
       request: { params: IdParam, body: jsonBody(FolderMoveSchema) },
       responses: { 200: jsonResponse(FolderSchema, "Moved"), ...commonErrors, ...notFoundError },
     }),
-    async (c) => {
+    async (c) => retryOnConflict(async () => {
       const { id } = c.req.valid("param");
       const input = c.req.valid("json");
       const db = c.var.db;
@@ -160,7 +161,7 @@ export const folderRoutes = newRouter()
         eventQuery(db, { entityType: "folder", entityId: id, type: "moved", before: toFolder(before), after: toFolder(after), actor: c.var.actor }),
       ]);
       return c.json(toFolder(after), 200);
-    },
+    }),
   )
   .openapi(
     createRoute({

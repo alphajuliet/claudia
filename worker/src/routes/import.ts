@@ -1,6 +1,7 @@
 import { createRoute } from "@hono/zod-openapi";
 import type { BatchItem } from "drizzle-orm/batch";
-import { inArray, sql } from "drizzle-orm";
+import { generateNKeysBetween } from "fractional-indexing";
+import { and, inArray, isNull, sql } from "drizzle-orm";
 import { ErrorSchema, ImportResultSchema, ImportSchema, type ImportBatch } from "@claudia/shared";
 import { folders, labels, lists, taskLabels, tasks } from "../db/schema";
 import { runBatch, type Db } from "../lib/db";
@@ -46,6 +47,41 @@ async function requireExisting(db: Db, table: Table, refs: (string | null)[], in
   if (missing.length) throw new ApiError(422, "missing_reference", `Unknown ${what}: ${missing.join(", ")}`);
 }
 
+/** Sibling scopes, as the unique position indexes see them. */
+const scopeKey = (...parts: (string | null)[]) => parts.map((p) => p ?? "").join("|");
+
+/**
+ * Imported items keep their positions unless one clashes with a live sibling already here, or with another imported
+ * sibling: then that scope's imported items are put after what's here, in their own order. So importing again into
+ * a list that has gained tasks since doesn't trip the unique position index.
+ */
+function fitPositions<T extends { position: string }>(items: T[], scopeOf: (item: T) => string, taken: Map<string, string[]>): T[] {
+  const byScope = new Map<string, T[]>();
+  for (const item of items) byScope.set(scopeOf(item), [...(byScope.get(scopeOf(item)) ?? []), item]);
+  const moved = new Map<T, string>();
+  for (const [scope, members] of byScope) {
+    const here = new Set(taken.get(scope) ?? []);
+    const mine = members.map((m) => m.position);
+    if (new Set(mine).size === mine.length && !mine.some((p) => here.has(p))) continue;
+    const last = [...here].sort().at(-1) ?? null;
+    const ordered = [...members].sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0));
+    generateNKeysBetween(last, null, ordered.length).forEach((key, i) => moved.set(ordered[i]!, key));
+  }
+  return items.map((item) => (moved.has(item) ? { ...item, position: moved.get(item)! } : item));
+}
+
+/** Live positions in each scope, read by `query` for the scope ids in chunks. */
+async function takenPositions(
+  ids: string[],
+  query: (part: string[]) => Promise<{ scope: string; position: string }[]>,
+): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  for (const part of chunk([...new Set(ids)])) {
+    for (const r of await query(part)) out.set(r.scope, [...(out.get(r.scope) ?? []), r.position]);
+  }
+  return out;
+}
+
 export async function importBatch(db: Db, input: ImportBatch) {
   const inFolders = new Set(input.folders.map((f) => f.id));
   const inLists = new Set(input.lists.map((l) => l.id));
@@ -80,10 +116,30 @@ export async function importBatch(db: Db, input: ImportBatch) {
     existingIds(db, tasks, [...inTasks]),
   ]);
 
-  const newFolders = parentsFirst(input.folders.filter((f) => !haveFolders.has(f.id)));
-  const newLists = input.lists.filter((l) => !haveLists.has(l.id));
+  const folderScope = (f: { parentId: string | null }) => scopeKey(f.parentId);
+  const listScope = (l: { folderId: string | null }) => scopeKey(l.folderId);
+  const taskScope = (t: { listId: string; parentId: string | null }) => scopeKey(t.listId, t.parentId);
+  const addedFolders = input.folders.filter((f) => !haveFolders.has(f.id));
+  const addedLists = input.lists.filter((l) => !haveLists.has(l.id));
+  const addedTasks = input.tasks.filter((t) => !haveTasks.has(t.id));
+  // Top-level folders and unfiled lists have no parent to look up by, so those scopes are read whole.
+  const live = <T extends typeof folders | typeof lists | typeof tasks>(t: T) => isNull(t.deletedAt);
+  const [folderSlots, listSlots, taskSlots] = await Promise.all([
+    takenPositions(["", ...addedFolders.map((f) => f.parentId ?? "")], (part) =>
+      db.select({ scope: sql<string>`coalesce(${folders.parentId}, '')`, position: folders.position }).from(folders)
+        .where(and(live(folders), inArray(sql`coalesce(${folders.parentId}, '')`, part)))),
+    takenPositions(["", ...addedLists.map((l) => l.folderId ?? "")], (part) =>
+      db.select({ scope: sql<string>`coalesce(${lists.folderId}, '')`, position: lists.position }).from(lists)
+        .where(and(live(lists), inArray(sql`coalesce(${lists.folderId}, '')`, part)))),
+    takenPositions(addedTasks.map((t) => t.listId), (part) =>
+      db.select({ scope: sql<string>`${tasks.listId} || '|' || coalesce(${tasks.parentId}, '')`, position: tasks.position }).from(tasks)
+        .where(and(live(tasks), inArray(tasks.listId, part)))),
+  ]);
+
+  const newFolders = parentsFirst(fitPositions(addedFolders, folderScope, folderSlots));
+  const newLists = fitPositions(addedLists, listScope, listSlots);
   const freshLabels = newLabels.filter((l) => !haveLabels.has(l.id));
-  const newTasks = parentsFirst(input.tasks.filter((t) => !haveTasks.has(t.id)));
+  const newTasks = parentsFirst(fitPositions(addedTasks, taskScope, taskSlots));
 
   const log = (entityType: "folder" | "list" | "label" | "task", entityId: string, after: unknown) =>
     eventQuery(db, { entityType, entityId, type: "imported", after, actor: "import" });

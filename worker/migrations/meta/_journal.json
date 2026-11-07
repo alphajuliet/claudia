@@ -29,6 +29,13 @@
       "when": 1793873558888,
       "tag": "0003_label_colour",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1794095429393,
+      "tag": "0004_sibling_positions_unique",
+      "breakpoints": true
     }
   ]
 }
