@@ -50,7 +50,7 @@ Work is tracked on the Workflowy **Claudia** board (`🔅 My projects › Produc
 - Australian English in UI copy and docs. Dates are stored in UTC, and date-only fields as `YYYY-MM-DD`. The default time zone is `Australia/Sydney`.
 - Small, focused commits with imperative messages.
 - Never commit secrets. Use `wrangler secret` and `.dev.vars` (git-ignored).
-- Domain rules live in `worker/src/domain/` as plain functions over the database (tasks so far); routes in `worker/src/routes/` only parse the request and call them.
+- Domain rules live in `worker/src/domain/` as plain functions over the database (tasks, and the built-in views in `views.ts`); routes in `worker/src/routes/` only parse the request and call them.
 - Tests come with features: unit tests for the domain logic (recurrence, ordering, filters) and API tests against a local D1.
 
 ## Commands
