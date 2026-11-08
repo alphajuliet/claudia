@@ -65,3 +65,7 @@ npx wrangler d1 execute claudia-restore --remote --command "SELECT count(*) FROM
 ```
 
 The file creates its tables, so it only runs into an empty database. To use the restored copy, point the Worker at it: change `database_name` and `database_id` in `wrangler.jsonc` to the new database's and deploy. Otherwise delete it when done: `npx wrangler d1 delete claudia-restore`.
+
+## Restore tests
+
+- **2026-11-08**: the production backup (1.55 MB, 279 tasks, 1,061 events) restored into a scratch database in 1,565 statements. Row counts and text lengths matched production table by table, apart from one task created after the backup; no foreign key problems; the same 11 tables, 14 indexes and 2 triggers. The first attempt failed a foreign key check because D1 applied the file in parts; rows are now written after the rows they refer to.
