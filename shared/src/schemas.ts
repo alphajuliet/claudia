@@ -241,6 +241,40 @@ export const TaskMoveSchema = z
   .refine(notBoth, NOT_BOTH)
   .openapi("TaskMove");
 
+// Views: the built-in smart lists. What each shows is decided by the server (worker/src/domain/views.ts).
+export const VIEWS = [
+  { id: "inbox", name: "Inbox", label: null },
+  { id: "today", name: "Today", label: null },
+  { id: "next", name: "Next", label: "next" },
+  { id: "wip", name: "WIP", label: "wip" },
+  { id: "waiting", name: "Waiting", label: "waitingOn" },
+  { id: "someday", name: "Someday", label: "someday" },
+] as const;
+export const VIEW_IDS = ["inbox", "today", "next", "wip", "waiting", "someday"] as const satisfies readonly (typeof VIEWS)[number]["id"][];
+export type ViewId = (typeof VIEW_IDS)[number];
+export const ViewIdParam = z.object({
+  id: z.enum(VIEW_IDS).openapi({ param: { name: "id", in: "path" }, example: "today" }),
+});
+/** "all", or one context: lists not in a folder show in every context, and the Inbox always does. */
+export const ContextFilterSchema = z.enum(["all", ...CONTEXTS]).default("all").openapi({ description: "Narrow to the lists of one context" });
+export type ContextFilter = z.infer<typeof ContextFilterSchema>;
+export const ViewSummarySchema = z
+  .object({
+    id: z.enum(VIEW_IDS),
+    name: z.string(),
+    label: z.string().nullable().openapi({ description: "The label the view shows (and quick add in it gives), if any" }),
+    count: z.number().int().openapi({ description: "Open tasks it shows now" }),
+  })
+  .openapi("ViewSummary");
+export const ViewTasksQuerySchema = z.object({
+  context: ContextFilterSchema,
+  status: z.enum(["open", "completed"]).default("open").openapi({
+    description: "open: what the view shows. completed: what it showed and was completed (for Today, completed today)",
+  }),
+  limit: z.coerce.number().int().min(1).max(500).default(500),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+
 export const TaskQuerySchema = z.object({
   listId: IdSchema.optional(),
   parentId: IdSchema.optional(),

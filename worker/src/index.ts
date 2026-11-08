@@ -21,6 +21,7 @@ import { taskRoutes } from "./routes/tasks";
 import { captureRoutes } from "./routes/capture";
 import { tokenRoutes } from "./routes/tokens";
 import { backupRoutes } from "./routes/backup";
+import { viewRoutes } from "./routes/views";
 import { backUp } from "./backup";
 
 export const app = newRouter();
@@ -63,6 +64,7 @@ app.route("/", listRoutes);
 app.route("/", taskRoutes);
 app.route("/", captureRoutes);
 app.route("/", countRoutes);
+app.route("/", viewRoutes);
 app.route("/", labelRoutes);
 app.route("/", filterRoutes);
 app.route("/", settingRoutes);

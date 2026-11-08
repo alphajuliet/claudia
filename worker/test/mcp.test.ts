@@ -63,9 +63,9 @@ describe("authentication", () => {
 });
 
 describe("tools/list", () => {
-  it("gives a write token all 22 tools, with JSON Schemas and hints", async () => {
+  it("gives a write token all 24 tools, with JSON Schemas and hints", async () => {
     const tools = await listTools(write);
-    expect(tools).toHaveLength(22);
+    expect(tools).toHaveLength(24);
     for (const t of tools) {
       expect(t.inputSchema.type).toBe("object");
       expect(t.annotations.destructiveHint).toBe(false);
@@ -76,10 +76,10 @@ describe("tools/list", () => {
     expect(create.inputSchema.allOf).toBeUndefined();
   });
 
-  it("gives a read token only the 7 read tools, marked read-only", async () => {
+  it("gives a read token only the 9 read tools, marked read-only", async () => {
     const tools = await listTools(await makeToken(["read"]));
     expect(tools.map((t) => t.name).sort()).toEqual([
-      "get_task", "list_filters", "list_folders", "list_labels", "list_lists", "run_filter", "search_tasks",
+      "get_task", "get_view", "list_filters", "list_folders", "list_labels", "list_lists", "list_views", "run_filter", "search_tasks",
     ]);
     expect(tools.every((t) => t.annotations.readOnlyHint === true)).toBe(true);
   });

@@ -6,7 +6,7 @@
 import type { z } from "@hono/zod-openapi";
 import type { BatchItem } from "drizzle-orm/batch";
 import { generateNKeysBetween } from "fractional-indexing";
-import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, not, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, lte, ne, not, or, sql, type SQL } from "drizzle-orm";
 import type { TaskCreateSchema, TaskMoveSchema, TaskQuerySchema, TaskUpdateSchema } from "@claudia/shared";
 import { labels, lists, taskLabels, tasks } from "../db/schema";
 import { retryOnConflict, runBatch, type Db } from "../lib/db";
@@ -195,23 +195,38 @@ async function moveWithSection(db: Db, actor: Actor, before: Row, input: TaskMov
  */
 export async function findTasks(db: Db, q: TaskQuery) {
   const timeZone = q.dueBefore || q.dueAfter || q.activeBy ? await userTimeZone(db) : null;
-  const dayStart = (date: string) => startOfDayIn(date, timeZone!).toISOString();
-  const dueBy = (date: string) => or(lte(tasks.dueDate, date), lt(tasks.dueAt, dayStart(addDays(date, 1))));
   const where = and(
-    live,
     q.listId ? eq(tasks.listId, q.listId) : undefined,
     q.parentId ? eq(tasks.parentId, q.parentId) : undefined,
     q.priority ? eq(tasks.priority, q.priority) : undefined,
     q.status === "open" ? isNull(tasks.completedAt) : q.status === "completed" ? isNotNull(tasks.completedAt) : undefined,
-    q.dueBefore ? dueBy(q.dueBefore) : undefined,
-    q.activeBy ? or(dueBy(q.activeBy), lte(tasks.startDate, q.activeBy)) : undefined,
-    q.dueAfter ? or(gte(tasks.dueDate, q.dueAfter), gte(tasks.dueAt, dayStart(q.dueAfter))) : undefined,
+    q.dueBefore ? dueBy(q.dueBefore, timeZone!) : undefined,
+    q.activeBy ? activeBy(q.activeBy, timeZone!) : undefined,
+    q.dueAfter ? or(gte(tasks.dueDate, q.dueAfter), gte(tasks.dueAt, dayStartIn(q.dueAfter, timeZone!))) : undefined,
     q.q ? sql`(instr(lower(${tasks.title}), lower(${q.q})) > 0 OR instr(lower(coalesce(${tasks.notes}, '')), lower(${q.q})) > 0)` : undefined,
-    q.label
-      ? sql`EXISTS (SELECT 1 FROM ${taskLabels} tl JOIN ${labels} l ON l.id = tl.label_id WHERE tl.task_id = ${tasks.id} AND lower(l.name) = lower(${q.label}))`
-      : undefined,
+    q.label ? hasLabel(q.label) : undefined,
   );
-  const rows = await db.select().from(tasks).where(where).orderBy(asc(tasks.listId), asc(tasks.position)).limit(q.limit).offset(q.offset);
+  return fetchTasks(db, where, q);
+}
+
+// ---- Conditions shared by queries, views and counts, so each rule is written once.
+
+const dayStartIn = (date: string, timeZone: string) => startOfDayIn(date, timeZone).toISOString();
+/** Due on or before `date`: a due date, or a due time before the next day starts in `timeZone`. */
+export const dueBy = (date: string, timeZone: string) => or(lte(tasks.dueDate, date), lt(tasks.dueAt, dayStartIn(addDays(date, 1), timeZone)));
+/** Due or started on or before `date`: what Today shows for today. */
+export const activeBy = (date: string, timeZone: string) => or(dueBy(date, timeZone), lte(tasks.startDate, date));
+/** Carries the label, in any case. */
+export const hasLabel = (name: string) =>
+  sql`EXISTS (SELECT 1 FROM ${taskLabels} tl JOIN ${labels} l ON l.id = tl.label_id WHERE tl.task_id = ${tasks.id} AND lower(l.name) = lower(${name}))`;
+/** Not snoozed past `at` (an ISO timestamp). */
+export const notSnoozed = (at: string) => or(isNull(tasks.snoozedUntil), lte(tasks.snoozedUntil, at));
+/** What views and counts call open: an open, unsnoozed task (not a heading), subtasks included. */
+export const openTask = (at: string) => and(live, isNull(tasks.completedAt), eq(tasks.kind, "task"), notSnoozed(at));
+
+/** Live tasks matching `where`, in list order, with their labels. */
+export async function fetchTasks(db: Db, where: SQL | undefined, page: { limit: number; offset: number }) {
+  const rows = await db.select().from(tasks).where(and(live, where)).orderBy(asc(tasks.listId), asc(tasks.position)).limit(page.limit).offset(page.offset);
   return present(db, rows);
 }
 

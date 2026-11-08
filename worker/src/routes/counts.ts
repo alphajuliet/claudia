@@ -1,8 +1,9 @@
 import { createRoute } from "@hono/zod-openapi";
-import { and, eq, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { CountsSchema, type Counts } from "@claudia/shared";
 import { labels, taskLabels, tasks } from "../db/schema";
-import { addDays, startOfDayIn, todayIn, userTimeZone } from "../lib/recurrence";
+import { activeBy, openTask } from "../domain/tasks";
+import { todayIn, userTimeZone } from "../lib/recurrence";
 import { commonErrors, jsonResponse, newRouter } from "../lib/router";
 
 export const countRoutes = newRouter().openapi(
@@ -19,15 +20,8 @@ export const countRoutes = newRouter().openapi(
   async (c) => {
     const db = c.var.db;
     const timeZone = await userTimeZone(db);
-    const at = new Date().toISOString();
-    const tomorrow = startOfDayIn(addDays(todayIn(timeZone), 1), timeZone).toISOString();
-    const open = and(
-      isNull(tasks.deletedAt),
-      isNull(tasks.completedAt),
-      eq(tasks.kind, "task"),
-      or(isNull(tasks.snoozedUntil), lte(tasks.snoozedUntil, at)),
-    );
-    const active = or(lte(tasks.dueDate, todayIn(timeZone)), lt(tasks.dueAt, tomorrow), lte(tasks.startDate, todayIn(timeZone)));
+    const open = openTask(new Date().toISOString());
+    const active = activeBy(todayIn(timeZone), timeZone);
     const [perList, perLabel] = await Promise.all([
       db
         .select({ listId: tasks.listId, open: sql<number>`count(*)`, today: sql<number>`sum(case when ${active} then 1 else 0 end)` })

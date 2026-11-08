@@ -18,7 +18,7 @@ describe("tool list", () => {
   it("has the 22 expected tools and no deletes or admin tools", () => {
     expect(TOOLS.map((t) => t.name).sort()).toEqual([
       "complete_task", "create_folder", "create_filter", "create_label", "create_list", "create_task",
-      "get_task", "list_filters", "list_folders", "list_labels", "list_lists", "move_folder", "move_list",
+      "get_task", "get_view", "list_filters", "list_folders", "list_labels", "list_lists", "list_views", "move_folder", "move_list",
       "move_task", "run_filter", "search_tasks", "uncomplete_task", "update_filter",
       "update_folder", "update_label", "update_list", "update_task",
     ].sort());
@@ -27,7 +27,7 @@ describe("tool list", () => {
 
   it("marks exactly the 7 read tools as read", () => {
     expect(TOOLS.filter((t) => t.access === "read").map((t) => t.name).sort()).toEqual([
-      "get_task", "list_filters", "list_folders", "list_labels", "list_lists", "run_filter", "search_tasks",
+      "get_task", "get_view", "list_filters", "list_folders", "list_labels", "list_lists", "list_views", "run_filter", "search_tasks",
     ]);
   });
 
@@ -47,6 +47,9 @@ describe("request mapping", () => {
 
   it("reads use GET and the id in the path", () => {
     expect(req("get_task", { id: ID })).toEqual({ method: "GET", path: `/api/tasks/${ID}` });
+    expect(req("get_view", { id: "today", context: "work" })).toEqual({ method: "GET", path: "/api/views/today/tasks", query: { context: "work" } });
+    expect(req("list_views", {})).toEqual({ method: "GET", path: "/api/views", query: {} });
+    expect(() => req("get_view", { id: "tomorrow" })).toThrow();
     expect(req("run_filter", { id: ID, limit: 5 })).toEqual({ method: "GET", path: `/api/filters/${ID}/tasks`, query: { limit: 5 } });
     expect(req("list_lists", { archived: true }).query).toEqual({ archived: "true" });
     expect(req("list_folders", {})).toEqual({ method: "GET", path: "/api/folders" });

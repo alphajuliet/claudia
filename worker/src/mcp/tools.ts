@@ -6,6 +6,7 @@ import {
   LabelColourSchema,
   LabelNameSchema,
   TaskQuerySchema,
+  VIEW_IDS,
   placementShape,
   taskCreateShape,
   taskFieldShapes,
@@ -77,6 +78,28 @@ export const TOOLS: ToolDef[] = [
       offset: z.number().int().min(0).optional(),
     }),
     request: (a) => ({ method: "GET", path: `/api/filters/${a.id}/tasks`, query: noId(a) }),
+  }),
+  tool({
+    name: "list_views",
+    description:
+      "List the built-in views (inbox, today, next, wip, waiting, someday) with how many open tasks each shows, optionally in one context (work, personal or home). Use get_view for their tasks.",
+    access: "read",
+    input: strict({ context: z.enum(["all", ...CONTEXTS]).optional().describe("Narrow to one context; all by default") }),
+    request: (a) => ({ method: "GET", path: "/api/views", query: { ...a } }),
+  }),
+  tool({
+    name: "get_view",
+    description:
+      "Get a built-in view's tasks, exactly as the app shows them: open, unsnoozed tasks (not headings). inbox: the Inbox list. today: due or started today or earlier (the user's day). next, wip, waiting, someday: tasks with the label next, wip, waitingOn or someday. Prefer this over search_tasks for these.",
+    access: "read",
+    input: strict({
+      id: z.enum(VIEW_IDS).describe("Which view"),
+      context: z.enum(["all", ...CONTEXTS]).optional().describe("Narrow to one context's lists (the Inbox and lists in no folder show in all)"),
+      status: z.enum(["open", "completed"]).optional().describe("completed: its completed tasks instead (today: completed today)"),
+      limit: z.number().int().min(1).max(500).optional(),
+      offset: z.number().int().min(0).optional(),
+    }),
+    request: (a) => ({ method: "GET", path: `/api/views/${a.id}/tasks`, query: noId(a) }),
   }),
   tool({
     name: "list_folders",
