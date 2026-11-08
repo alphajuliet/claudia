@@ -16,7 +16,7 @@ Not backed up: OAuth grants (in KV; reconnect claude.ai and the phone if lost) a
 `worker/src/backup.ts` reads every table and writes `nightly/claudia-YYYY-MM-DD.sql`:
 
 1. `PRAGMA defer_foreign_keys = true;`, then each `CREATE TABLE`
-2. one `INSERT` per row (line breaks in text are written as `char(10)`, so each row is one line)
+2. one `INSERT` per row, each after any row it refers to (tables in dependency order, parent tasks and folders before their children), so the file restores even when D1 applies it in more than one transaction; line breaks in text are written as `char(10)`, so each row is one line
 3. the indexes and triggers, after the rows, so the append-only triggers on `events` don't get in the way
 
 `d1_migrations` is included, so a restored database knows which migrations it has. Cloudflare's own tables (`_cf_KV`, `sqlite_sequence`) are left out. The object's metadata holds the row count per table.

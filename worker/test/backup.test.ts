@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers";
 import { createScheduledController } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import worker from "../src";
-import { backupKey, dumpDatabase, literal } from "../src/backup";
+import { backupKey, dumpDatabase, literal, parentsFirst, tablesInOrder } from "../src/backup";
 import { client, makeToken, reset } from "./helpers";
 
 let api: ReturnType<typeof client>;
@@ -23,7 +23,7 @@ async function seed() {
 
 const TABLES = ["folders", "lists", "labels", "tasks", "task_labels", "filters", "settings", "tokens"];
 const snapshot = async () =>
-  Object.fromEntries(await Promise.all(TABLES.map(async (t) => [t, (await env.DB.prepare(`SELECT * FROM "${t}" ORDER BY rowid`).all()).results])));
+  Object.fromEntries(await Promise.all(TABLES.map(async (t) => [t, (await env.DB.prepare(`SELECT * FROM "${t}" ORDER BY 1, 2`).all()).results])));
 
 describe("literal", () => {
   it("writes SQL literals", () => {
@@ -32,6 +32,23 @@ describe("literal", () => {
     expect(literal("it's")).toBe("'it''s'");
     expect(literal(new Uint8Array([0, 255]))).toBe("X'00ff'");
     expect(literal("a\nb\r\nc")).toBe("'a' || char(10) || 'b' || char(13) || char(10) || 'c'");
+  });
+});
+
+describe("ordering", () => {
+  it("puts tables after the ones they refer to", () => {
+    const keys = [
+      { tbl: "task_labels", ref: "tasks", from: "task_id", to: "id" },
+      { tbl: "task_labels", ref: "labels", from: "label_id", to: "id" },
+      { tbl: "tasks", ref: "lists", from: "list_id", to: "id" },
+      { tbl: "tasks", ref: "tasks", from: "parent_id", to: "id" },
+    ];
+    expect(tablesInOrder(["events", "labels", "lists", "task_labels", "tasks"], keys)).toEqual(["events", "labels", "lists", "tasks", "task_labels"]);
+  });
+
+  it("puts rows after their parents", () => {
+    const rows = [{ id: "c", parent: "b" }, { id: "b", parent: "a" }, { id: "x", parent: null }, { id: "a", parent: null }];
+    expect(parentsFirst(rows, "parent", "id").map((r) => r.id)).toEqual(["x", "a", "b", "c"]);
   });
 });
 
@@ -54,13 +71,19 @@ describe("dumpDatabase", () => {
     expect(rows.events).toBeGreaterThan(0);
   });
 
-  it("gives back the same rows when its inserts are replayed", async () => {
+  it("gives back the same rows when its inserts are replayed one at a time, with foreign keys checked as they go", async () => {
     await seed();
+    // A parent made after its subtask: the subtask's row comes first by rowid.
+    const list = (await api("GET", "/api/lists")).body[0];
+    const early = (await api("POST", "/api/tasks", { listId: list.id, title: "Made first" })).body;
+    const late = (await api("POST", "/api/tasks", { listId: list.id, title: "Made later" })).body;
+    await api("POST", `/api/tasks/${early.id}/move`, { parentId: late.id });
     const before = await snapshot();
     const { sql } = await dumpDatabase(env.DB);
     await reset();
+    // Each insert on its own, so a reference to a row not yet written fails at once (no deferring).
     const inserts = sql.split("\n").filter((l) => TABLES.some((t) => l.startsWith(`INSERT INTO "${t}" `)));
-    await env.DB.batch([env.DB.prepare("PRAGMA defer_foreign_keys = true"), ...inserts.map((l) => env.DB.prepare(l))]);
+    for (const l of inserts) await env.DB.prepare(l).run();
     expect(await snapshot()).toEqual(before);
   });
 });
