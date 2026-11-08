@@ -11,7 +11,7 @@ beforeEach(async () => {
   await reset();
   api = client(await makeToken(["write"]), { "X-Claudia-Client": "shortcut" });
   await api("POST", "/api/lists", { name: "Errands" });
-  inbox = (await api("POST", "/api/lists", { name: "Inbox" })).body;
+  inbox = (await api("POST", "/api/lists", { name: "Inbox", inbox: true })).body;
 });
 
 describe("readCapture", () => {
@@ -41,14 +41,19 @@ describe("POST /api/capture", () => {
     expect(created).toMatchObject({ type: "created", actor: "shortcut" });
   });
 
-  it("finds the Inbox by name in any case, and skips archived ones", async () => {
-    await api("PATCH", `/api/lists/${inbox.id}`, { archived: true });
-    const fresh = (await api("POST", "/api/lists", { name: "INBOX" })).body;
-    expect((await api("POST", "/api/capture", { text: "Hello" })).body.listId).toBe(fresh.id);
+  it("finds the Inbox by its flag, whatever it's called", async () => {
+    await api("PATCH", `/api/lists/${inbox.id}`, { name: "📥 Capture" });
+    await api("POST", "/api/lists", { name: "inbox" }); // Just a name.
+    expect((await api("POST", "/api/capture", { text: "Hello" })).body.listId).toBe(inbox.id);
+    const other = (await api("POST", "/api/lists", { name: "Triage" })).body;
+    await api("PATCH", `/api/lists/${other.id}`, { inbox: true });
+    expect((await api("POST", "/api/capture", { text: "Again" })).body.listId).toBe(other.id);
   });
 
   it("says so when there is no Inbox", async () => {
-    await api("DELETE", `/api/lists/${inbox.id}`);
+    await reset();
+    api = client(await makeToken(["write"]));
+    await api("POST", "/api/lists", { name: "Inbox" }); // Called Inbox, but not the Inbox.
     const res = await api("POST", "/api/capture", { text: "Hello" });
     expect(res.status).toBe(422);
     expect(res.body.error.code).toBe("no_inbox");

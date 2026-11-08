@@ -97,6 +97,37 @@ describe("lists", () => {
   });
 });
 
+describe("the Inbox", () => {
+  const inboxes = async () => ((await api("GET", "/api/lists")).body as { id: string; inbox: boolean }[]).filter((l) => l.inbox).map((l) => l.id);
+
+  it("is a flag on one list, which can be handed to another and logged", async () => {
+    const a = await list("Inbox", { inbox: true });
+    expect(a.inbox).toBe(true);
+    expect((await list("Other")).inbox).toBe(false);
+    const b = await list("Triage");
+    expect((await api("PATCH", `/api/lists/${b.id}`, { inbox: true })).body.inbox).toBe(true);
+    expect(await inboxes()).toEqual([b.id]);
+    const c = await list("New inbox", { inbox: true });
+    expect(await inboxes()).toEqual([c.id]);
+    const handed = await db.select().from(events).where(eq(events.entityId, a.id));
+    expect(handed.at(-1)).toMatchObject({ type: "updated", before: { inbox: true }, after: { inbox: false } });
+  });
+
+  it("keeps its flag through a rename, and can't be archived or deleted", async () => {
+    const a = await list("Inbox", { inbox: true });
+    expect((await api("PATCH", `/api/lists/${a.id}`, { name: "Capture" })).body).toMatchObject({ name: "Capture", inbox: true });
+    expect((await api("PATCH", `/api/lists/${a.id}`, { archived: true })).body.error.code).toBe("inbox_required");
+    expect((await api("DELETE", `/api/lists/${a.id}`)).body.error.code).toBe("inbox_required");
+    expect(await inboxes()).toEqual([a.id]);
+  });
+
+  it("can't be given to an archived list", async () => {
+    const a = await list("Old");
+    await api("PATCH", `/api/lists/${a.id}`, { archived: true });
+    expect((await api("PATCH", `/api/lists/${a.id}`, { inbox: true })).status).toBe(422);
+  });
+});
+
 describe("events", () => {
   it("logs each change with before/after and the claimed client", async () => {
     const f = await folder("F");

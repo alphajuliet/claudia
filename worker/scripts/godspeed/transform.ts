@@ -166,7 +166,8 @@ export async function transformStructure(gs: GsList[], report: Report) {
       listIds.set(l.id, id);
       lists.push({
         id, name: l.name, folderId: parent ? folderIds.get(parent.id) ?? null : null, position: "",
-        archivedAt: l.archived_at ? iso(l.archived_at) : null, createdAt: iso(l.created_at), updatedAt: iso(l.updated_at),
+        archivedAt: l.archived_at ? iso(l.archived_at) : null, inbox: l.list_type === "inbox",
+        createdAt: iso(l.created_at), updatedAt: iso(l.updated_at),
       });
     }
   }

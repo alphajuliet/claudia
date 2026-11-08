@@ -5,7 +5,7 @@ import { listChoices, matchLists } from "./listSearch";
 const folder = (id: string, name: string, parentId: string | null, position: string) =>
   ({ id, name, parentId, position, context: "work" }) as Folder;
 const list = (id: string, name: string, folderId: string | null, position = "a0", archivedAt: string | null = null) =>
-  ({ id, name, folderId, position, archivedAt }) as List;
+  ({ id, name, folderId, position, archivedAt, inbox: name === "Inbox" }) as List;
 
 const folders = [folder("w", "🏢 Work", null, "a0"), folder("a", "Archive", "w", "a1"), folder("h", "🏡 Home", null, "a1")];
 const lists = [

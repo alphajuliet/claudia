@@ -3,9 +3,10 @@ import { describe, expect, it } from "vitest";
 import { findInbox, viewQuery, viewCount } from "./views";
 
 const stamp = "2026-10-01T00:00:00.000Z";
-const list = (id: string, name: string, archivedAt: string | null = null): List => ({
+const list = (id: string, name: string, archivedAt: string | null = null, inbox = name === "Inbox"): List => ({
   id,
   name,
+  inbox,
   folderId: null,
   position: "a0",
   archivedAt,
@@ -31,10 +32,10 @@ describe("viewQuery", () => {
 });
 
 describe("findInbox", () => {
-  it("matches the name in any case and skips archived lists", () => {
-    const lists = [list("old", "Inbox", stamp), list("work", "Work"), list("in", "INBOX")];
-    expect(findInbox(lists)?.id).toBe("in");
-    expect(findInbox([list("old", "inbox", stamp)])).toBeUndefined();
+  it("finds the list flagged as the Inbox, whatever it's called, and not by name", () => {
+    expect(findInbox([list("work", "Work"), list("in", "📥 Capture", null, true)])?.id).toBe("in");
+    expect(findInbox([list("named", "Inbox", null, false)])).toBeUndefined();
+    expect(findInbox([list("old", "Inbox", stamp, true)])).toBeUndefined();
   });
 });
 

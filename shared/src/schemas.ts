@@ -79,17 +79,20 @@ export const ListSchema = z
     folderId: IdSchema.nullable(),
     position: z.string(),
     archivedAt: Timestamp.nullable(),
+    inbox: z.boolean().openapi({ description: "The Inbox: where capture puts tasks, whatever the list is called. One list at most." }),
     createdAt: Timestamp,
     updatedAt: Timestamp,
   })
   .openapi("List");
+const makeInbox = z.literal(true).optional().openapi({ description: "Make this list the Inbox, in place of the current one" });
 export const ListCreateSchema = z
-  .object({ name: z.string().min(1), folderId: IdSchema.nullable().optional() })
+  .object({ name: z.string().min(1), folderId: IdSchema.nullable().optional(), inbox: makeInbox })
   .openapi("ListCreate");
 export const ListUpdateSchema = z
   .object({
     name: z.string().min(1).optional(),
-    archived: z.boolean().optional().openapi({ description: "Archive or unarchive the list" }),
+    archived: z.boolean().optional().openapi({ description: "Archive or unarchive the list (not the Inbox)" }),
+    inbox: makeInbox,
   })
   .openapi("ListUpdate");
 export const ListMoveSchema = z
@@ -304,7 +307,7 @@ const ImportFolder = z.object({
 });
 const ImportList = z.object({
   id: IdSchema, name: z.string().min(1), folderId: IdSchema.nullable(), position: z.string().min(1),
-  archivedAt: Timestamp.nullable(), createdAt: Timestamp, updatedAt: Timestamp,
+  archivedAt: Timestamp.nullable(), inbox: z.boolean().default(false), createdAt: Timestamp, updatedAt: Timestamp,
 });
 const ImportLabel = z.object({ id: IdSchema, name: LabelNameSchema, createdAt: Timestamp });
 const ImportTask = z.object({

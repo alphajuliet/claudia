@@ -16,7 +16,7 @@ const at = "2026-10-31T00:00:00.000Z";
 const work: Folder = { id: "01JC0000000000000000000001", name: "Acme", parentId: null, context: "work", position: "a0", createdAt: at, updatedAt: at };
 const personal: Folder = { id: "01JC0000000000000000000002", name: "Life", parentId: null, context: "personal", position: "a1", createdAt: at, updatedAt: at };
 const list = (id: string, name: string, folderId: string | null, position = "a0"): List =>
-  ({ id, name, folderId, position, archivedAt: null, createdAt: at, updatedAt: at });
+  ({ id, name, folderId, position, archivedAt: null, inbox: name === "Inbox", createdAt: at, updatedAt: at });
 const inbox = list("01JA0000000000000000000001", "Inbox", null);
 const projects = list("01JA0000000000000000000002", "Projects", work.id);
 const garden = list("01JA0000000000000000000003", "Garden", personal.id);

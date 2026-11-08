@@ -8,7 +8,8 @@ import {
   ListUpdateSchema,
 } from "@claudia/shared";
 import { folders, lists, tasks } from "../db/schema";
-import type { Db } from "../lib/db";
+import type { BatchItem } from "drizzle-orm/batch";
+import { runBatch, type Db } from "../lib/db";
 import { ApiError, notFound } from "../lib/errors";
 import { eventQuery } from "../lib/events";
 import { newId, now } from "../lib/ids";
@@ -21,6 +22,7 @@ import {
   jsonResponse,
   newRouter,
   notFoundError,
+  type Actor,
 } from "../lib/router";
 
 const tag = ["Lists"];
@@ -32,6 +34,7 @@ export const toList = (r: Row) => ({
   folderId: r.folderId,
   position: r.position,
   archivedAt: r.archivedAt,
+  inbox: r.inbox,
   createdAt: r.createdAt,
   updatedAt: r.updatedAt,
 });
@@ -45,6 +48,25 @@ export async function getList(db: Db, id: string): Promise<Row> {
   if (!row) throw notFound("List");
   return row;
 }
+
+/** The Inbox, if a live list is it. */
+export async function findInbox(db: Db): Promise<Row | undefined> {
+  const [row] = await db.select().from(lists).where(and(live, eq(lists.inbox, true))).limit(1);
+  return row;
+}
+
+/** Statements taking the Inbox flag off the current Inbox (logged), to run before giving it to another list. */
+async function handOverInbox(db: Db, actor: Actor, to: string, at: string): Promise<BatchItem<"sqlite">[]> {
+  const current = await findInbox(db);
+  if (!current || current.id === to) return [];
+  const after = { ...current, inbox: false, updatedAt: at };
+  return [
+    db.update(lists).set({ inbox: false, updatedAt: at }).where(eq(lists.id, current.id)),
+    eventQuery(db, { entityType: "list", entityId: current.id, type: "updated", before: toList(current), after: toList(after), actor }),
+  ];
+}
+
+const KEEP_INBOX = "The Inbox can't be archived or deleted. Make another list the Inbox first.";
 
 async function assertFolder(db: Db, id: string | null) {
   if (!id) return;
@@ -94,11 +116,13 @@ export const listRoutes = newRouter()
         folderId,
         position: await positionFor(db, lists, and(live, inFolder(folderId))),
         archivedAt: null,
+        inbox: input.inbox === true,
         createdAt: at,
         updatedAt: at,
         deletedAt: null,
       };
-      await db.batch([
+      await runBatch(db, [
+        ...(row.inbox ? await handOverInbox(db, c.var.actor, row.id, at) : []),
         db.insert(lists).values(row),
         eventQuery(db, { entityType: "list", entityId: row.id, type: "created", after: toList(row), actor: c.var.actor }),
       ]);
@@ -127,15 +151,17 @@ export const listRoutes = newRouter()
     }),
     async (c) => {
       const { id } = c.req.valid("param");
-      const { name, archived } = c.req.valid("json");
+      const { name, archived, inbox } = c.req.valid("json");
       const db = c.var.db;
       const before = await getList(db, id);
       const at = now();
       const archivedAt = archived === undefined ? before.archivedAt : archived ? (before.archivedAt ?? at) : null;
-      const after: Row = { ...before, name: name ?? before.name, archivedAt, updatedAt: at };
+      const after: Row = { ...before, name: name ?? before.name, archivedAt, inbox: before.inbox || inbox === true, updatedAt: at };
+      if (after.inbox && after.archivedAt) throw new ApiError(422, "inbox_required", KEEP_INBOX);
       const type = archived === undefined ? "updated" : archived ? "archived" : "unarchived";
-      await db.batch([
-        db.update(lists).set({ name: after.name, archivedAt, updatedAt: at }).where(eq(lists.id, id)),
+      await runBatch(db, [
+        ...(inbox && !before.inbox ? await handOverInbox(db, c.var.actor, id, at) : []),
+        db.update(lists).set({ name: after.name, archivedAt, inbox: after.inbox, updatedAt: at }).where(eq(lists.id, id)),
         eventQuery(db, { entityType: "list", entityId: id, type, before: toList(before), after: toList(after), actor: c.var.actor }),
       ]);
       return c.json(toList(after), 200);
@@ -183,6 +209,7 @@ export const listRoutes = newRouter()
       const { id } = c.req.valid("param");
       const db = c.var.db;
       const before = await getList(db, id);
+      if (before.inbox) throw new ApiError(422, "inbox_required", KEEP_INBOX);
       const [task] = await db.select({ id: tasks.id }).from(tasks).where(and(eq(tasks.listId, id), isNull(tasks.deletedAt))).limit(1);
       if (task) throw new ApiError(409, "not_empty", "Move or delete the list's tasks first");
       const at = now();

@@ -1,7 +1,7 @@
 import { createRoute } from "@hono/zod-openapi";
 import type { BatchItem } from "drizzle-orm/batch";
 import { generateNKeysBetween } from "fractional-indexing";
-import { and, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { ErrorSchema, ImportResultSchema, ImportSchema, type ImportBatch } from "@claudia/shared";
 import { folders, labels, lists, taskLabels, tasks } from "../db/schema";
 import { runBatch, type Db } from "../lib/db";
@@ -137,7 +137,14 @@ export async function importBatch(db: Db, input: ImportBatch) {
   ]);
 
   const newFolders = parentsFirst(fitPositions(addedFolders, folderScope, folderSlots));
-  const newLists = fitPositions(addedLists, listScope, listSlots);
+  // At most one Inbox: an imported one only takes the job if there's no Inbox yet.
+  const [inboxNow] = await db.select({ id: lists.id }).from(lists).where(and(isNull(lists.deletedAt), eq(lists.inbox, true))).limit(1);
+  let inboxTaken = Boolean(inboxNow);
+  const newLists = fitPositions(addedLists, listScope, listSlots).map((l) => {
+    const inbox = l.inbox && !inboxTaken && l.archivedAt === null;
+    if (inbox) inboxTaken = true;
+    return { ...l, inbox };
+  });
   const freshLabels = newLabels.filter((l) => !haveLabels.has(l.id));
   const newTasks = parentsFirst(fitPositions(addedTasks, taskScope, taskSlots));
 

@@ -63,12 +63,15 @@ export const lists = sqliteTable(
     folderId: text("folder_id").references(() => folders.id),
     position: text("position").notNull(),
     archivedAt: text("archived_at"),
+    /** The list capture and the Inbox view use, whatever it's called. At most one live list has it. */
+    inbox: integer("inbox", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
   },
   (t) => [
     index("lists_folder_idx").on(t.folderId, t.position),
+    uniqueIndex("lists_one_inbox").on(t.inbox).where(sql`${t.inbox} = 1 AND ${t.deletedAt} IS NULL`),
     uniqueIndex("lists_position_unique").on(sql`coalesce(${t.folderId}, '')`, t.position).where(sql`${t.deletedAt} IS NULL`),
   ],
 );

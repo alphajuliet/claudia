@@ -15,7 +15,8 @@ const LABELS: Partial<Record<ViewId, string>> = { next: "next", wip: "wip", wait
 /** The label a built-in view shows (and quick add gives), if any. */
 export const viewLabel = (id: ViewId): string | undefined => LABELS[id];
 
-export const findInbox = (lists: List[]) => lists.find((l) => l.archivedAt === null && l.name.toLowerCase() === "inbox");
+/** The Inbox: the list flagged as it, whatever it's called. */
+export const findInbox = (lists: List[]) => lists.find((l) => l.inbox && l.archivedAt === null);
 
 /**
  * A built-in view's count of open tasks, from the per-list counts, over the lists it shows (`lists`: the Inbox and

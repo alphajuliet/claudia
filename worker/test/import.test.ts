@@ -60,6 +60,13 @@ describe("import", () => {
     expect(titles).toEqual(["T40", "T41", mine.title, "T42", "T43"]);
   });
 
+  it("marks an imported Inbox only when there's no Inbox yet", async () => {
+    await api("POST", "/api/import", { lists: [list(20, { name: "Inbox", inbox: true })] });
+    expect((await api("GET", `/api/lists/${id(20)}`)).body.inbox).toBe(true);
+    await api("POST", "/api/import", { lists: [list(21, { name: "Inbox 2", inbox: true })] });
+    expect((await api("GET", `/api/lists/${id(21)}`)).body.inbox).toBe(false);
+  });
+
   it("is idempotent and does not overwrite later edits", async () => {
     const batch = { folders: [], lists: [list(20)], labels: [label(30, "next")], tasks: [task(40, { labelIds: [id(30)] })] };
     await api("POST", "/api/import", batch);

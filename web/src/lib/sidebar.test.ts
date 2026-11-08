@@ -16,6 +16,7 @@ const list = (id: string, position: string, folderId: string | null, archivedAt:
   id,
   name: id,
   folderId,
+  inbox: false,
   position,
   archivedAt,
   createdAt: stamp,

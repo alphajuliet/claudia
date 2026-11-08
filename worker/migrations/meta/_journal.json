@@ -36,6 +36,13 @@
       "when": 1794095429393,
       "tag": "0004_sibling_positions_unique",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1794101761593,
+      "tag": "0005_inbox_flag",
+      "breakpoints": true
     }
   ]
 }

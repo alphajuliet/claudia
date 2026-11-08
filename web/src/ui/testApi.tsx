@@ -21,7 +21,7 @@ export const addDays = (date: string, n: number) => new Date(Date.parse(`${date}
 export const work: Folder = { id: "01JC0000000000000000000001", name: "Acme", parentId: null, context: "work", position: "a0", createdAt: at, updatedAt: at };
 export const personal: Folder = { id: "01JC0000000000000000000002", name: "Life", parentId: null, context: "personal", position: "a1", createdAt: at, updatedAt: at };
 const list = (id: string, name: string, folderId: string | null, position = "a0"): List =>
-  ({ id, name, folderId, position, archivedAt: null, createdAt: at, updatedAt: at });
+  ({ id, name, folderId, position, archivedAt: null, inbox: name === "Inbox", createdAt: at, updatedAt: at });
 // The Inbox sorts after Errands by position, but views still put it first.
 export const inbox = list("01JA0000000000000000000001", "Inbox", null, "a5");
 export const errands = list("01JA0000000000000000000004", "Errands", null, "a0");
