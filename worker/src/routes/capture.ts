@@ -5,7 +5,7 @@ import { lists } from "../db/schema";
 import { ApiError } from "../lib/errors";
 import { userTimeZone } from "../lib/recurrence";
 import { commonErrors, jsonBody, jsonResponse, newRouter } from "../lib/router";
-import { createTask } from "./tasks";
+import { createTask } from "../domain/tasks";
 
 /**
  * Reads capture text as quick add does: `#labels` come out, then a date or time at the end of what's left

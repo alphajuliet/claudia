@@ -24,7 +24,7 @@ import {
   newRouter,
   notFoundError,
 } from "../lib/router";
-import { findTasks } from "./tasks";
+import { findTasks } from "../domain/tasks";
 
 const tag = ["Filters"];
 type Row = typeof filters.$inferSelect;
