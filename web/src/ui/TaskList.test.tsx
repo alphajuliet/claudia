@@ -82,7 +82,7 @@ describe("task lists", () => {
     const real = fetchMock.getMockImplementation()!;
     let failing = true;
     fetchMock.mockImplementation(async (path, init) =>
-      failing && String(path).startsWith("/api/tasks?") ? json({ error: { code: "internal", message: "Database unavailable" } }, 500) : real(path, init));
+      failing && String(path).startsWith("/api/views/next/tasks") ? json({ error: { code: "internal", message: "Database unavailable" } }, 500) : real(path, init));
     renderAt("/next");
     expect(await main().findByText("Database unavailable")).toBeTruthy();
     failing = false;

@@ -1,6 +1,6 @@
 import type { List } from "@claudia/shared";
 import { describe, expect, it } from "vitest";
-import { findInbox, viewQuery, viewCount } from "./views";
+import { findInbox, viewLabel } from "./views";
 
 const stamp = "2026-10-01T00:00:00.000Z";
 const list = (id: string, name: string, archivedAt: string | null = null, inbox = name === "Inbox"): List => ({
@@ -14,23 +14,6 @@ const list = (id: string, name: string, archivedAt: string | null = null, inbox 
   updatedAt: stamp,
 });
 
-const ctx = { today: "2026-10-31", inboxId: "IN" };
-
-describe("viewQuery", () => {
-  it("builds each built-in view's query", () => {
-    expect(viewQuery("inbox", ctx)).toBe("status=open&limit=500&listId=IN");
-    expect(viewQuery("today", ctx)).toBe("status=open&limit=500&activeBy=2026-10-31");
-    expect(viewQuery("next", ctx)).toBe("status=open&limit=500&label=next");
-    expect(viewQuery("wip", ctx)).toBe("status=open&limit=500&label=wip");
-    expect(viewQuery("waiting", ctx)).toBe("status=open&limit=500&label=waitingOn");
-    expect(viewQuery("someday", ctx)).toBe("status=open&limit=500&label=someday");
-  });
-
-  it("is null for the inbox when there is no Inbox list", () => {
-    expect(viewQuery("inbox", { today: ctx.today, inboxId: undefined })).toBeNull();
-  });
-});
-
 describe("findInbox", () => {
   it("finds the list flagged as the Inbox, whatever it's called, and not by name", () => {
     expect(findInbox([list("work", "Work"), list("in", "📥 Capture", null, true)])?.id).toBe("in");
@@ -39,26 +22,9 @@ describe("findInbox", () => {
   });
 });
 
-describe("viewCount", () => {
-  const counts = {
-    lists: {
-      IN: { open: 4, today: 1, labels: { next: 1 } },
-      A: { open: 3, today: 2, labels: { next: 2, waitingon: 1 } },
-      B: { open: 5, today: 0, labels: { someday: 5 } },
-    },
-  };
-
-  it("counts the Inbox list for Inbox", () => {
-    expect(viewCount("inbox", counts, ["A"], "IN")).toBe(4);
-    expect(viewCount("inbox", counts, "all", undefined)).toBe(0);
-  });
-
-  it("adds up the lists shown for the other views", () => {
-    expect(viewCount("today", counts, "all", "IN")).toBe(3);
-    expect(viewCount("today", counts, ["IN", "B"], "IN")).toBe(1);
-    expect(viewCount("next", counts, ["IN", "A"], "IN")).toBe(3);
-    expect(viewCount("waiting", counts, "all", "IN")).toBe(1);
-    expect(viewCount("someday", counts, ["A"], "IN")).toBe(0);
-    expect(viewCount("wip", counts, ["Z"], "IN")).toBe(0);
+describe("viewLabel", () => {
+  it("names the label a view shows, if any", () => {
+    expect(viewLabel("waiting")).toBe("waitingOn");
+    expect(viewLabel("today")).toBeUndefined();
   });
 });

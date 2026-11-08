@@ -1,4 +1,4 @@
-import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, type Label, type LabelColour, type List, type Task } from "@claudia/shared";
+import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, ViewSummarySchema, type ContextFilter, type Label, type LabelColour, type List, type Task, type ViewId } from "@claudia/shared";
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
@@ -70,6 +70,21 @@ export function useTask(id: string) {
     enabled: state.status === "signedIn",
   });
 }
+
+/**
+ * A built-in view's tasks in a context, as the server decides them (`status: "completed"`: its completed ones; for
+ * Today, those completed today). Null waits.
+ */
+export const useViewTasks = (id: ViewId | null, context: ContextFilter, opts: TaskListOptions & { status?: "completed" } = {}) =>
+  useGet(
+    listKey(["tasks", "view", id, context, ...(opts.status ? [opts.status] : [])], opts),
+    id === null ? null : `/api/views/${id}/tasks?context=${context}${opts.status ? `&status=${opts.status}` : ""}`,
+    TasksSchema,
+    opts,
+  );
+
+/** The built-in views with how many tasks each shows in a context. Under ["counts"], so it's refetched with them. */
+export const useViews = (context: ContextFilter) => useGet(["counts", "views", context], `/api/views?context=${context}`, ViewSummarySchema.array());
 
 /** A saved filter's tasks; `status` overrides the filter's own (null leaves the query off). */
 export const useFilterTasks = (id: string | null, opts: TaskListOptions & { status?: "completed" } = {}) =>

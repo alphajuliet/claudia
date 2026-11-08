@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from "react";
 import type { Task } from "@claudia/shared";
 import { Link } from "wouter";
-import { useCounts, useFolders, useLists, useTasks, useTimeZone } from "../data/queries";
+import { useFolders, useLists, useTasks, useTimeZone, useViews, useViewTasks } from "../data/queries";
 import { ageOf, dashboard, NEXT_DAYS, SECTION_LIMIT, WIP_LIMIT } from "../lib/dashboard";
 import { addDays, todayIn } from "../lib/dates";
-import { findInbox, viewCount, viewQuery } from "../lib/views";
+import { findInbox } from "../lib/views";
+import { isSnoozed } from "../lib/tasks";
+import { useContextFilter } from "./contextFilter";
 import { QuickAdd } from "./QuickAdd";
 import { useTaskFilter } from "./screens";
 import { TaskList, type Section } from "./TaskList";
@@ -46,10 +48,10 @@ export function Dashboard() {
   const foldersQuery = useFolders();
   const lists = listsQuery.data ?? [];
   const inbox = findInbox(lists);
-  const inboxCount = useCounts().data;
-  const ctx = { today, inboxId: inbox?.id };
-  const wipQuery = useTasks(viewQuery("wip", ctx), { keepPrevious: true });
-  const waitingQuery = useTasks(viewQuery("waiting", ctx), { keepPrevious: true });
+  const { context } = useContextFilter();
+  const inboxCount = useViews(context).data?.find((v) => v.id === "inbox")?.count;
+  const wipQuery = useViewTasks("wip", context, { keepPrevious: true });
+  const waitingQuery = useViewTasks("waiting", context, { keepPrevious: true });
   const dueQuery = useTasks(new URLSearchParams({ status: "open", limit: "500", dueBefore: addDays(today, NEXT_DAYS) }).toString(), { keepPrevious: true });
   const shown = useTaskFilter();
   const [nextOpen, setNextOpen] = useState(false);
@@ -70,9 +72,10 @@ export function Dashboard() {
   const shownCount = (state: SectionState, n: number) => (state.ready ? n : "–");
 
   const { wip, dueNow, nextDays, waiting, counts } = dashboard({
-    wip: (wipQuery.data ?? []).filter(shown),
+    // WIP and Waiting come narrowed by the server; the due list is a plain query, narrowed here.
+    wip: (wipQuery.data ?? []).filter((t) => !isSnoozed(t)),
     due: (dueQuery.data ?? []).filter(shown),
-    waiting: (waitingQuery.data ?? []).filter(shown),
+    waiting: (waitingQuery.data ?? []).filter((t) => !isSnoozed(t)),
     today,
     timeZone,
   });
@@ -126,7 +129,7 @@ export function Dashboard() {
         <Link href="/wip">{shownCount(wipState, counts.wip)} WIP</Link>
         <Link href="/today">{shownCount(dueState, counts.overdue)} Overdue</Link>
         <Link href="/today">{shownCount(dueState, counts.today)} Today</Link>
-        {inbox && inboxCount && <Link href="/inbox">{viewCount("inbox", inboxCount, "all", inbox.id)} Inbox</Link>}
+        {inbox && inboxCount !== undefined && <Link href="/inbox">{inboxCount} Inbox</Link>}
       </nav>
       <QuickAdd target={inbox && { listId: inbox.id, listName: inbox.name }} announce />
       <TaskList query={READY} sections={sections} empty="" split={2} rowNote={rowNote} />

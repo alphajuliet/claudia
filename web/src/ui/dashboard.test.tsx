@@ -80,7 +80,7 @@ describe("the dashboard", () => {
     const fetchMock = stubApi([task({ title: "Weed", listId: garden.id, labels: ["wip"] })], { lists: [inbox, garden, projects] });
     const real = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation((path: string, init?: RequestInit) =>
-      String(path).includes("label=waitingOn") ? Promise.resolve(json({ error: { code: "boom", message: "Boom" } }, 500)) : real(path, init));
+      String(path).startsWith("/api/views/waiting/tasks") ? Promise.resolve(json({ error: { code: "boom", message: "Boom" } }, 500)) : real(path, init));
     renderAt("/dashboard");
     expect(await section("Waiting").findByRole("alert")).toBeTruthy();
     expect(await section("WIP").findByText("Weed")).toBeTruthy();

@@ -5,7 +5,7 @@ import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { vi } from "vitest";
 import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
-import type { Filter, Folder, Label, LabelColour, List, Task } from "@claudia/shared";
+import { VIEWS, type Filter, type Folder, type Label, type LabelColour, type List, type Task, type ViewId } from "@claudia/shared";
 import { todayIn } from "../lib/dates";
 import { listPosition, type ListMove } from "../lib/listMove";
 import { SessionProvider } from "../session/SessionProvider";
@@ -83,6 +83,31 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   const pass = async (method: string, path: string, body: unknown) => {
     try { await opts.gate?.(method, path, body); return true; } catch { return false; }
   };
+  /** A view's tasks: open and unsnoozed (or completed: for Today, today), not headings, in the context's lists. */
+  const viewOf = (id: ViewId, context: string, status: "open" | "completed") => {
+    const lists = bodies["/api/lists"] as List[];
+    const folders = bodies["/api/folders"] as Folder[];
+    const inboxId = lists.find((l) => l.inbox && l.archivedAt === null)?.id;
+    const shown = new Set<string>();
+    const walk = (parentId: string | null) => {
+      for (const f of folders) if (f.parentId === parentId && f.context === context) { shown.add(f.id); walk(f.id); }
+    };
+    walk(null);
+    const inContext = (t: Task) =>
+      context === "all" || t.listId === inboxId
+      || lists.some((l) => l.id === t.listId && l.archivedAt === null && (l.folderId === null || shown.has(l.folderId)));
+    const label = VIEWS.find((v) => v.id === id)?.label?.toLowerCase();
+    const rule = (t: Task) =>
+      id === "inbox" ? t.listId === inboxId
+      : id === "today" ? (t.dueDate !== null && t.dueDate <= today) || (t.startDate !== null && t.startDate <= today)
+      : t.labels.some((l) => l.toLowerCase() === label);
+    const now = new Date().toISOString();
+    const state = (t: Task) =>
+      status === "open"
+        ? t.completedAt === null && (t.snoozedUntil === null || t.snoozedUntil <= now)
+        : t.completedAt !== null && (id !== "today" || todayIn("Australia/Sydney", new Date(t.completedAt)) === today);
+    return id === "inbox" && !inboxId ? [] : [...store.values()].filter((t) => t.kind === "task" && state(t) && rule(t) && inContext(t));
+  };
   let changed = false;
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
     const renamed = path.match(/^\/api\/(lists|folders)\/(\w+)$/);
@@ -156,6 +181,17 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
         && (!q.get("activeBy") || (t.dueDate !== null && t.dueDate <= q.get("activeBy")!) || (t.startDate !== null && t.startDate <= q.get("activeBy")!))
         && (!q.get("q") || `${t.title}\n${t.notes ?? ""}`.toLowerCase().includes(q.get("q")!.toLowerCase())));
       return json(out);
+    }
+    // Views, as worker/src/domain/views.ts decides them (due times aside).
+    if (pathname === "/api/views") {
+      const context = new URLSearchParams(search).get("context") ?? "all";
+      return json(VIEWS.map((v) => ({ id: v.id, name: v.name, label: v.label, count: viewOf(v.id, context, "open").length })));
+    }
+    const shownView = pathname!.match(/^\/api\/views\/(\w+)\/tasks$/);
+    if (shownView) {
+      if (changed) await opts.holdRefetch;
+      const q = new URLSearchParams(search);
+      return json(viewOf(shownView[1] as ViewId, q.get("context") ?? "all", q.get("status") === "completed" ? "completed" : "open"));
     }
     // A saved filter here matches every task, completed ones included (or only those, with status=completed).
     if (/^\/api\/filters\/\w+\/tasks$/.test(pathname!))

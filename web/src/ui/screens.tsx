@@ -1,11 +1,10 @@
 import type { ReactNode } from "react";
 import type { List, Task } from "@claudia/shared";
 import { Link, Redirect } from "wouter";
-import { useFilters, useFilterTasks, useFolders, useLists, useTasks, useTimeZone } from "../data/queries";
-import { todayIn } from "../lib/dates";
+import { useFilters, useFilterTasks, useFolders, useLists, useTasks, useViewTasks } from "../data/queries";
 import { listOrder, sidebarTree } from "../lib/sidebar";
 import { groupByList, isSnoozed, treeRows, type Row } from "../lib/tasks";
-import { findInbox, viewLabel, viewQuery, VIEWS, type ViewId } from "../lib/views";
+import { findInbox, viewLabel, VIEWS, type ViewId } from "../lib/views";
 import { useContextFilter } from "./contextFilter";
 import { InlineRename, useRenameReported } from "./InlineRename";
 import { useCommand, useRunCommand } from "./keyboard";
@@ -112,9 +111,14 @@ export function useTaskFilter(): (t: Task) => boolean {
   return (t) => t.kind === "task" && !isSnoozed(t) && (context === "all" || inContext.has(t.listId));
 }
 
-export function useGroupedSections(tasks: Task[] | undefined): Section[] {
+/**
+ * Tasks grouped by list, in sidebar order. Filters and search are narrowed here (`useTaskFilter`); a view's tasks
+ * come narrowed by the server (`narrowed`), and only a task snoozed since loading is taken out at once.
+ */
+export function useGroupedSections(tasks: Task[] | undefined, narrowed = false): Section[] {
   const { lists, order } = useListOrder();
-  const shown = (tasks ?? []).filter(useTaskFilter());
+  const filter = useTaskFilter();
+  const shown = (tasks ?? []).filter(narrowed ? (t) => !isSnoozed(t) : filter);
   return groupByList(shown, lists, order).map((g) => ({ key: g.listId, title: g.list?.name ?? "Other list", rows: g.rows }));
 }
 
@@ -127,8 +131,9 @@ export function ViewScreen({ id }: { id: string }) {
 function BuiltInView({ id, name }: { id: ViewId; name: string }) {
   const lists = useLists();
   const inbox = findInbox(lists.data ?? []);
-  const today = todayIn(useTimeZone());
-  const query = viewQuery(id, { today, inboxId: inbox?.id });
+  const { context } = useContextFilter();
+  // The Inbox view waits for the lists, and shows nothing without an Inbox.
+  const viewId = id === "inbox" && !inbox ? null : id;
   // Views add to the Inbox, with the view's label, or due today in Today.
   const label = viewLabel(id);
   const target: QuickAddTarget | undefined = inbox && {
@@ -138,22 +143,21 @@ function BuiltInView({ id, name }: { id: ViewId; name: string }) {
     ...(id === "today" ? { dueToday: true } : {}),
   };
   const [show] = useShowCompleted();
-  const open = useTasks(query, { keepPrevious: true, keepsCompleted: show });
-  const done = useTasks(show && query ? withStatus(query, "completed") : null, { keepPrevious: true });
-  const timeZone = useTimeZone();
-  // Today shows what was completed today, not every task ever due before it.
-  const tasks = combine(open, done, show, id === "today" ? (t) => todayIn(timeZone, new Date(t.completedAt!)) === today : undefined);
-  const sections = useGroupedSections(tasks.data);
+  const open = useViewTasks(viewId, context, { keepPrevious: true, keepsCompleted: show });
+  // For Today, the server gives what was completed today, not every task ever due before it.
+  const done = useViewTasks(show ? viewId : null, context, { status: "completed", keepPrevious: true });
+  const tasks = combine(open, done, show);
+  const sections = useGroupedSections(tasks.data, true);
   const noInbox = id === "inbox" && lists.isSuccess && !inbox;
   return (
     <>
       <ScreenHeader title={name} />
       <QuickAdd target={target} announce />
       {noInbox ? (
-        <p className="list-state muted">There's no list called Inbox.</p>
+        <p className="list-state muted">No list is the Inbox.</p>
       ) : (
         <TaskList
-          query={query === null ? { isPending: true, error: lists.error, refetch: lists.refetch } : tasks}
+          query={viewId === null ? { isPending: true, error: lists.error, refetch: lists.refetch } : tasks}
           // The Inbox is a single list, so its group title would only repeat the heading.
           sections={id === "inbox" ? sections.map((s) => ({ ...s, title: undefined })) : sections}
           empty={id === "inbox" ? "Inbox zero." : "Nothing here."}

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import type { Counts, List } from "@claudia/shared";
-import { useCounts, useFilters, useFolders, useLists, useMoveList } from "../data/queries";
+import { useCounts, useFilters, useFolders, useLists, useMoveList, useViews } from "../data/queries";
 import { moveForDrop, moveForStep, type ListMove } from "../lib/listMove";
 import { listOrder, sidebarTree, type FolderNode } from "../lib/sidebar";
-import { findInbox, viewCount, VIEWS } from "../lib/views";
+import { findInbox, VIEWS } from "../lib/views";
 import { useSession } from "../session/SessionProvider";
 import { CONTEXT_CHOICES, useContextFilter } from "./contextFilter";
 import { Logo } from "./Logo";
@@ -172,8 +172,8 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
     revealCurrent.current = false;
     ref.current?.querySelector('.sidebar-scroll [aria-current="page"]')?.scrollIntoView?.({ block: "nearest" });
   }, [location]);
-  // Views count the lists they show: every list, or the Inbox and the context's lists.
-  const shown = context === "all" ? "all" : [...(inboxId ? [inboxId] : []), ...listOrder(tree)];
+  // How many tasks each view shows in the context, counted by the server.
+  const viewCounts = new Map((useViews(context).data ?? []).map((v) => [v.id, v.count]));
 
   return (
     <nav ref={ref} className="sidebar" aria-label="Sidebar" id="sidebar" onKeyDown={onKeyDown}>
@@ -194,7 +194,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
           <li><NavLink href="/labels" onNavigate={onNavigate}>Labels</NavLink></li>
           {VIEWS.filter((v) => v.id !== "inbox" || inboxId).map((v) => (
             <li key={v.id}>
-              <NavLink href={`/${v.id}`} count={counts && viewCount(v.id, counts, shown, inboxId)} onNavigate={onNavigate}
+              <NavLink href={`/${v.id}`} count={viewCounts.get(v.id)} onNavigate={onNavigate}
                 dropList={v.id === "inbox" ? inboxId : undefined}>{v.name}</NavLink>
             </li>
           ))}
