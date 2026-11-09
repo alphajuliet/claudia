@@ -1,7 +1,7 @@
 export type CommandId =
   | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "priorityHigh" | "priorityNormal" | "priorityLow" | "rename" | "editNotes" | "editLabels" | "moveToList" | "delete" | "toggleCompleted" | "undo" | "capture" | "search" | "help"
   | "contextAll" | "contextWork" | "contextPersonal" | "contextHome"
-  | "nextList" | "previousList" | "goList" | "goDashboard" | "goLabels" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
+  | "nextList" | "previousList" | "goList" | "goTaskList" | "goDashboard" | "goLabels" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
 export interface Command { id: CommandId; label: string; keys: string[] }
 
@@ -45,6 +45,7 @@ export const COMMANDS: Command[] = [
   { id: "nextList", label: "Next list in the sidebar", keys: ["Alt+j"] },
   { id: "previousList", label: "Previous list in the sidebar", keys: ["Alt+k"] },
   { id: "goList", label: "Go to a list", keys: ["g l"] },
+  { id: "goTaskList", label: "Go to the task's list", keys: ["G"] },
   { id: "goDashboard", label: "Go to Dashboard", keys: ["g d"] },
   { id: "goInbox", label: "Go to Inbox", keys: ["g i"] },
   { id: "goToday", label: "Go to Today", keys: ["g t"] },

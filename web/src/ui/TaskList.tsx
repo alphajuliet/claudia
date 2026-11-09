@@ -210,6 +210,9 @@ export function focusTask(id: string, preventScroll = false) {
   document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(id)}"]`)?.focus({ preventScroll });
 }
 
+/** The task to highlight when its list shows, after `G` (go to the task's list). */
+let arriving: { path: string; id: string } | null = null;
+
 /**
  * The keyboard highlight: the row that last had focus, on this screen. j and k move it (wrapping at the ends) and,
  * while the panel is open, the panel follows. When the highlighted task leaves the list, the row now in its place
@@ -253,7 +256,15 @@ function useHighlight(order: Task[]) {
 
   // A screen starts on its first row, so there is somewhere to move from. Not on a touch screen, where a highlight
   // has no key to follow, and not when a task is already open (j and k start from that one).
+  // After G, the task it was pressed on instead, once its list shows.
   useEffect(() => {
+    const came = arriving?.path === location ? order.find((t) => t.id === arriving!.id) : undefined;
+    if (came) {
+      arriving = null;
+      setState({ path: location, id: came.id });
+      focusTask(came.id);
+      return;
+    }
     if (highlightId || selectedId || order.length === 0 || window.matchMedia?.("(pointer: coarse)").matches) return;
     setState({ path: location, id: order[0]!.id });
   }, [ids, highlightId, selectedId, location]);
@@ -546,6 +557,14 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
     requestEdit(current.id, field);
     select(current.id);
   };
+  // G: the highlighted (or open) task's list, with the task highlighted there and still open if it was.
+  const [, navigate] = useLocation();
+  useCommand("goTaskList", () => {
+    if (!target || target.listId === reorder?.listId) return false;
+    const path = `/list/${target.listId}`;
+    arriving = { path, id: target.id };
+    navigate(selectedId ? `${path}?task=${target.id}` : path);
+  });
   useCommand("editNotes", editIn("notes"));
   useCommand("editLabels", editIn("labels"));
   useCommand("moveToList", editIn("list"));
