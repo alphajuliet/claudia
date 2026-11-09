@@ -13,10 +13,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 /** Answers /api/me with `me` and the shell's own reads with empty results. */
 const signedInApi = () => vi.fn(async (path: string, _init?: RequestInit) => json(path === "/api/me" ? me : path === "/api/settings" ? {} : []));
 
-/** Waits for the shell, which shows the token's name in the sidebar footer. */
+/** Waits for the shell, whose Sign out button names the token in its tooltip. */
 async function findSignedInAs(name: string) {
   const sidebar = await screen.findByRole("navigation", { name: "Sidebar" });
-  return within(sidebar).findByText(name);
+  return within(sidebar).findByTitle(new RegExp(`token “${name}”`));
 }
 
 afterEach(() => vi.restoreAllMocks());
@@ -59,7 +59,7 @@ describe("sign-in", () => {
     renderApp();
     await signInWith("  cl_good  ");
     expect(await findSignedInAs("laptop")).toBeTruthy();
-    expect(screen.getByText(/write/)).toBeTruthy();
+    expect(screen.getByTitle(/\(write\)/)).toBeTruthy();
     expect(tokenStore.get()).toBe("cl_good");
     expect(new Headers(fetchMock.mock.calls[0]![1]!.headers).get("Authorization")).toBe("Bearer cl_good");
   });
@@ -170,7 +170,7 @@ describe("signed in", () => {
     expect(await findSignedInAs("laptop")).toBeTruthy();
     finishOld(json({ error: {} }, 401));
     await new Promise((resolve) => setTimeout(resolve, 20));
-    expect(within(screen.getByRole("navigation", { name: "Sidebar" })).getByText("laptop")).toBeTruthy();
+    expect(within(screen.getByRole("navigation", { name: "Sidebar" })).getByTitle(/token “laptop”/)).toBeTruthy();
     expect(tokenStore.get()).toBe("cl_b");
   });
 });

@@ -248,13 +248,15 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
             Shake to undo
           </label>
         )}
-        {state.status === "signedIn" && (
-          <span className="who" title={`Signed in with the token “${state.me.name}”`}>
-            <span className="who-name">{state.me.name}</span>
-            <span className="who-scopes">{state.me.scopes.join(", ")}</span>
-          </span>
-        )}
-        <button type="button" className="quiet" onClick={() => signOut()}>Sign out</button>
+        {/* The token's name and scopes only in the tooltip: on screen they read like a user name. */}
+        <button
+          type="button"
+          className="quiet"
+          title={state.status === "signedIn" ? `Signed in with the token “${state.me.name}” (${state.me.scopes.join(", ")})` : undefined}
+          onClick={() => signOut()}
+        >
+          Sign out
+        </button>
       </footer>
     </nav>
   );

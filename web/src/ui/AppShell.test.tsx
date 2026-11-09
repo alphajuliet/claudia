@@ -60,8 +60,10 @@ describe("AppShell", () => {
       expect(sidebar().getByRole("link", { name })).toBeTruthy();
     expect(sidebar().getByText("Acme")).toBeTruthy();
     expect(sidebar().getByText("Life")).toBeTruthy();
-    expect(sidebar().getByText("laptop")).toBeTruthy();
-    expect(sidebar().getByRole("button", { name: "Sign out" })).toBeTruthy();
+    // The token's name isn't shown as if it were the user's, only in Sign out's tooltip.
+    expect(sidebar().queryByText("laptop")).toBeNull();
+    expect(sidebar().queryByText("write")).toBeNull();
+    expect(sidebar().getByRole("button", { name: "Sign out" }).title).toBe("Signed in with the token “laptop” (write)");
   });
 
   it("marks the current route's link and redirects / to the Dashboard", async () => {
