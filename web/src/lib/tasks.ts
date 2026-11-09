@@ -1,4 +1,4 @@
-import { todayIn } from "./dates";
+import { addDays, todayIn, weekdayOf } from "./dates";
 import type { List, Task } from "@claudia/shared";
 
 export interface Row { task: Task; depth: number }
@@ -81,4 +81,55 @@ export function rowsUnder(rows: Row[], id: string): string[] {
   const out: string[] = [];
   for (let j = i + 1; j < rows.length && rows[j]!.depth > rows[i]!.depth; j++) out.push(rows[j]!.task.id);
   return out;
+}
+
+export type DueBucket = "overdue" | "today" | "tomorrow" | "week" | "month" | "later" | "none";
+export const DUE_BUCKETS: { id: DueBucket; title: string }[] = [
+  { id: "overdue", title: "Overdue" },
+  { id: "today", title: "Today" },
+  { id: "tomorrow", title: "Tomorrow" },
+  { id: "week", title: "This week" },
+  { id: "month", title: "This month" },
+  { id: "later", title: "Later" },
+  { id: "none", title: "No date" },
+];
+
+/** Which due-date group a day falls in. Weeks end on Sunday; a day after tomorrow but still this week is "week". */
+export function dueBucket(due: string | null, today: string): DueBucket {
+  if (due === null) return "none";
+  if (due < today) return "overdue";
+  if (due === today) return "today";
+  if (due === addDays(today, 1)) return "tomorrow";
+  if (due <= addDays(today, (7 - weekdayOf(today)) % 7)) return "week";
+  if (due.slice(0, 7) === today.slice(0, 7)) return "month";
+  return "later";
+}
+
+export interface DueGroup { bucket: DueBucket; title: string; rows: Row[] }
+
+/**
+ * Tasks grouped by due date (Overdue, Today, Tomorrow, This week, This month, Later, No date; empty groups left out).
+ * Within a group: by day, then due time, priority, the list's place in `listOrder` and position. Every task is a row
+ * of its own, subtasks included, since a subtask's date needn't match its parent's.
+ */
+export function groupByDue(tasks: Task[], today: string, timeZone: string, listOrder: string[]): DueGroup[] {
+  const rank = new Map(listOrder.map((id, i) => [id, i]));
+  const due = new Map(tasks.map((t) => [t.id, dueDateOf(t, timeZone)]));
+  const sorted = [...tasks].sort((a, b) => {
+    const da = due.get(a.id) ?? "\uffff";
+    const db = due.get(b.id) ?? "\uffff";
+    if (da !== db) return da < db ? -1 : 1;
+    // A due time comes before an all-day date on the same day.
+    const ta = a.dueAt ?? "\uffff";
+    const tb = b.dueAt ?? "\uffff";
+    if (ta !== tb) return ta < tb ? -1 : 1;
+    return byPriority(a, b)
+      || (rank.get(a.listId) ?? Infinity) - (rank.get(b.listId) ?? Infinity)
+      || (a.position < b.position ? -1 : a.position > b.position ? 1 : 0);
+  });
+  return DUE_BUCKETS.map(({ id, title }) => ({
+    bucket: id,
+    title,
+    rows: sorted.filter((t) => dueBucket(due.get(t.id) ?? null, today) === id).map((task) => ({ task, depth: 0 })),
+  })).filter((g) => g.rows.length > 0);
 }

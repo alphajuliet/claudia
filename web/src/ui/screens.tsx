@@ -1,14 +1,16 @@
 import type { ReactNode } from "react";
 import type { List, Task } from "@claudia/shared";
 import { Link, Redirect } from "wouter";
-import { useFilters, useFilterTasks, useFolders, useLists, useTasks, useViewTasks } from "../data/queries";
+import { useFilters, useFilterTasks, useFolders, useLists, useTasks, useTimeZone, useViewTasks } from "../data/queries";
+import { todayIn } from "../lib/dates";
 import { listOrder, sidebarTree } from "../lib/sidebar";
-import { groupByList, isSnoozed, treeRows, type Row } from "../lib/tasks";
+import { groupByDue, groupByList, isSnoozed, treeRows, type Row } from "../lib/tasks";
 import { findInbox, viewLabel, VIEWS, type ViewId } from "../lib/views";
 import { useContextFilter } from "./contextFilter";
 import { InlineRename, useRenameReported } from "./InlineRename";
 import { useCommand, useRunCommand } from "./keyboard";
 import { QuickAdd, type QuickAddTarget } from "./QuickAdd";
+import { useGrouping, type Grouping } from "./grouping";
 import { useShowCompleted } from "./showCompleted";
 import { TaskList, type Section } from "./TaskList";
 
@@ -69,6 +71,17 @@ function ShowCompletedButton() {
   );
 }
 
+/** The Group toggle for a view's header (by list or by due date), with Shift+D. */
+function GroupButton({ grouping, onChange }: { grouping: Grouping; onChange: (g: Grouping) => void }) {
+  const flip = () => onChange(grouping === "list" ? "due" : "list");
+  useCommand("toggleGrouping", flip);
+  return (
+    <button type="button" className="quiet small" title="Group by list or by due date (Shift+D)" onClick={flip}>
+      Group: {grouping === "list" ? "List" : "Due date"}
+    </button>
+  );
+}
+
 /** A screen's title (click to rename, when `onRename` is given), any actions of its own and its Show completed toggle. */
 function ScreenHeader({ title, onRename, children }: { title: string; onRename?: (name: string) => void; children?: ReactNode }) {
   return (
@@ -122,6 +135,17 @@ export function useGroupedSections(tasks: Task[] | undefined, narrowed = false):
   return groupByList(shown, lists, order).map((g) => ({ key: g.listId, title: g.list?.name ?? "Other list", rows: g.rows }));
 }
 
+/** A view's tasks grouped by due date (Overdue, Today, Tomorrow, …): from the server, so only newly snoozed ones go. */
+function useDueSections(tasks: Task[] | undefined): Section[] {
+  const { order } = useListOrder();
+  const timeZone = useTimeZone();
+  const shown = (tasks ?? []).filter((t) => !isSnoozed(t));
+  return groupByDue(shown, todayIn(timeZone), timeZone, order).map((g) => ({ key: `due:${g.bucket}`, title: g.title, rows: g.rows }));
+}
+
+/** The views that can be grouped by due date as well as by list. */
+const GROUPABLE: ReadonlySet<ViewId> = new Set(["today", "next", "wip", "waiting"]);
+
 export function ViewScreen({ id }: { id: string }) {
   const view = VIEWS.find((v) => v.id === id);
   if (!view) return <NotFound />;
@@ -147,11 +171,19 @@ function BuiltInView({ id, name }: { id: ViewId; name: string }) {
   // For Today, the server gives what was completed today, not every task ever due before it.
   const done = useViewTasks(show ? viewId : null, context, { status: "completed", keepPrevious: true });
   const tasks = combine(open, done, show);
-  const sections = useGroupedSections(tasks.data, true);
+  const [grouping, setGrouping] = useGrouping(id);
+  const byDue = GROUPABLE.has(id) && grouping === "due";
+  const byList = useGroupedSections(tasks.data, true);
+  const byDate = useDueSections(tasks.data);
+  const sections = byDue ? byDate : byList;
+  // Grouped by date, each row says which list it's in.
+  const listName = (t: Task) => lists.data?.find((l) => l.id === t.listId)?.name;
   const noInbox = id === "inbox" && lists.isSuccess && !inbox;
   return (
     <>
-      <ScreenHeader title={name} />
+      <ScreenHeader title={name}>
+        {GROUPABLE.has(id) && <GroupButton grouping={grouping} onChange={setGrouping} />}
+      </ScreenHeader>
       <QuickAdd target={target} announce />
       {noInbox ? (
         <p className="list-state muted">No list is the Inbox.</p>
@@ -161,6 +193,7 @@ function BuiltInView({ id, name }: { id: ViewId; name: string }) {
           // The Inbox is a single list, so its group title would only repeat the heading.
           sections={id === "inbox" ? sections.map((s) => ({ ...s, title: undefined })) : sections}
           empty={id === "inbox" ? "Inbox zero." : "Nothing here."}
+          rowNote={byDue ? listName : undefined}
         />
       )}
     </>

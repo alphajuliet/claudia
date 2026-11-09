@@ -1,6 +1,6 @@
 import type { List, Task } from "@claudia/shared";
 import { describe, expect, it } from "vitest";
-import { collapseRows, groupByList, isSnoozed, parentsIn, rowsUnder, treeRows, type Row } from "./tasks";
+import { collapseRows, dueBucket, groupByDue, groupByList, isSnoozed, parentsIn, rowsUnder, treeRows, type Row } from "./tasks";
 
 const task = (overrides: Partial<Task> & Pick<Task, "id">): Task => ({
   listId: "L1",
@@ -150,5 +150,51 @@ describe("priority order", () => {
       task({ id: "next", position: "a1" }),
     ];
     expect(ids(treeRows(nested, true))).toEqual(["parent", "urgent", "sub", "next"]);
+  });
+});
+
+describe("dueBucket", () => {
+  // 2026-11-10 is a Tuesday; that week ends on Sunday the 15th.
+  const today = "2026-11-10";
+  it("sorts days into Overdue, Today, Tomorrow, This week, This month, Later and No date", () => {
+    expect(dueBucket("2026-11-09", today)).toBe("overdue");
+    expect(dueBucket(today, today)).toBe("today");
+    expect(dueBucket("2026-11-11", today)).toBe("tomorrow");
+    expect(dueBucket("2026-11-15", today)).toBe("week");
+    expect(dueBucket("2026-11-16", today)).toBe("month");
+    expect(dueBucket("2026-11-30", today)).toBe("month");
+    expect(dueBucket("2026-12-01", today)).toBe("later");
+    expect(dueBucket(null, today)).toBe("none");
+  });
+
+  it("has no This week left on a Sunday, and a week running into next month stays This week", () => {
+    expect(dueBucket("2026-11-16", "2026-11-15")).toBe("tomorrow");
+    expect(dueBucket("2026-11-17", "2026-11-15")).toBe("month");
+    // Thursday 2026-10-29: Sunday is 1 November.
+    expect(dueBucket("2026-11-01", "2026-10-29")).toBe("week");
+  });
+});
+
+describe("groupByDue", () => {
+  const tz = "Australia/Sydney";
+  it("leaves out empty groups and orders by day, time, priority, list order and position", () => {
+    const tasks = [
+      task({ id: "none" }),
+      task({ id: "later", dueDate: "2027-01-01" }),
+      task({ id: "allDay", dueDate: "2026-11-10" }),
+      // 9am Sydney time on the 10th.
+      task({ id: "timed", dueAt: "2026-11-09T22:00:00.000Z" }),
+      task({ id: "high", dueDate: "2026-11-10", priority: "high" }),
+      task({ id: "otherList", dueDate: "2026-11-10", listId: "L0" }),
+      task({ id: "sub", dueDate: "2026-11-08", parentId: "allDay" }),
+    ];
+    const groups = groupByDue(tasks, "2026-11-10", tz, ["L0", "L1"]);
+    expect(groups.map((g) => [g.title, g.rows.map((r) => r.task.id)])).toEqual([
+      ["Overdue", ["sub"]],
+      ["Today", ["timed", "high", "otherList", "allDay"]],
+      ["Later", ["later"]],
+      ["No date", ["none"]],
+    ]);
+    expect(groups.flatMap((g) => g.rows.map((r) => r.depth))).toEqual([0, 0, 0, 0, 0, 0, 0]);
   });
 });
