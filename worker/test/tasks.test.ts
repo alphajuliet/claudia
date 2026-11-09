@@ -53,6 +53,14 @@ describe("create and read", () => {
     await task("D", { afterId: a.id });
     expect(await query(`?listId=${inbox.id}`)).toEqual(["A", "D", "C", "B"]);
   });
+
+  it("puts a task first with atStart, but an afterId or beforeId wins", async () => {
+    const a = await task("A");
+    await task("B", { atStart: true });
+    await task("C", { atStart: true });
+    await task("D", { atStart: true, afterId: a.id });
+    expect(await query(`?listId=${inbox.id}`)).toEqual(["C", "B", "A", "D"]);
+  });
 });
 
 describe("update", () => {

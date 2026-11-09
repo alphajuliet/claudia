@@ -222,7 +222,14 @@ export const taskCreateShape = {
 };
 
 export const TaskCreateSchema = z
-  .object({ ...taskCreateShape, ...placementShape })
+  .object({
+    ...taskCreateShape,
+    ...placementShape,
+    atStart: z
+      .boolean()
+      .optional()
+      .openapi({ description: "Put the task first among its siblings rather than last (ignored with afterId or beforeId)" }),
+  })
   .refine(notBoth, NOT_BOTH)
   .openapi("TaskCreate");
 

@@ -163,8 +163,11 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     const [pathname, search = ""] = path.split("?");
     if (pathname === "/api/tasks" && init?.method === "POST") {
       if (opts.failCreate) return fail("Boom");
-      const body = JSON.parse(String(init.body)) as Partial<Task> & Pick<Task, "title" | "listId">;
-      const created = task(body);
+      const { atStart, ...body } = JSON.parse(String(init.body)) as Partial<Task> & Pick<Task, "title" | "listId"> & { atStart?: boolean };
+      const first = [...store.values()]
+        .filter((t) => t.listId === body.listId && t.parentId === (body.parentId ?? null))
+        .sort(byPosition)[0];
+      const created = task(atStart ? { ...body, position: generateKeyBetween(null, first?.position ?? null) } : body);
       store.set(created.id, created);
       return json(created, 201);
     }

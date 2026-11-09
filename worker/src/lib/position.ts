@@ -15,17 +15,19 @@ interface Orderable extends SQLiteTable {
 export interface Placement {
   afterId?: string | undefined;
   beforeId?: string | undefined;
+  /** With neither id: first rather than last. */
+  atStart?: boolean | undefined;
 }
 
 /**
  * The fractional index for an item among `scope` siblings: after `afterId`,
- * before `beforeId`, or at the end.
+ * before `beforeId`, or at the end (the start with `atStart`).
  */
 export async function positionFor(
   db: Db,
   table: Orderable,
   scope: SQL | undefined,
-  { afterId, beforeId }: Placement = {},
+  { afterId, beforeId, atStart }: Placement = {},
 ): Promise<string> {
   const live = and(scope, isNull(table.deletedAt));
 
@@ -50,5 +52,6 @@ export async function positionFor(
     const b = await positionOf(beforeId);
     return generateKeyBetween(await neighbour(lt(table.position, b), desc(table.position)), b);
   }
+  if (atStart) return generateKeyBetween(null, await neighbour(gt(table.position, ""), asc(table.position)));
   return generateKeyBetween(await neighbour(gt(table.position, ""), desc(table.position)), null);
 }

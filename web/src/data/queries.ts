@@ -276,10 +276,11 @@ export interface TaskCreate extends TaskPatch {
   kind?: Task["kind"];
   afterId?: string;
   beforeId?: string;
+  atStart?: boolean;
 }
 
 /**
- * Creates a task (appended unless `afterId` or `beforeId` is given). Which cached lists it belongs in is the server's
+ * Creates a task (appended unless `afterId`, `beforeId` or `atStart` is given). Which cached lists it belongs in is the server's
  * call, so they are refetched rather than updated at once.
  */
 export function useCreateTask() {

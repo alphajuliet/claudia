@@ -24,7 +24,7 @@ describe("quick add", () => {
     const field = await quickAdd();
     await userEvent.type(field, "Plant tomatoes");
     field.blur();
-    await waitFor(() => expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Plant tomatoes" }]));
+    await waitFor(() => expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: garden.id, title: "Plant tomatoes" }]));
     expect(field.value).toBe("");
   });
 
@@ -64,7 +64,7 @@ describe("quick add", () => {
     expect(field.value).toBe("Call Sam tomorrow");
   });
 
-  it("adds to the list being shown, at the end, and keeps focus for the next one", async () => {
+  it("adds to the list being shown, at the top, and keeps focus for the next one", async () => {
     const fetchMock = stubApi([task({ title: "Weed the beds", listId: garden.id })]);
     renderAt(`/list/${garden.id}`);
     const field = await quickAdd();
@@ -72,8 +72,12 @@ describe("quick add", () => {
     await userEvent.type(field, "Plant tomatoes{Enter}");
     expect(field.value).toBe("");
     expect(document.activeElement).toBe(field);
-    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Plant tomatoes" }]);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: garden.id, title: "Plant tomatoes" }]);
     expect(await main().findByText("Plant tomatoes")).toBeTruthy();
+    expect(main().getAllByRole("listitem").map((r) => r.textContent)).toEqual([
+      expect.stringContaining("Plant tomatoes"),
+      expect.stringContaining("Weed the beds"),
+    ]);
     // The task went to the list on screen, so there's nothing to announce.
     expect(screen.getByRole("status").textContent).toBe("");
   });
@@ -83,7 +87,7 @@ describe("quick add", () => {
     renderAt("/next");
     await userEvent.type(await quickAdd(), "Call Sam #phone #Next about #phone the deck{Enter}");
     expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([
-      { listId: inbox.id, title: "Call Sam about the deck", labels: ["next", "phone"] },
+      { atStart: true, listId: inbox.id, title: "Call Sam about the deck", labels: ["next", "phone"] },
     ]);
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Added to Inbox"));
     expect(await main().findByText("Call Sam about the deck")).toBeTruthy();
@@ -95,7 +99,7 @@ describe("quick add", () => {
       const { unmount } = renderAt(path);
       await userEvent.type(await quickAdd(), "Sort the post{Enter}");
       expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([
-        { listId: inbox.id, title: "Sort the post", ...(label ? { labels: [label] } : {}) },
+        { atStart: true, listId: inbox.id, title: "Sort the post", ...(label ? { labels: [label] } : {}) },
       ]);
       unmount();
     }
@@ -105,7 +109,7 @@ describe("quick add", () => {
     const fetchMock = stubApi([]);
     renderAt("/today");
     await userEvent.type(await quickAdd(), "Pay the rent{Enter}");
-    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: inbox.id, title: "Pay the rent", dueDate: today }]);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: inbox.id, title: "Pay the rent", dueDate: today }]);
     expect(await main().findByText("Pay the rent")).toBeTruthy();
   });
 
@@ -119,7 +123,7 @@ describe("quick add", () => {
       const field = await quickAdd();
       vi.setSystemTime(new Date("2026-11-02T13:30:00.000Z"));
       await userEvent.type(field, "Pay the rent{Enter}");
-      expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: inbox.id, title: "Pay the rent", dueDate: "2026-11-03" }]);
+      expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: inbox.id, title: "Pay the rent", dueDate: "2026-11-03" }]);
     } finally {
       vi.useRealTimers();
     }
@@ -130,7 +134,7 @@ describe("quick add", () => {
     const fetchMock = stubApi([], { filters: [errand] });
     renderAt(`/filter/${errand.id}`);
     await userEvent.type(await quickAdd(), "Buy stamps #errand{Enter}");
-    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: inbox.id, title: "Buy stamps", labels: ["errand"] }]);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: inbox.id, title: "Buy stamps", labels: ["errand"] }]);
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Added to Inbox"));
   });
 
@@ -188,7 +192,7 @@ describe("dates in quick add", () => {
     await userEvent.type(field, "Call Sam tomorrow");
     expect(main().getByText("Due Tomorrow")).toBeTruthy();
     await userEvent.type(field, "{Enter}");
-    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Call Sam", dueDate: addDays(day, 1) }]);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: garden.id, title: "Call Sam", dueDate: addDays(day, 1) }]);
     expect(main().queryByText(/^Due /)).toBeNull();
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Added, due Tomorrow"));
   });
@@ -199,7 +203,7 @@ describe("dates in quick add", () => {
     renderAt(`/list/${garden.id}`);
     await userEvent.type(await quickAdd(), "Call Sam tomorrow 3pm{Enter}");
     expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([
-      { listId: garden.id, title: "Call Sam", dueAt: zonedToUtc(addDays(day, 1), "15:00", tz) },
+      { atStart: true, listId: garden.id, title: "Call Sam", dueAt: zonedToUtc(addDays(day, 1), "15:00", tz) },
     ]);
   });
 
@@ -226,7 +230,7 @@ describe("dates in quick add", () => {
     expect(main().queryByText(/^Due /)).toBeNull();
     expect(document.activeElement).toBe(field);
     await userEvent.type(field, "{Enter}");
-    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Read chapter 3/4" }]);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: garden.id, title: "Read chapter 3/4" }]);
     // The dismissal was for that entry only.
     await userEvent.type(field, "Read chapter 3/4");
     expect(main().getByText(/^Due /)).toBeTruthy();
@@ -256,7 +260,7 @@ describe("dates in quick add", () => {
     await userEvent.type(field, "Call Sam tomorrow");
     expect(main().getByText("Due Tomorrow")).toBeTruthy();
     await userEvent.type(field, "{Enter}");
-    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Call Sam", dueDate: addDays(day, 1) }]);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: garden.id, title: "Call Sam", dueDate: addDays(day, 1) }]);
   });
 
   it("describes the field with the preview while it shows", async () => {
@@ -302,7 +306,7 @@ describe("dates in quick add", () => {
     renderAt(`/list/${garden.id}`);
     await userEvent.type(await quickAdd(), "Pay rent #home 1 Dec{Enter}");
     expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([
-      { listId: garden.id, title: "Pay rent", labels: ["home"], dueDate: "2026-12-01" },
+      { atStart: true, listId: garden.id, title: "Pay rent", labels: ["home"], dueDate: "2026-12-01" },
     ]);
   });
 
@@ -311,7 +315,7 @@ describe("dates in quick add", () => {
     const fetchMock = stubApi([]);
     renderAt("/today");
     await userEvent.type(await quickAdd(), "Call Sam tomorrow{Enter}");
-    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: inbox.id, title: "Call Sam", dueDate: addDays(day, 1) }]);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: inbox.id, title: "Call Sam", dueDate: addDays(day, 1) }]);
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Added to Inbox, due Tomorrow"));
   });
 
@@ -323,7 +327,7 @@ describe("dates in quick add", () => {
     await userEvent.type(field, "Tomorrow");
     expect(main().queryByText(/^Due /)).toBeNull();
     await userEvent.type(field, "{Enter}");
-    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ listId: garden.id, title: "Tomorrow" }]);
+    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: garden.id, title: "Tomorrow" }]);
   });
 });
 

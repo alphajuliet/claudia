@@ -78,6 +78,8 @@ export function QuickAdd({ target, announce = false }: { target: QuickAddTarget 
       .mutateAsync({
         listId: target.listId,
         title: when ? when.title : parsed.title,
+        // New tasks go first, next to the field they were typed in.
+        atStart: true,
         ...(labels.length ? { labels } : {}),
         ...due,
       })
