@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Task } from "@claudia/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { cachedTask, useUpdateTask } from "../data/queries";
@@ -8,7 +8,6 @@ import { dueFields, quickDates } from "../lib/when";
 import { Field, FieldStatus, usePatch, type SaveState } from "./TaskFields";
 import { plainText } from "./Markdown";
 import { useToast } from "./Toast";
-import { useCompact } from "./useVisualViewport";
 
 /*
  * The panel's date fields. Each is a WhenField: what is set now, quick choices, and native date and time inputs, so
@@ -98,7 +97,8 @@ export interface WhenChoice { label: string; date: string; time?: string }
 /**
  * A day with an optional time: what is set now (overdue in red when `showOverdue`) with Clear, quick choices, and date
  * and time inputs. A time needs a day, so a time typed with none set is today. `dateOnly` leaves out the time.
- * With `collapsible`, a touch screen shows only what is set: tapping it shows the rest, and a quick choice folds it again.
+ * With `collapsible` (the panel's fields, on every device) it shows only what is set: clicking or tapping it shows the
+ * rest, and a quick choice folds it again. Escape inside folds it too, back to the toggle.
  */
 export function WhenField({ label, name, value, choices, today, nowTime, timeDisabled = false, dateOnly = false, showOverdue = false, collapsible = false, status, onSave }: {
   label: string;
@@ -120,9 +120,17 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   // Without times, a new day drops the one already set (such as an imported due time on a repeating task).
   const noTime = timeDisabled || dateOnly;
   const keptTime = noTime ? null : value?.time ?? null;
-  const compact = useCompact();
   const [unfolded, setUnfolded] = useState(false);
-  const foldable = collapsible && compact;
+  const foldable = collapsible;
+  const toggle = useRef<HTMLButtonElement>(null);
+  // Escape in an unfolded field folds it, saving what is being typed first, and the panel stays open.
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== "Escape" || !foldable || !unfolded) return;
+    e.stopPropagation();
+    if (document.activeElement instanceof HTMLElement && e.currentTarget.contains(document.activeElement)) document.activeElement.blur();
+    setUnfolded(false);
+    toggle.current?.focus();
+  };
   const current = shown ? (
     <span className={showOverdue && shown.overdue ? "due overdue" : undefined}>{shown.text}</span>
   ) : (
@@ -130,10 +138,10 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   );
   return (
     <Field label={label} group>
-      <div className="when">
+      <div className="when" onKeyDown={onKeyDown}>
         <div className="when-current">
           {foldable ? (
-            <button type="button" className="when-toggle" aria-label={`Change ${name}`} aria-expanded={unfolded} onClick={() => setUnfolded(!unfolded)}>
+            <button ref={toggle} type="button" className="when-toggle" aria-label={`Change ${name}`} aria-expanded={unfolded} onClick={() => setUnfolded(!unfolded)}>
               {current}
             </button>
           ) : current}

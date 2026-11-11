@@ -34,6 +34,11 @@ async function openOn(t: Task, tasks: Task[] = [t], opts: Parameters<typeof stub
   return { fetchMock, view, p };
 }
 
+/** Unfolds the panel's Due, Snooze and Start fields, which show only what is set until clicked. */
+async function unfoldDates(p: ReturnType<typeof within>) {
+  for (const name of ["due date", "snooze", "start date"]) await userEvent.click(p.getByRole("button", { name: `Change ${name}` }));
+}
+
 describe("selecting a task", () => {
   it("puts ?task= in the address, marks the row and opens the panel", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
@@ -121,6 +126,7 @@ describe("the detail panel", () => {
   it("sets and clears the due date", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
+    await unfoldDates(p);
     const due = within(p.getByRole("group", { name: "Due" }));
     fireEvent.change(due.getByLabelText("Due date"), { target: { value: "2026-11-05" } });
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: "2026-11-05", dueAt: null }]));
@@ -131,6 +137,7 @@ describe("the detail panel", () => {
   it("a quick button sets the day and keeps the time", async () => {
     const call = task({ title: "Call Sam", listId: garden.id, dueAt: "2026-11-03T08:00:00.000Z" });
     const { fetchMock, p } = await openOn(call);
+    await unfoldDates(p);
     await userEvent.click(within(p.getByRole("group", { name: "Due" })).getByRole("button", { name: "Due: Tomorrow" }));
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${call.id}`)).toEqual([
       { dueDate: null, dueAt: zonedToUtc(addDays(today, 1), "19:00", tz) },
@@ -140,6 +147,7 @@ describe("the detail panel", () => {
   it("adding a time moves the date to dueAt", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-11-05" });
     const { fetchMock, p } = await openOn(weed);
+    await unfoldDates(p);
     const time = p.getByLabelText("Due time");
     fireEvent.change(time, { target: { value: "09:30" } });
     fireEvent.blur(time);
@@ -149,6 +157,7 @@ describe("the detail panel", () => {
   it("a time with no due date is today", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
+    await unfoldDates(p);
     const time = p.getByLabelText("Due time");
     fireEvent.change(time, { target: { value: "09:30" } });
     fireEvent.blur(time);
@@ -158,6 +167,7 @@ describe("the detail panel", () => {
   it("clearing the time keeps the day", async () => {
     const call = task({ title: "Call Sam", listId: garden.id, dueAt: "2026-11-03T08:00:00.000Z" });
     const { fetchMock, p } = await openOn(call);
+    await unfoldDates(p);
     const time = p.getByLabelText("Due time");
     fireEvent.change(time, { target: { value: "" } });
     fireEvent.blur(time);
@@ -167,6 +177,7 @@ describe("the detail panel", () => {
   it("snoozes with a quick choice, closes the panel and offers Undo", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, view, p } = await openOn(weed);
+    await unfoldDates(p);
     await userEvent.click(within(p.getByRole("group", { name: "Snooze" })).getByRole("button", { name: "Snooze: Tomorrow" }));
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ snoozedUntil: zonedToUtc(addDays(today, 1), "00:00", tz) }]));
     expect(view.href()).toBe(`/list/${garden.id}`);
@@ -182,6 +193,7 @@ describe("the detail panel", () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     let patches = 0;
     const { p } = await openOn(weed, [weed], { gate: () => (++patches > 1 ? Promise.reject(new Error("no")) : undefined) });
+    await unfoldDates(p);
     await userEvent.click(within(p.getByRole("group", { name: "Snooze" })).getByRole("button", { name: "Snooze: Tomorrow" }));
     await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Snoozed “Weed the beds” until Tomorrow"));
     await userEvent.click(within(screen.getByRole("status")).getByRole("button", { name: "Undo" }));
@@ -192,6 +204,7 @@ describe("the detail panel", () => {
   it("puts the row back when a snooze fails after the panel has closed", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { view, p } = await openOn(weed, [weed], { failUpdate: true });
+    await unfoldDates(p);
     await userEvent.click(within(p.getByRole("group", { name: "Snooze" })).getByRole("button", { name: "Snooze: Tomorrow" }));
     expect(view.href()).toBe(`/list/${garden.id}`);
     expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
@@ -203,6 +216,7 @@ describe("the detail panel", () => {
   it("a typed snooze saves with Undo but keeps the panel open", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, view, p } = await openOn(weed);
+    await unfoldDates(p);
     const day = addDays(todayIn(tz), 3);
     const date = within(p.getByRole("group", { name: "Snooze" })).getByLabelText("Snooze date");
     fireEvent.change(date, { target: { value: day } });
@@ -216,6 +230,7 @@ describe("the detail panel", () => {
   it("an Undo for a snooze since changed does nothing", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
+    await unfoldDates(p);
     const snooze = within(p.getByRole("group", { name: "Snooze" }));
     const date = snooze.getByLabelText("Snooze date");
     fireEvent.change(date, { target: { value: addDays(todayIn(tz), 3) } });
@@ -231,6 +246,7 @@ describe("the detail panel", () => {
   it("doesn't save a snooze for today with no time, which has passed", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
+    await unfoldDates(p);
     const date = within(p.getByRole("group", { name: "Snooze" })).getByLabelText("Snooze date");
     fireEvent.change(date, { target: { value: todayIn(tz) } });
     fireEvent.blur(date);
@@ -249,6 +265,7 @@ describe("the detail panel", () => {
     };
     const choices = async () => {
       const { fetchMock, p } = await openOn(task({ title: "Weed the beds", listId: garden.id }));
+      await unfoldDates(p);
       const snooze = within(p.getByRole("group", { name: "Snooze" }));
       const names = snooze.getAllByRole("button").map((b) => b.getAttribute("aria-label")).filter((n) => n?.startsWith("Snooze: "));
       return { fetchMock, p, snooze, names };
@@ -312,6 +329,7 @@ describe("the detail panel", () => {
     const startDate = addDays(today, 9);
     const weed = task({ title: "Weed the beds", listId: garden.id, startDate });
     const { fetchMock, p } = await openOn(weed);
+    await unfoldDates(p);
     const start = within(p.getByRole("group", { name: "Start" }));
     expect(start.getByText(formatDue(startDate, today).text)).toBeTruthy();
     expect((p.getByLabelText("Start date") as HTMLInputElement).value).toBe(startDate);
@@ -324,11 +342,14 @@ describe("the detail panel", () => {
   it("sets the start date from a quick choice or the date input, with no time", async () => {
     const plain = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(plain);
+    await unfoldDates(p);
     const start = within(p.getByRole("group", { name: "Start" }));
     expect(start.getByText("None")).toBeTruthy();
     expect(p.queryByLabelText("Start time")).toBeNull();
     await userEvent.click(start.getByRole("button", { name: "Start: Today" }));
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${plain.id}`)).toEqual([{ startDate: today }]);
+    // The quick choice folded it again.
+    await userEvent.click(start.getByRole("button", { name: "Change start date" }));
     fireEvent.change(p.getByLabelText("Start date"), { target: { value: "2026-12-24" } });
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${plain.id}`)).toEqual([{ startDate: today }, { startDate: "2026-12-24" }]));
   });
@@ -336,6 +357,7 @@ describe("the detail panel", () => {
   it("hints at empty date and time inputs only", async () => {
     const plain = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-11-05" });
     const { p } = await openOn(plain);
+    await unfoldDates(p);
     const hint = (label: string) => p.getByLabelText(label).parentElement!.getAttribute("data-hint");
     expect(hint("Due date")).toBeNull();
     expect(hint("Due time")).toBe("Time");
@@ -354,6 +376,7 @@ describe("the detail panel", () => {
   it("changing a repeating task's day drops its due time", async () => {
     const call = task({ title: "Call Sam", listId: garden.id, dueAt: "2026-11-03T08:00:00.000Z", recurRule: "FREQ=WEEKLY", recurFrom: "due" });
     const { fetchMock, p } = await openOn(call);
+    await unfoldDates(p);
     await userEvent.click(within(p.getByRole("group", { name: "Due" })).getByRole("button", { name: "Due: Tomorrow" }));
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${call.id}`)).toEqual([{ dueDate: addDays(today, 1), dueAt: null }]);
   });
@@ -361,6 +384,7 @@ describe("the detail panel", () => {
   it("a repeating task can't take a time", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-11-05", recurRule: "FREQ=WEEKLY", recurFrom: "due" });
     const { p } = await openOn(weed);
+    await unfoldDates(p);
     const time = p.getByLabelText("Due time") as HTMLInputElement;
     expect(time.disabled).toBe(true);
     expect(p.getByText("Times on repeating tasks are coming")).toBeTruthy();
@@ -523,6 +547,7 @@ describe("the detail panel", () => {
   it("saves a changed date once, after a pause or on leaving the field", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
+    await unfoldDates(p);
     const due = p.getByLabelText("Due date");
     fireEvent.change(due, { target: { value: "2026-11-05" } });
     fireEvent.change(due, { target: { value: "2026-11-15" } });
@@ -540,6 +565,7 @@ describe("the detail panel", () => {
   it("doesn't save a date whose year is still being typed", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
+    await unfoldDates(p);
     const due = p.getByLabelText("Due date");
     fireEvent.change(due, { target: { value: "0202-11-05" } });
     fireEvent.blur(due);
@@ -550,6 +576,7 @@ describe("the detail panel", () => {
   it("saves a date still waiting when the panel closes", async () => {
     const weed = task({ title: "Weed the beds", listId: garden.id });
     const { fetchMock, p } = await openOn(weed);
+    await unfoldDates(p);
     fireEvent.change(p.getByLabelText("Due date"), { target: { value: "2026-11-05" } });
     await userEvent.click(p.getByRole("button", { name: "Done" }));
     await waitFor(() => expect(screen.queryByRole("complementary")).toBeNull());
@@ -565,10 +592,12 @@ describe("the detail panel", () => {
     renderAt(`/inbox?task=${weed.id}`);
     const p = await inPanel();
     await p.findByDisplayValue("Weed the beds");
+    await unfoldDates(p);
     fireEvent.change(p.getByLabelText("Due date"), { target: { value: "2026-11-05" } });
     await userEvent.click((await main().findByText("Mow the lawn")).closest("li")!);
     const q = await inPanel();
     await q.findByDisplayValue("Mow the lawn");
+    await unfoldDates(q);
     expect((q.getByLabelText("Due date") as HTMLInputElement).value).toBe("2026-11-20");
     await new Promise((resolve) => setTimeout(resolve, 700));
     expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${weed.id}`)).toEqual([{ dueDate: "2026-11-05", dueAt: null }]);
@@ -786,17 +815,10 @@ describe("the sheet and the keyboard", () => {
     }
   });
 
-  describe("the date fields on a touch screen", () => {
-    const touch = () => vi.stubGlobal("matchMedia", (query: string) => ({
-      media: query,
-      matches: query === "(pointer: coarse)",
-      addEventListener: () => {},
-      removeEventListener: () => {},
-    }));
+  describe("the folding date fields", () => {
     const dueGroup = async () => within(await screen.findByRole("group", { name: "Due" }));
 
-    it("shows only what is set until tapped, and a quick choice folds it again", async () => {
-      touch();
+    it("shows only what is set until clicked, and a quick choice folds it again", async () => {
       const t = task({ title: "Weed the beds", listId: garden.id, dueDate: "2026-12-25" });
       const fetchMock = stubApi([t]);
       renderAt(`/list/${garden.id}?task=${t.id}`);
@@ -815,7 +837,6 @@ describe("the sheet and the keyboard", () => {
     });
 
     it("stays open after a typed date, for a time to follow", async () => {
-      touch();
       const t = task({ title: "Weed the beds", listId: garden.id });
       stubApi([t]);
       renderAt(`/list/${garden.id}?task=${t.id}`);
@@ -823,6 +844,29 @@ describe("the sheet and the keyboard", () => {
       await userEvent.click(due.getByRole("button", { name: "Change due date" }));
       fireEvent.change(due.getByLabelText("Due date"), { target: { value: "2026-12-25" } });
       expect(due.getByLabelText("Due time")).toBeTruthy();
+    });
+
+    it("folds on Escape, saving what was typed, and keeps the panel open", async () => {
+      const t = task({ title: "Weed the beds", listId: garden.id });
+      const fetchMock = stubApi([t]);
+      renderAt(`/list/${garden.id}?task=${t.id}`);
+      const due = await dueGroup();
+      const toggle = due.getByRole("button", { name: "Change due date" });
+      await userEvent.click(toggle);
+      const date = due.getByLabelText("Due date");
+      date.focus();
+      fireEvent.change(date, { target: { value: "2026-12-25" } });
+      await userEvent.keyboard("{Escape}");
+      expect(due.queryByLabelText("Due date")).toBeNull();
+      expect(toggle.getAttribute("aria-expanded")).toBe("false");
+      expect(document.activeElement).toBe(toggle);
+      expect(screen.getByRole("complementary", { name: "Task details" })).toBeTruthy();
+      await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${t.id}`)).toEqual([{ dueDate: "2026-12-25", dueAt: null }]));
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${t.id}`)).toHaveLength(1);
+
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull());
     });
   });
 });

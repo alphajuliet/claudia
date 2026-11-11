@@ -851,6 +851,10 @@ input.task-title-input {
   }
 }
 .when-note { font-size: 0.85rem; }
+/* The panel's folded date fields: what is set, as plain text that unfolds the choices. */
+button.when-toggle { flex: 1; justify-content: flex-start; min-height: 1.9rem; padding: 0; border: 0; background: transparent; color: var(--fg); font-weight: 400; text-align: left; cursor: pointer; }
+button.when-toggle:hover { filter: none; }
+button.when-toggle:hover > span { text-decoration: underline; text-decoration-color: var(--border); }
 @media (pointer: coarse) {
   .when-choices button.quiet.small, .when-current button.quiet.small, .when-inputs .detail-date { min-height: var(--touch); }
   .when-choices button.quiet.small { padding: 0.3rem 0.75rem; }
@@ -1069,7 +1073,7 @@ input.task-title-input {
   .detail-fields { gap: 0; padding: 0.3rem 0; }
   .when { gap: 0.3rem; padding: 0; }
   .when-current { min-height: var(--touch); }
-  button.when-toggle { flex: 1; justify-content: flex-start; min-height: var(--touch); padding: 0; border: 0; background: transparent; color: var(--fg); font-weight: 400; text-align: left; }
+  button.when-toggle { min-height: var(--touch); }
   .when-choices button.quiet.small, .when-current button.quiet.small, .when-inputs .detail-date { min-height: 2.2rem; }
   .when-choices button.quiet.small { padding: 0.15rem 0.6rem; }
   .detail-footer { padding-top: 0; }
