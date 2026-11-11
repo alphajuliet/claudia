@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { errands, garden, main, renderAt, sentBodies, stubApi, task } from "./testApi";
@@ -160,5 +160,53 @@ describe("quick editing from the keyboard", () => {
     await userEvent.keyboard("et");
     expect(document.activeElement).toBe(main().getByRole("textbox", { name: "Title" }));
     expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
+  });
+
+  describe("the date fields from the keyboard", () => {
+    const group = (name: string) => within(screen.getByRole("group", { name }));
+
+    it("unfolds Due and puts the cursor in its date with e d, typing there rather than running keys", async () => {
+      const { fetchMock, tasks } = await openFirst();
+      await userEvent.keyboard("{Enter}");
+      await titleBox();
+      await userEvent.keyboard("ed");
+      const date = group("Due").getByLabelText("Due date");
+      expect(document.activeElement).toBe(date);
+      expect(group("Due").getByRole("button", { name: "Change due date" }).getAttribute("aria-expanded")).toBe("true");
+      // Snooze and Start stay folded.
+      expect(screen.queryByLabelText("Snooze date")).toBeNull();
+      await userEvent.keyboard("x");
+      expect(main().getByText("Weed the beds")).toBeTruthy();
+      fireEvent.change(date, { target: { value: "2026-12-25" } });
+      await userEvent.keyboard("{Escape}");
+      await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${tasks[0]!.id}`)).toEqual([{ dueDate: "2026-12-25", dueAt: null }]));
+      expect(document.activeElement).toBe(group("Due").getByRole("button", { name: "Change due date" }));
+      expect(panel()).toBeTruthy();
+    });
+
+    it("does the same for Start with e s and Snooze with e z", async () => {
+      await openFirst();
+      await userEvent.keyboard("{Enter}");
+      await titleBox();
+      await userEvent.keyboard("es");
+      expect(document.activeElement).toBe(group("Start").getByLabelText("Start date"));
+      await userEvent.keyboard("{Escape}ez");
+      expect(document.activeElement).toBe(group("Snooze").getByLabelText("Snooze date"));
+    });
+
+    it("opens the panel on the field when it is closed", async () => {
+      const { tasks } = await openFirst();
+      await userEvent.keyboard("jez");
+      await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText("Snooze date")));
+      expect(screen.getByRole("textbox", { name: "Title" })).toHaveProperty("value", tasks[1]!.title);
+    });
+
+    it("leaves a heading alone", async () => {
+      stubApi([task({ title: "Beds", listId: garden.id, kind: "heading" })]);
+      renderAt(`/list/${garden.id}`);
+      await main().findByText("Beds");
+      await userEvent.keyboard("ed");
+      expect(screen.queryByRole("complementary", { name: "Task details" })).toBeNull();
+    });
   });
 });

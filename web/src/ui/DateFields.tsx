@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useId, useRef, useState, type KeyboardEvent, type Ref } from "react";
+import { flushSync } from "react-dom";
 import type { Task } from "@claudia/shared";
 import { useQueryClient } from "@tanstack/react-query";
 import { cachedTask, useUpdateTask } from "../data/queries";
@@ -8,6 +9,9 @@ import { dueFields, quickDates } from "../lib/when";
 import { Field, FieldStatus, usePatch, type SaveState } from "./TaskFields";
 import { plainText } from "./Markdown";
 import { useToast } from "./Toast";
+import { useCommand } from "./keyboard";
+import { usePendingEdit, type PendingField } from "./selection";
+import type { CommandId } from "../lib/commands";
 
 /*
  * The panel's date fields. Each is a WhenField: what is set now, quick choices, and native date and time inputs, so
@@ -27,8 +31,9 @@ const wholeTime = (time: string) => TIME.test(time);
  * A native date or time input. A complete value saves after a moment without changes, or on leaving the field, so
  * retyping a day sends one save. One still being typed (a year on its way to 2026) waits until leaving the field.
  */
-function IdleInput({ type, label, value, complete, disabled = false, describedBy, onSave }: {
+function IdleInput({ type, label, value, complete, disabled = false, describedBy, inputRef, onSave }: {
   type: "date" | "time";
+  inputRef?: Ref<HTMLInputElement>;
   label: string;
   describedBy?: string;
   value: string | null;
@@ -68,6 +73,7 @@ function IdleInput({ type, label, value, complete, disabled = false, describedBy
     // iOS draws an empty date or time input as a blank box: the wrapper shows a hint there instead (styles.css).
     <span className="when-input" data-hint={shown === "" ? (type === "date" ? "Date" : "Time") : undefined}>
       <input
+        ref={inputRef}
         type={type}
         className="detail-date"
         aria-label={label}
@@ -99,8 +105,9 @@ export interface WhenChoice { label: string; date: string; time?: string }
  * and time inputs. A time needs a day, so a time typed with none set is today. `dateOnly` leaves out the time.
  * With `collapsible` (the panel's fields, on every device) it shows only what is set: clicking or tapping it shows the
  * rest, and a quick choice folds it again. Escape inside folds it too, back to the toggle.
+ * `shortcut` (the panel's fields) is the command and pending edit that unfold it and put the cursor in its date.
  */
-export function WhenField({ label, name, value, choices, today, nowTime, timeDisabled = false, dateOnly = false, showOverdue = false, collapsible = false, status, onSave }: {
+export function WhenField({ label, name, value, choices, today, nowTime, timeDisabled = false, dateOnly = false, showOverdue = false, collapsible = false, shortcut, status, onSave }: {
   label: string;
   name: string;
   value: When | null;
@@ -111,6 +118,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   dateOnly?: boolean;
   showOverdue?: boolean;
   collapsible?: boolean;
+  shortcut?: { command: CommandId; taskId: string; field: PendingField };
   status: SaveState;
   /** `quick` is true for a quick choice, false for Clear or a typed date or time. */
   onSave: (when: When | null, quick: boolean) => void;
@@ -123,6 +131,17 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
   const [unfolded, setUnfolded] = useState(false);
   const foldable = collapsible;
   const toggle = useRef<HTMLButtonElement>(null);
+  const dateInput = useRef<HTMLInputElement>(null);
+  // e d, e s or e z: unfold and into the date, from which Shift+Tab reaches the quick choices.
+  const startEditing = () => {
+    flushSync(() => setUnfolded(true));
+    const el = dateInput.current;
+    if (!el) return false;
+    el.focus({ preventScroll: true });
+    el.scrollIntoView?.({ block: "nearest" });
+  };
+  useCommand(shortcut?.command ?? "editDue", shortcut ? startEditing : undefined);
+  usePendingEdit(shortcut?.taskId ?? "", shortcut?.field ?? "due", () => { if (shortcut) startEditing(); });
   // Escape in an unfolded field folds it, saving what is being typed first, and the panel stays open.
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== "Escape" || !foldable || !unfolded) return;
@@ -172,6 +191,7 @@ export function WhenField({ label, name, value, choices, today, nowTime, timeDis
             </div>
             <div className="when-inputs">
               <IdleInput
+                inputRef={dateInput}
                 type="date"
                 label={`${label} date`}
                 value={value?.date ?? null}
@@ -224,6 +244,7 @@ export function DueField({ task, timeZone, onQuick, collapsible }: { task: Task;
       timeDisabled={Boolean(task.recurRule)}
       showOverdue
       collapsible={collapsible}
+      shortcut={collapsible ? { command: "editDue", taskId: task.id, field: "due" } : undefined}
       status={state}
       onSave={(when, quick) => {
         void patch(dueFields(when, timeZone));
@@ -296,6 +317,7 @@ export function SnoozeField({ task, timeZone, onClose, collapsible }: { task: Ta
       today={today}
       nowTime={nowTime}
       collapsible={collapsible}
+      shortcut={collapsible ? { command: "editSnooze", taskId: task.id, field: "snooze" } : undefined}
       status={state}
       onSave={onSave}
     />
@@ -322,6 +344,7 @@ function StartField({ task, timeZone }: { task: Task; timeZone: string }) {
       nowTime={nowTime}
       dateOnly
       collapsible
+      shortcut={{ command: "editStart", taskId: task.id, field: "start" }}
       status={state}
       onSave={(when) => void patch({ startDate: when?.date ?? null })}
     />

@@ -550,7 +550,7 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
   useCommand("newHeading", reorder ? () => {
     make({ listId: reorder.listId, parentId: null, kind: "heading", title: NEW_HEADING_TITLE, ...headingPlace(order, target) });
   } : undefined);
-  // e n, e l and e m with the panel closed: open the highlighted task's panel on that field. (With the panel open, its
+  // e n, e l, e m, e d, e s and e z with the panel closed: open the highlighted task's panel on that field. (With the panel open, its
   // fields take these first.)
   const editIn = (field: PendingField) => () => {
     if (!current || current.kind !== "task") return false;
@@ -586,6 +586,9 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
   useCommand("editNotes", editIn("notes"));
   useCommand("editLabels", editIn("labels"));
   useCommand("moveToList", editIn("list"));
+  useCommand("editDue", editIn("due"));
+  useCommand("editStart", editIn("start"));
+  useCommand("editSnooze", editIn("snooze"));
   useCommand("rename", () => {
     if (document.querySelector(".detail-title-input")) return false; // The panel's title takes it.
     const title = current?.kind === "task" && document.querySelector<HTMLElement>(`main [data-task-id="${CSS.escape(current.id)}"] .task-title`);

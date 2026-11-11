@@ -1,5 +1,5 @@
 export type CommandId =
-  | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "priorityHigh" | "priorityNormal" | "priorityLow" | "toggleLabel1" | "toggleLabel2" | "toggleLabel3" | "toggleLabel4" | "rename" | "editNotes" | "editLabels" | "moveToList" | "delete" | "toggleCompleted" | "toggleGrouping" | "undo" | "capture" | "search" | "help"
+  | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "priorityHigh" | "priorityNormal" | "priorityLow" | "toggleLabel1" | "toggleLabel2" | "toggleLabel3" | "toggleLabel4" | "rename" | "editNotes" | "editLabels" | "editDue" | "editStart" | "editSnooze" | "moveToList" | "delete" | "toggleCompleted" | "toggleGrouping" | "undo" | "capture" | "search" | "help"
   | "contextAll" | "contextWork" | "contextPersonal" | "contextHome"
   | "nextList" | "previousList" | "goList" | "goTaskList" | "goDashboard" | "goLabels" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
@@ -36,6 +36,9 @@ export const COMMANDS: Command[] = [
   { id: "rename", label: "Edit title", keys: ["e t"] },
   { id: "editNotes", label: "Edit notes in the task details", keys: ["e n"] },
   { id: "editLabels", label: "Add a label in the task details", keys: ["e l"] },
+  { id: "editDue", label: "Set the due date in the task details", keys: ["e d"] },
+  { id: "editStart", label: "Set the start date in the task details", keys: ["e s"] },
+  { id: "editSnooze", label: "Snooze in the task details", keys: ["e z"] },
   { id: "moveToList", label: "Move task to another list", keys: ["e m"] },
   { id: "delete", label: "Delete task", keys: ["Delete", "Backspace"] },
   { id: "toggleCompleted", label: "Show or hide completed tasks", keys: ["C"] },
