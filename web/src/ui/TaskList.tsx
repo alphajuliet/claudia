@@ -565,6 +565,24 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
     arriving = { path, id: target.id };
     navigate(selectedId ? `${path}?task=${target.id}` : path);
   });
+  // e 1 to e 4: toggle one of the built-in views' labels (the names the views show) on the highlighted task.
+  const toggleLabel = (label: string) => () => {
+    if (!current || current.kind !== "task") return false;
+    const had = current.labels.some((l) => l.toLowerCase() === label.toLowerCase());
+    const before = current.labels;
+    const labels = had ? before.filter((l) => l.toLowerCase() !== label.toLowerCase()) : [...before, label];
+    const fail = (e: Error) => toast.show({ message: e.message, error: true });
+    update.mutateAsync({ id: current.id, patch: { labels } }).then(() => {
+      toast.show({
+        message: had ? `Removed ${label}` : `Added ${label}`,
+        action: { label: "Undo", run: () => { update.mutateAsync({ id: current.id, patch: { labels: before } }).catch(fail); } },
+      });
+    }, fail);
+  };
+  useCommand("toggleLabel1", toggleLabel("next"));
+  useCommand("toggleLabel2", toggleLabel("wip"));
+  useCommand("toggleLabel3", toggleLabel("waitingOn"));
+  useCommand("toggleLabel4", toggleLabel("someday"));
   useCommand("editNotes", editIn("notes"));
   useCommand("editLabels", editIn("labels"));
   useCommand("moveToList", editIn("list"));

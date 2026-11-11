@@ -1,5 +1,5 @@
 export type CommandId =
-  | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "priorityHigh" | "priorityNormal" | "priorityLow" | "rename" | "editNotes" | "editLabels" | "moveToList" | "delete" | "toggleCompleted" | "toggleGrouping" | "undo" | "capture" | "search" | "help"
+  | "next" | "previous" | "newTask" | "newSubtask" | "newHeading" | "moveUp" | "moveDown" | "indent" | "outdent" | "moveListUp" | "moveListDown" | "collapse" | "expand" | "open" | "close" | "complete" | "priorityHigh" | "priorityNormal" | "priorityLow" | "toggleLabel1" | "toggleLabel2" | "toggleLabel3" | "toggleLabel4" | "rename" | "editNotes" | "editLabels" | "moveToList" | "delete" | "toggleCompleted" | "toggleGrouping" | "undo" | "capture" | "search" | "help"
   | "contextAll" | "contextWork" | "contextPersonal" | "contextHome"
   | "nextList" | "previousList" | "goList" | "goTaskList" | "goDashboard" | "goLabels" | "goInbox" | "goToday" | "goNext" | "goWip" | "goWaiting" | "goSomeday";
 
@@ -26,6 +26,10 @@ export const COMMANDS: Command[] = [
   { id: "open", label: "Open task details", keys: ["Enter", "o"] },
   { id: "close", label: "Close task details", keys: ["Escape"] },
   { id: "complete", label: "Complete task", keys: ["x"] },
+  { id: "toggleLabel1", label: "Toggle the next label", keys: ["e 1"] },
+  { id: "toggleLabel2", label: "Toggle the wip label", keys: ["e 2"] },
+  { id: "toggleLabel3", label: "Toggle the waitingOn label", keys: ["e 3"] },
+  { id: "toggleLabel4", label: "Toggle the someday label", keys: ["e 4"] },
   { id: "priorityHigh", label: "Set priority to High", keys: ["p h"] },
   { id: "priorityNormal", label: "Set priority to Normal", keys: ["p n"] },
   { id: "priorityLow", label: "Set priority to Low", keys: ["p l"] },
@@ -38,7 +42,7 @@ export const COMMANDS: Command[] = [
   { id: "toggleGrouping", label: "Group a view by list or by due date", keys: ["D"] },
   { id: "undo", label: "Undo the last change (complete, snooze or move)", keys: ["z"] },
   { id: "capture", label: "Add a task", keys: ["c"] },
-  { id: "search", label: "Search", keys: ["/"] },
+  { id: "search", label: "Search", keys: ["/", "Mod+f"] },
   { id: "contextAll", label: "Show all contexts", keys: ["1"] },
   { id: "contextWork", label: "Show Work", keys: ["2"] },
   { id: "contextPersonal", label: "Show Personal", keys: ["3"] },

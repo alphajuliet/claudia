@@ -80,6 +80,25 @@ describe("keyName", () => {
   });
 });
 
+describe("Ctrl and ⌘ bindings", () => {
+  it("names a press with one of them 'Mod'", () => {
+    expect(keyName({ altKey: false, metaKey: true, key: "f" })).toBe("Mod+f");
+    expect(keyName({ altKey: false, ctrlKey: true, shiftKey: true, key: "F" })).toBe("Mod+F");
+    expect(createMatcher(COMMANDS).match("Mod+f", 0)).toBe("search");
+  });
+
+  it("leaves other Ctrl and ⌘ keys to the browser, but keeps ⌘F even in a text field", () => {
+    const field = Object.assign(document.createElement("input"), { type: "text" });
+    const press = (mods: object) => ignoresKeys({ altKey: false, ctrlKey: false, metaKey: false, key: "f", target: field, ...mods });
+    expect(press({ metaKey: true })).toBe(false);
+    expect(press({ ctrlKey: true })).toBe(false);
+    expect(press({ metaKey: true, key: "c" })).toBe(true);
+    expect(press({ metaKey: true, shiftKey: true, key: "F" })).toBe(true);
+    expect(press({ metaKey: true, ctrlKey: true })).toBe(true);
+    expect(press({ metaKey: true, altKey: true })).toBe(true);
+  });
+});
+
 describe("ignoresKeys", () => {
   const press = (target: EventTarget | null, mods: Partial<{ ctrlKey: boolean; metaKey: boolean; altKey: boolean; key: string; code: string }> = {}) =>
     ignoresKeys({ ctrlKey: false, metaKey: false, altKey: false, key: "j", target, ...mods });

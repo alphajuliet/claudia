@@ -75,6 +75,10 @@ function Shell() {
   useCommand("previous", covered);
   useCommand("complete", covered);
   useCommand("rename", covered);
+  useCommand("toggleLabel1", covered);
+  useCommand("toggleLabel2", covered);
+  useCommand("toggleLabel3", covered);
+  useCommand("toggleLabel4", covered);
   useCommand("delete", covered);
   useCommand("toggleCompleted", covered);
   useCommand("capture", covered);
