@@ -130,7 +130,7 @@ describe("quick editing from the keyboard", () => {
     // The task's own list isn't offered.
     expect(within(picker).queryByRole("option", { name: /^Garden/ })).toBeNull();
     await userEvent.keyboard("err{Enter}");
-    expect(sentBodies(fetchMock, "POST", `/api/tasks/${tasks[0]!.id}/move`)).toEqual([{ listId: errands.id }]);
+    expect(sentBodies(fetchMock, "POST", `/api/tasks/${tasks[0]!.id}/move`)).toEqual([{ listId: errands.id, atStart: true }]);
     expect(screen.queryByRole("dialog", { name: "Move to a list" })).toBeNull();
     await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
   });

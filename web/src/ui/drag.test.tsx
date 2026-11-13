@@ -275,7 +275,7 @@ describe("dropping on a sidebar list", () => {
     });
   }
 
-  it("moves the task to the end of that list, with Undo", async () => {
+  it("moves the task to the top of that list, with Undo", async () => {
     const { tasks: [, b, c], fetchMock } = threeTasks();
     await main().findByText("Plant tomatoes");
     overLink("Errands");
@@ -285,7 +285,7 @@ describe("dropping on a sidebar list", () => {
     expect(document.querySelector<HTMLElement>(".drop-line")?.hidden).toBe(true);
     release(-100, 150);
     expectCleared();
-    await waitFor(() => expect(moves(fetchMock, b!)).toEqual([{ listId: errands.id, parentId: null }]));
+    await waitFor(() => expect(moves(fetchMock, b!)).toEqual([{ listId: errands.id, parentId: null, atStart: true }]));
     await waitFor(() => expect(titles()).toEqual(["Weed the beds", "Mulch the roses"]));
     const toast = await screen.findByRole("status");
     await waitFor(() => expect(toast.textContent).toContain("Moved “Plant tomatoes” to Errands"));

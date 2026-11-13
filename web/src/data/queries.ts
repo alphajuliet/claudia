@@ -342,6 +342,8 @@ export interface TaskMove {
   parentId?: string | null;
   afterId?: string;
   beforeId?: string;
+  /** With neither afterId nor beforeId: first among its new siblings rather than last. */
+  atStart?: boolean;
   /** For a heading: its section (the top-level tasks down to the next heading) moves straight after it. */
   withSection?: boolean;
 }
@@ -379,7 +381,7 @@ function movedInCache(queryClient: QueryClient, { id, ...to }: TaskMove): Map<st
 
   const siblings = tasks.filter((t) => t.listId === listId && t.parentId === parentId && !moving.has(t.id)).sort(byPosition);
   const anchor = to.afterId ?? to.beforeId;
-  const at = anchor ? siblings.findIndex((t) => t.id === anchor) : siblings.length;
+  const at = anchor ? siblings.findIndex((t) => t.id === anchor) : to.atStart ? 0 : siblings.length;
   if (at < 0) return null;
   const [low, high] = to.afterId ? [siblings[at], siblings[at + 1]] : [siblings[at - 1], siblings[at]];
   const position = generateKeyBetween(low?.position ?? null, high?.position ?? null);
@@ -398,7 +400,7 @@ const moveListKey = ["lists", "move"];
 /**
  * Moves a task (and its subtasks) to another list or parent, or reorders it; with `withSection`, a heading takes its
  * section along. Changing list without a parent puts it at the top level there, and omitting the placement puts it
- * last. It moves in every cached list at once (leaving lists for another list); on failure those tasks are put back.
+ * last (first with `atStart`). It moves in every cached list at once (leaving lists for another list); on failure those tasks are put back.
  * While a later move of the same task is running, an earlier one's answer leaves it where it is shown.
  */
 export function useMoveTask() {

@@ -385,7 +385,7 @@ function useStepMove(sections: ShownSection[], current: Task | undefined, order:
 
 /**
  * Moves a dragged task to where it was dropped. A drop where it already was sends nothing. Dropped on another list,
- * it goes to the end there at the top level (a heading with its section), and the toast's Undo puts it back.
+ * it goes to the top there, at the top level (a heading with its section), and the toast's Undo puts it back.
  */
 function useDropMove(listId: string | undefined) {
   const move = useMoveTask();
@@ -398,7 +398,7 @@ function useDropMove(listId: string | undefined) {
       const section = task.kind === "heading" ? { withSection: true as const } : {};
       const back = { ...placeOf(items, task), listId, ...section };
       const name = lists?.find((l) => l.id === target.listId)?.name ?? "another list";
-      move.mutateAsync({ id: task.id, listId: target.listId, parentId: null, ...section }).catch(fail);
+      move.mutateAsync({ id: task.id, listId: target.listId, parentId: null, atStart: true, ...section }).catch(fail);
       toast.show({ message: `Moved “${plainText(task.title)}” to ${name}`, undo: () => { move.mutateAsync({ id: task.id, ...back }).catch(fail); } });
       return;
     }

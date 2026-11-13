@@ -317,7 +317,7 @@ export function ListField({ task }: { task: Task }) {
     const mine = ++latestMove.current;
     setMoving(listId);
     // Only the latest move settling shows the task's list again, so an earlier one doesn't flash its list.
-    void save.run(move.mutateAsync({ id: task.id, listId })).finally(() => { if (mine === latestMove.current) setMoving(null); });
+    void save.run(move.mutateAsync({ id: task.id, listId, atStart: true })).finally(() => { if (mine === latestMove.current) setMoving(null); });
   };
   return (
     <>

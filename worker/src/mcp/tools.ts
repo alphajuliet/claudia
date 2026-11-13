@@ -150,13 +150,14 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: "move_task",
     description:
-      "Move a task to another list (listId), under another task (parentId, or null for top level), or to a position among its siblings (afterId or beforeId). Tasks nested under it move with it. With withSection, a heading takes the tasks under it along, in order; it can't be placed inside its own section.",
+      "Move a task to another list (listId), under another task (parentId, or null for top level), or to a position among its siblings (afterId or beforeId, or atStart for first). Without a position it goes last; the app puts a task moved to another list first, so send atStart: true for that unless asked otherwise. Tasks nested under it move with it. With withSection, a heading takes the tasks under it along, in order; it can't be placed inside its own section.",
     access: "write",
     input: withPlacement({
       id: id("task"),
       listId: IdSchema.optional(),
       parentId: IdSchema.nullable().optional(),
       withSection: z.boolean().optional().describe("For a heading: move the tasks under it (down to the next heading) with it"),
+      atStart: z.boolean().optional().describe("Place first among its new siblings (ignored with afterId or beforeId)"),
     }),
     request: (a) => ({ method: "POST", path: `/api/tasks/${a.id}/move`, body: noId(a) }),
   }),

@@ -240,6 +240,10 @@ export const TaskMoveSchema = z
     listId: IdSchema.optional(),
     parentId: IdSchema.nullable().optional(),
     ...placementShape,
+    atStart: z
+      .boolean()
+      .optional()
+      .openapi({ description: "Put the task first among its new siblings rather than last (ignored with afterId or beforeId)" }),
     withSection: z
       .boolean()
       .optional()

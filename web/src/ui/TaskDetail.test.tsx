@@ -408,7 +408,7 @@ describe("the detail panel", () => {
     expect([...select.querySelectorAll("optgroup")].map((g) => g.label)).toEqual(["Acme", "Life"]);
     expect([...select.options].map((o) => o.text)).toEqual(["Inbox", "Errands", "Projects", "Garden"]);
     await userEvent.selectOptions(select, errands.id);
-    expect(sentBodies(fetchMock, "POST", `/api/tasks/${weed.id}/move`)).toEqual([{ listId: errands.id }]);
+    expect(sentBodies(fetchMock, "POST", `/api/tasks/${weed.id}/move`)).toEqual([{ listId: errands.id, atStart: true }]);
     // It has left the list on screen.
     await waitFor(() => expect(main().queryByText("Weed the beds")).toBeNull());
     expect(await p.findByText("Saved")).toBeTruthy();

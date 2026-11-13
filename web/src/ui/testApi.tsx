@@ -250,13 +250,13 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   return fetchMock;
 }
 
-interface MoveBody { listId?: string; parentId?: string | null; afterId?: string; beforeId?: string; withSection?: boolean }
+interface MoveBody { listId?: string; parentId?: string | null; afterId?: string; beforeId?: string; atStart?: boolean; withSection?: boolean }
 
 const byPosition = (a: Task, b: Task) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0);
 
 /**
  * POST /api/tasks/{id}/move, as `worker/src/routes/tasks.ts` does it: the task goes after `afterId`, before
- * `beforeId` or last among its new siblings. Changing list without a parent puts it at the top level there, and
+ * `beforeId`, first with `atStart`, or last among its new siblings. Changing list without a parent puts it at the top level there, and
  * its subtasks follow it. With `withSection` a heading's section (the top-level tasks down to the next heading)
  * lands straight after it, in order. Null when the placement isn't a sibling (or is inside the section).
  */
@@ -275,7 +275,7 @@ function moveIn(store: Map<string, Task>, t: Task, body: MoveBody): Task | null 
   const moving = new Set([t.id, ...section.map((x) => x.id)]);
   const siblings = all.filter((x) => x.listId === listId && x.parentId === parentId && !moving.has(x.id)).sort(byPosition);
   const anchor = body.afterId ?? body.beforeId;
-  const at = anchor ? siblings.findIndex((x) => x.id === anchor) : siblings.length;
+  const at = anchor ? siblings.findIndex((x) => x.id === anchor) : body.atStart ? 0 : siblings.length;
   if (at < 0) return null;
   const [low, high] = body.afterId ? [siblings[at], siblings[at + 1]] : [siblings[at - 1], siblings[at]];
   const position = generateKeyBetween(low?.position ?? null, high?.position ?? null);

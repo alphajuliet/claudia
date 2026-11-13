@@ -312,6 +312,22 @@ describe("nesting and moving", () => {
     expect((await api("GET", `/api/tasks/${child.id}`)).body).toMatchObject({ listId: other.id, parentId: parent.id });
   });
 
+  it("moves to the end of another list, or to the top with atStart", async () => {
+    await task("First there", { listId: other.id });
+    await task("Last there", { listId: other.id });
+    const a = await task("A");
+    const b = await task("B");
+    const there = async () => titles((await api("GET", `/api/tasks?listId=${other.id}`)).body);
+    await api("POST", `/api/tasks/${a.id}/move`, { listId: other.id });
+    expect(await there()).toEqual(["First there", "Last there", "A"]);
+    const res = await api("POST", `/api/tasks/${b.id}/move`, { listId: other.id, atStart: true });
+    expect(res.status).toBe(200);
+    expect(await there()).toEqual(["B", "First there", "Last there", "A"]);
+    // A named place wins over atStart.
+    await api("POST", `/api/tasks/${b.id}/move`, { afterId: a.id, atStart: true });
+    expect(await there()).toEqual(["First there", "Last there", "A", "B"]);
+  });
+
   it("moves a child to the top level of another list", async () => {
     const parent = await task("Parent");
     const child = await task("Child", { parentId: parent.id });
@@ -364,6 +380,12 @@ describe("moving a heading with its section", () => {
     const ids = [h1.id, a.id, done.id, b.id, sub.id];
     const moved = await db.select().from(events).where(and(eq(events.type, "moved"), inArray(events.entityId, ids)));
     expect(moved.map((e) => e.entityId).sort()).toEqual([...ids].sort());
+  });
+
+  it("moves to the top of another list with atStart", async () => {
+    await task("x", { listId: other.id });
+    expect((await move(h1.id, { withSection: true, listId: other.id, atStart: true })).status).toBe(200);
+    expect(await order(other.id)).toEqual(["H1", "a", "done", "b", "x"]);
   });
 
   it("refuses a placement inside its own section", async () => {
