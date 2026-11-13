@@ -155,7 +155,10 @@ export function TitleField({ task, startHere = false }: { task: Task; startHere?
   );
 }
 
-/** Notes: a textarea that grows with its text and saves on leaving it. Empty notes are cleared. */
+/**
+ * Notes: a textarea that grows with its text and saves on leaving it. Empty notes are cleared. ⌘Enter (Ctrl+Enter)
+ * leaves it too, for the panel itself, which stays open with the keys working again.
+ */
 export function NotesField({ task }: { task: Task }) {
   const { state, patch } = usePatch(task);
   const [draft, setDraft] = useState<string | null>(null);
@@ -234,6 +237,14 @@ export function NotesField({ task }: { task: Task }) {
           onChange={(e) => setDraft(e.target.value)}
           onFocus={() => setEditing(true)}
           onBlur={onBlur}
+          onKeyDown={(e) => {
+            if (e.key !== "Enter" || !(e.metaKey || e.ctrlKey) || e.nativeEvent.isComposing) return;
+            e.preventDefault();
+            // Leaving the field saves it; the panel (or sheet) takes focus, so Enter there goes on to the title.
+            const panel = e.currentTarget.closest<HTMLElement>(".detail");
+            if (panel) panel.focus({ preventScroll: true });
+            else e.currentTarget.blur();
+          }}
         />
       )}
       <FieldStatus state={state} />

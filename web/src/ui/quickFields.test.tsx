@@ -73,6 +73,26 @@ describe("quick editing from the keyboard", () => {
     await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${tasks[0]!.id}`)).toEqual([{ notes: "hello el" }]));
   });
 
+  it("saves notes and leaves the field with ⌘Enter or Ctrl+Enter, keeping the panel open", async () => {
+    const { fetchMock, tasks } = await openFirst();
+    await userEvent.keyboard("{Enter}");
+    await titleBox();
+    await userEvent.keyboard("en");
+    const notes = screen.getByRole("textbox", { name: "Notes" });
+    await userEvent.keyboard("Roses{Enter}first");
+    expect(notes).toHaveProperty("value", "Roses\nfirst");
+    await userEvent.keyboard("{Meta>}{Enter}{/Meta}");
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${tasks[0]!.id}`)).toEqual([{ notes: "Roses\nfirst" }]));
+    expect(document.activeElement).toBe(panel());
+    // Shown formatted again, and the keys are back: e n edits once more.
+    expect(screen.queryByRole("textbox", { name: "Notes" })).toBeNull();
+    await userEvent.keyboard("en");
+    expect(document.activeElement).toBe(screen.getByRole("textbox", { name: "Notes" }));
+    await userEvent.keyboard("!{Control>}{Enter}{/Control}");
+    await waitFor(() => expect(sentBodies(fetchMock, "PATCH", `/api/tasks/${tasks[0]!.id}`).at(-1)).toEqual({ notes: "Roses\nfirst!" }));
+    expect(document.activeElement).toBe(panel());
+  });
+
   it("turns formatted notes into the editor with e n", async () => {
     await openFirst("Start with the **roses**");
     await userEvent.keyboard("{Enter}");
