@@ -21,6 +21,8 @@ The design, decisions and plan are in the Obsidian note **Claudia: own task stor
 
 Read it before starting any feature. It links to the broader context in `2026/202610142030 task-management-reboot.md` (principles, labels, review cadence, why Godspeed fell short). If the code and the note disagree, ask which one is right, then update the other. Record new design decisions in the note as dated `#Decision` lines, not only in commit messages.
 
+For how the code is put together (request flow, data model, auth, MCP, the web app's layers), see `docs/architecture.md`. Keep it current when the structure changes.
+
 ## Project tracking
 
 Work is tracked on the Workflowy **Claudia** board (`🔅 My projects › Productivity › Claudia`, node `c5cebc351211`, https://workflowy.com/#/c5cebc351211), not in this repo.
