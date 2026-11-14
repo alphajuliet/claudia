@@ -8,7 +8,8 @@ import {
   IdParam,
 } from "@claudia/shared";
 import { folders, lists } from "../db/schema";
-import type { Db } from "../lib/db";
+import { cascadeContext } from "../domain/folders";
+import { runBatch, type Db } from "../lib/db";
 import { ApiError, notFound } from "../lib/errors";
 import { eventQuery } from "../lib/events";
 import { newId, now } from "../lib/ids";
@@ -81,13 +82,16 @@ export const folderRoutes = newRouter()
       const input = c.req.valid("json");
       const db = c.var.db;
       const parentId = input.parentId ?? null;
-      if (parentId) await getFolder(db, parentId);
+      // A subfolder takes its parent's context; a top-level folder needs one.
+      const parent = parentId ? await getFolder(db, parentId) : null;
+      const context = parent?.context ?? input.context;
+      if (!context) throw new ApiError(422, "context_required", "A top-level folder needs a context: work, personal or home");
       const at = now();
       const row: Row = {
         id: newId(),
         name: input.name,
         parentId,
-        context: input.context,
+        context,
         position: await positionFor(db, folders, and(live, sameParent(parentId))),
         createdAt: at,
         updatedAt: at,
@@ -117,6 +121,7 @@ export const folderRoutes = newRouter()
       path: "/api/folders/{id}",
       tags: tag,
       summary: "Rename a folder or change its context",
+      description: "A new context applies to the folders under it too.",
       request: { params: IdParam, body: jsonBody(FolderUpdateSchema) },
       responses: { 200: jsonResponse(FolderSchema, "Updated"), ...commonErrors, ...notFoundError },
     }),
@@ -125,10 +130,14 @@ export const folderRoutes = newRouter()
       const { name, context } = c.req.valid("json");
       const db = c.var.db;
       const before = await getFolder(db, id);
+      if (context && before.parentId && context !== (await getFolder(db, before.parentId)).context) {
+        throw new ApiError(422, "context_inherited", "A subfolder takes its parent's context: change the top-level folder's instead");
+      }
       const after: Row = { ...before, name: name ?? before.name, context: context ?? before.context, updatedAt: now() };
-      await db.batch([
+      await runBatch(db, [
         db.update(folders).set({ name: after.name, context: after.context, updatedAt: after.updatedAt }).where(eq(folders.id, id)),
         eventQuery(db, { entityType: "folder", entityId: id, type: "updated", before: toFolder(before), after: toFolder(after), actor: c.var.actor }),
+        ...(after.context !== before.context ? await cascadeContext(db, c.var.actor, id, after.context, after.updatedAt) : []),
       ]);
       return c.json(toFolder(after), 200);
     },
@@ -139,6 +148,7 @@ export const folderRoutes = newRouter()
       path: "/api/folders/{id}/move",
       tags: tag,
       summary: "Move a folder under another parent and/or reorder it",
+      description: "Moved under another folder, it and the folders under it take that folder's context.",
       request: { params: IdParam, body: jsonBody(FolderMoveSchema) },
       responses: { 200: jsonResponse(FolderSchema, "Moved"), ...commonErrors, ...notFoundError },
     }),
@@ -148,17 +158,19 @@ export const folderRoutes = newRouter()
       const db = c.var.db;
       const before = await getFolder(db, id);
       const parentId = input.parentId === undefined ? before.parentId : input.parentId;
-      if (parentId) await getFolder(db, parentId);
+      const parent = parentId ? await getFolder(db, parentId) : null;
       await assertNoCycle(db, id, parentId);
       const after: Row = {
         ...before,
         parentId,
+        context: parent?.context ?? before.context,
         position: await positionFor(db, folders, and(live, sameParent(parentId)), input),
         updatedAt: now(),
       };
-      await db.batch([
-        db.update(folders).set({ parentId, position: after.position, updatedAt: after.updatedAt }).where(eq(folders.id, id)),
+      await runBatch(db, [
+        db.update(folders).set({ parentId, context: after.context, position: after.position, updatedAt: after.updatedAt }).where(eq(folders.id, id)),
         eventQuery(db, { entityType: "folder", entityId: id, type: "moved", before: toFolder(before), after: toFolder(after), actor: c.var.actor }),
+        ...(after.context !== before.context ? await cascadeContext(db, c.var.actor, id, after.context, after.updatedAt) : []),
       ]);
       return c.json(toFolder(after), 200);
     }),

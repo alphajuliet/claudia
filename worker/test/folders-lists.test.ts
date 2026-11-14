@@ -53,6 +53,40 @@ describe("folders", () => {
     expect(res.status).toBe(422);
   });
 
+  describe("context follows the parent", () => {
+    const ctx = async (id: string) => (await api("GET", `/api/folders/${id}`)).body.context;
+
+    it("gives a subfolder its parent's context, and needs one at the top level", async () => {
+      const home = await folder("Home", { context: "home" });
+      expect((await api("POST", "/api/folders", { name: "Sub", parentId: home.id, context: "work" })).body.context).toBe("home");
+      expect((await api("POST", "/api/folders", { name: "Sub 2", parentId: home.id })).body.context).toBe("home");
+      expect(await api("POST", "/api/folders", { name: "Loose" })).toMatchObject({ status: 422, body: { error: { code: "context_required" } } });
+    });
+
+    it("moves a folder and everything under it into the new parent's context, logging each", async () => {
+      const work = await folder("Work");
+      const projects = await folder("Projects", { parentId: work.id });
+      const deep = await folder("Deep", { parentId: projects.id });
+      const home = await folder("Home", { context: "home" });
+      expect((await api("POST", `/api/folders/${projects.id}/move`, { parentId: home.id })).body).toMatchObject({ parentId: home.id, context: "home" });
+      expect(await ctx(deep.id)).toBe("home");
+      const logged = await db.select().from(events).where(eq(events.entityId, deep.id));
+      expect(logged.at(-1)).toMatchObject({ type: "updated", before: { context: "work" }, after: { context: "home" } });
+      // To the top level it keeps the context it has.
+      await api("POST", `/api/folders/${projects.id}/move`, { parentId: null });
+      expect(await ctx(projects.id)).toBe("home");
+    });
+
+    it("changes the folders under a top-level folder with it, and refuses a subfolder's own change", async () => {
+      const work = await folder("Work");
+      const sub = await folder("Sub", { parentId: work.id });
+      await api("PATCH", `/api/folders/${work.id}`, { context: "personal" });
+      expect(await ctx(sub.id)).toBe("personal");
+      expect(await api("PATCH", `/api/folders/${sub.id}`, { context: "home" })).toMatchObject({ status: 422, body: { error: { code: "context_inherited" } } });
+      expect((await api("PATCH", `/api/folders/${sub.id}`, { name: "Renamed", context: "personal" })).status).toBe(200);
+    });
+  });
+
   it("deletes softly, only when empty", async () => {
     const f = await folder("F");
     await list("L", { folderId: f.id });

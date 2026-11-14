@@ -61,11 +61,16 @@ export const FolderSchema = z
 export const FolderCreateSchema = z
   .object({
     name: z.string().min(1),
-    context: z.enum(CONTEXTS),
+    context: z.enum(CONTEXTS).optional().openapi({ description: "Needed for a top-level folder; a subfolder takes its parent's" }),
     parentId: IdSchema.nullable().optional(),
   })
   .openapi("FolderCreate");
-export const FolderUpdateSchema = FolderCreateSchema.partial().openapi("FolderUpdate");
+export const FolderUpdateSchema = z
+  .object({
+    name: z.string().min(1).optional(),
+    context: z.enum(CONTEXTS).optional().openapi({ description: "Applies to the folders under it too" }),
+  })
+  .openapi("FolderUpdate");
 export const FolderMoveSchema = z
   .object({ parentId: IdSchema.nullable().optional(), ...placementShape })
   .refine(notBoth, NOT_BOTH)
