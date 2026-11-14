@@ -1,8 +1,9 @@
 import { useRef } from "react";
+import type { FolderDrop, FolderMove } from "../lib/folderMove";
 import type { ListDrop, ListMove } from "../lib/listMove";
 import { usePressDrag } from "./usePressDrag";
 
-interface Dragged { id: string; name: string }
+interface Dragged { kind: "list" | "folder"; id: string; name: string }
 
 interface Row {
   el: Element;
@@ -15,6 +16,7 @@ interface Row {
 }
 
 interface Active {
+  kind: "list" | "folder";
   id: string;
   /** Where the drag began, how deep the list is and the folder it's in. */
   x: number;
@@ -23,7 +25,7 @@ interface Active {
   container: HTMLElement;
   line: HTMLElement;
   rows: Row[];
-  move: ListMove | null;
+  move: ListMove | FolderMove | null;
   marked: HTMLElement | null;
 }
 
@@ -48,8 +50,8 @@ function measure(container: HTMLElement): Row[] {
   });
 }
 
-interface Spot {
-  drop: ListDrop;
+interface Spot<D = ListDrop> {
+  drop: D;
   /** The height of the line, or null for none, and how deep it sits. */
   lineY: number | null;
   depth: number;
@@ -99,17 +101,44 @@ function dropAt(d: Active, x: number, y: number): Spot | null {
 }
 
 /**
- * Dragging the sidebar's lists: spread the returned `onPointerDown` and `ref` on the element that scrolls them. The
- * gesture is `usePressDrag`'s. A line shows where a list lands, indented to its level, and a folder's name lights up
- * when it goes in that folder rather than beside a list. `plan` turns a drop into a move (null where it wouldn't change
- * anything, which shows nothing), and `onMove` is called with it on release.
+ * The drop at (x, y) for a dragged folder, among the rows outside it. A folder's name takes it in its middle half
+ * (last among its subfolders); its top quarter puts it before that folder and its bottom quarter after (or, for an
+ * open folder with something showing in it, first inside). A list stands for its folder, first among the subfolders
+ * that follow its lists, and the Lists heading for the top level; below the last row is the end of the top level.
  */
-export function useListDrag({ plan, onMove }: {
+function folderDropAt(d: Active, y: number): Spot<FolderDrop> | null {
+  const rows = d.rows.filter((r) => !r.chain.includes(d.id));
+  if (rows.length === 0 || y < rows[0]!.rect.top) return null;
+  const r = rows.findIndex((row) => y < row.rect.bottom);
+  if (r < 0) return { drop: { kind: "into", folderId: null }, lineY: rows.at(-1)!.rect.bottom, depth: 0, lit: null };
+  const row = rows[r]!;
+  if (row.listId || row.folderId === null) {
+    const folderId = row.listId ? row.chain[0] ?? null : null;
+    return { drop: { kind: "into", folderId, atStart: true }, lineY: null, depth: 0, lit: rowOf(rows, folderId)?.el ?? null };
+  }
+  const folderId = row.folderId;
+  const depth = row.chain.length - 2;
+  const q = (y - row.rect.top) / row.rect.height;
+  if (q < 0.25) return { drop: { kind: "before", folderId }, lineY: row.rect.top, depth, lit: null };
+  if (q <= 0.75) return { drop: { kind: "into", folderId }, lineY: null, depth: 0, lit: row.el };
+  if (rows[r + 1]?.chain.includes(folderId)) return { drop: { kind: "into", folderId, atStart: true }, lineY: null, depth: 0, lit: row.el };
+  return { drop: { kind: "after", folderId }, lineY: row.rect.bottom, depth, lit: null };
+}
+
+/**
+ * Dragging the sidebar's lists and folders: spread the returned `onPointerDown` and `ref` on the element that scrolls them. The
+ * gesture is `usePressDrag`'s. A line shows where a list lands, indented to its level, and a folder's name lights up
+ * when it goes in that folder rather than beside a list. `plan` and `planFolder` turn a drop into a move (null where it
+ * wouldn't change anything, which shows nothing), and `onMove` or `onMoveFolder` is called with it on release.
+ */
+export function useListDrag({ plan, onMove, planFolder, onMoveFolder }: {
   plan: (id: string, drop: ListDrop) => ListMove | null;
   onMove: (id: string, move: ListMove) => void;
+  planFolder: (id: string, drop: FolderDrop) => FolderMove | null;
+  onMoveFolder: (id: string, move: FolderMove) => void;
 }) {
-  const latest = useRef({ plan, onMove });
-  latest.current = { plan, onMove };
+  const latest = useRef({ plan, onMove, planFolder, onMoveFolder });
+  latest.current = { plan, onMove, planFolder, onMoveFolder };
   const active = useRef<Active | null>(null);
 
   const mark = (d: Active, el: HTMLElement | null) => {
@@ -120,32 +149,48 @@ export function useListDrag({ plan, onMove }: {
 
   return usePressDrag<Dragged>({
     pick: (target) => {
-      if (target.closest("input")) return null;
-      const source = target.closest("[data-list-row]");
-      const id = source?.getAttribute("data-list-row");
-      if (!source || !id) return null;
-      return { source, item: { id, name: source.querySelector(".nav-name")?.textContent ?? "" } };
+      // A field (renaming, naming a new one) or a menu button keeps its press.
+      if (target.closest("input, button")) return null;
+      const list = target.closest("[data-list-row]");
+      const listId = list?.getAttribute("data-list-row");
+      if (list && listId) return { source: list, item: { kind: "list", id: listId, name: list.querySelector(".nav-name")?.textContent ?? "" } };
+      // A folder's name (the Lists heading has an empty id and stays put).
+      const folder = target.closest("[data-folder-row]");
+      const folderId = folder?.getAttribute("data-folder-row");
+      if (folder && folderId) return { source: folder, item: { kind: "folder", id: folderId, name: folder.querySelector(".folder-name")?.textContent ?? "" } };
+      return null;
     },
     label: ({ name }) => name,
     scroller: (container) => container,
-    start: ({ id }, container, x) => {
+    start: ({ kind, id }, container, x) => {
       const line = document.createElement("div");
       line.className = "drop-line";
       line.hidden = true;
       container.append(line);
       const rows = measure(container);
-      const row = rows.find((r) => r.listId === id);
-      if (row) (row.el as HTMLElement).dataset.dragging = "";
+      const row = rows.find((r) => (kind === "list" ? r.listId === id : r.listId === null && r.folderId === id));
+      // A folder fades with everything in it.
+      const faded = kind === "folder" ? row?.el.closest("li") : row?.el;
+      if (faded) (faded as HTMLElement).dataset.dragging = "";
       const chain = row?.chain ?? [null];
-      active.current = { id, x, depth: chain.length - 1, home: chain[0] ?? null, container, line, rows, move: null, marked: null };
+      active.current = { kind, id, x, depth: chain.length - 1, home: chain[0] ?? null, container, line, rows, move: null, marked: null };
     },
     move: (x, y) => {
       const d = active.current;
       if (!d) return;
       const box = d.container.getBoundingClientRect();
       // Outside the sidebar, a drop does nothing.
-      const at = x < box.left || x > box.right ? null : dropAt(d, x, y);
-      d.move = at && latest.current.plan(d.id, at.drop);
+      const outside = x < box.left || x > box.right;
+      let at: Spot<ListDrop | FolderDrop> | null;
+      if (d.kind === "list") {
+        const spot = outside ? null : dropAt(d, x, y);
+        d.move = spot && latest.current.plan(d.id, spot.drop);
+        at = spot;
+      } else {
+        const spot = outside ? null : folderDropAt(d, y);
+        d.move = spot && latest.current.planFolder(d.id, spot.drop);
+        at = spot;
+      }
       const shown = d.move ? at : null;
       mark(d, (shown?.lit ?? null) as HTMLElement | null);
       if (shown?.lineY == null) {
@@ -160,9 +205,10 @@ export function useListDrag({ plan, onMove }: {
       const d = active.current;
       if (d) d.rows = measure(d.container);
     },
-    settle: ({ id }) => {
+    settle: ({ kind, id }) => {
       const move = active.current?.move;
-      return move ? () => latest.current.onMove(id, move) : null;
+      if (!move) return null;
+      return kind === "list" ? () => latest.current.onMove(id, move as ListMove) : () => latest.current.onMoveFolder(id, move as FolderMove);
     },
     clear: () => {
       const d = active.current;

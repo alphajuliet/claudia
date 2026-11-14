@@ -290,6 +290,78 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
 }
 .folder[open] > summary::before { transform: rotate(45deg); }
 .folder > summary:hover { background: var(--row-hover); color: var(--fg); }
+/* The ⋯ menu on a list, a folder and the Lists heading: shown on hover or focus with a mouse, always on touch. */
+.nav-row { position: relative; display: flex; align-items: center; }
+.nav-row > .nav-link { flex: 1; min-width: 0; }
+.nav-heading-row { display: flex; align-items: center; justify-content: space-between; padding-right: 0.15rem; }
+.nav-heading-row .nav-heading { margin-bottom: 0; }
+button.row-menu-button {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  fill: currentColor;
+  opacity: 0;
+}
+.nav-row > button.row-menu-button { position: absolute; right: 0.2rem; }
+/* Over the count, which it hides while it shows. */
+.nav-row:hover > .row-menu-button, .nav-row:focus-within > .row-menu-button,
+.folder > summary:hover > .row-menu-button, .folder > summary:focus-within > .row-menu-button,
+.nav-heading-row:hover > .row-menu-button, .nav-heading-row:focus-within > .row-menu-button,
+button.row-menu-button[data-open] { opacity: 1; }
+.nav-row:hover .nav-count, .nav-row:focus-within .nav-count, .nav-row:has(> [data-open]) .nav-count { visibility: hidden; }
+.nav-row > button.row-menu-button:hover, .nav-row > button.row-menu-button[data-open] { background: var(--bg-sidebar); }
+button.row-menu-button:hover, button.row-menu-button[data-open] { color: var(--fg); filter: none; background: var(--row-hover); }
+.folder > summary .folder-name { flex: 1; }
+@media (pointer: coarse) {
+  button.row-menu-button { opacity: 1; width: 2rem; height: 2rem; }
+  /* On touch the button stays, so the count moves left of it. */
+  .nav-row > .nav-link { padding-right: 2.2rem; }
+  .nav-row:hover .nav-count, .nav-row:focus-within .nav-count { visibility: visible; }
+}
+.row-menu {
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  min-width: 11rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+}
+.row-menu [role="menuitem"] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0.35rem 0.6rem;
+  border: 0;
+  border-radius: calc(var(--radius) - 2px);
+  background: transparent;
+  color: var(--fg);
+  font-weight: 450;
+  text-align: left;
+}
+.row-menu [role="menuitem"]:hover, .row-menu [role="menuitem"]:focus { background: var(--row-hover); outline: none; filter: none; }
+.row-menu [role="menuitem"].danger { color: var(--danger); }
+.row-menu [role="menuitem"][aria-disabled="true"] { color: var(--muted); cursor: default; }
+.row-menu-note { font-size: 0.78rem; color: var(--muted); font-weight: 400; }
+@media (pointer: coarse) {
+  .row-menu [role="menuitem"] { min-height: var(--touch); justify-content: center; }
+}
+.nav-new { padding: 0.1rem 0; }
+.nav-new input.nav-rename { width: 100%; }
+/* A folder's name drags as a list does (press and hold on touch). */
+.folder > summary[data-folder-row] { touch-action: pan-y pinch-zoom; -webkit-touch-callout: none; -webkit-user-select: none; }
+.folder > summary[data-drag-lift] { background: var(--bg-raised); box-shadow: var(--shadow); }
+
 /* A folder's contents sit inside it: indented past the folder's name (which starts after the caret, about 1.35rem
    in), with a faint guide line, so every level of nesting reads clearly. */
 .folder > .nav-list {

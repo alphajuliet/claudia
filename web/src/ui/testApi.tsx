@@ -7,6 +7,7 @@ import { Router } from "wouter";
 import { memoryLocation } from "wouter/memory-location";
 import { VIEWS, type Filter, type Folder, type Label, type LabelColour, type List, type Task, type ViewId } from "@claudia/shared";
 import { todayIn } from "../lib/dates";
+import { folderPosition, type FolderMove } from "../lib/folderMove";
 import { listPosition, type ListMove } from "../lib/listMove";
 import { SessionProvider } from "../session/SessionProvider";
 import { tokenStore } from "../session/store";
@@ -29,6 +30,7 @@ export const projects = list("01JA0000000000000000000002", "Projects", work.id);
 export const garden = list("01JA0000000000000000000003", "Garden", personal.id);
 
 let seq = 0;
+let made = 0;
 /**
  * A task with a fresh ULID (`01JB…` plus a counter in valid Crockford digits), placed after the ones made before it
  * (a valid fractional index, so moves can place others around it).
@@ -114,9 +116,46 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     if (renamed && init?.method === "PATCH") {
       if (opts.failRename) return fail("Boom");
       const items = bodies[`/api/${renamed[1]}`] as { id: string; name: string }[];
-      const { name } = JSON.parse(String(init.body)) as { name: string };
-      bodies[`/api/${renamed[1]}`] = items.map((x) => (x.id === renamed[2] ? { ...x, name } : x));
+      const { name, archived } = JSON.parse(String(init.body)) as { name?: string; archived?: boolean };
+      const change = { ...(name !== undefined ? { name } : {}), ...(archived !== undefined ? { archivedAt: archived ? at : null } : {}) };
+      bodies[`/api/${renamed[1]}`] = items.map((x) => (x.id === renamed[2] ? { ...x, ...change } : x));
       return json((bodies[`/api/${renamed[1]}`] as { id: string }[]).find((x) => x.id === renamed[2]));
+    }
+    // Lists and folders: POST makes one last among its siblings (a subfolder in its parent's context), and DELETE
+    // refuses one that isn't empty, as the server does.
+    if ((path === "/api/lists" || path === "/api/folders") && init?.method === "POST") {
+      const items = bodies[path] as (List | Folder)[];
+      const body = JSON.parse(String(init.body)) as { name: string; folderId?: string | null; parentId?: string | null; context?: Folder["context"] };
+      const id = `01JF${String(++made).padStart(22, "0")}`;
+      const last = (scope: (x: List | Folder) => boolean) => items.filter(scope).map((x) => x.position).sort().at(-1) ?? null;
+      const item = path === "/api/lists"
+        ? { ...list(id, body.name, body.folderId ?? null), inbox: false, position: generateKeyBetween(last((x) => (x as List).folderId === (body.folderId ?? null)), null) }
+        : {
+            id, name: body.name, parentId: body.parentId ?? null, createdAt: at, updatedAt: at,
+            context: (items as Folder[]).find((f) => f.id === body.parentId)?.context ?? body.context!,
+            position: generateKeyBetween(last((x) => (x as Folder).parentId === (body.parentId ?? null)), null),
+          };
+      bodies[path] = [...items, item];
+      return json(item, 201);
+    }
+    if (renamed && init?.method === "DELETE") {
+      const [, kind, id] = renamed;
+      const busy = kind === "lists"
+        ? [...store.values()].some((t) => t.listId === id)
+        : (bodies["/api/lists"] as List[]).some((l) => l.folderId === id) || (bodies["/api/folders"] as Folder[]).some((f) => f.parentId === id);
+      if (busy) return json({ error: { code: "not_empty", message: kind === "lists" ? "Move or delete the list's tasks first" : "Move or delete the folder's contents first" } }, 409);
+      bodies[`/api/${kind}`] = (bodies[`/api/${kind}`] as { id: string }[]).filter((x) => x.id !== id);
+      return new Response(null, { status: 204 });
+    }
+    const movedFolder = path.match(/^\/api\/folders\/(\w+)\/move$/);
+    if (movedFolder && init?.method === "POST") {
+      if (!(await pass("POST", path, init.body))) return fail("Boom");
+      const all = bodies["/api/folders"] as Folder[];
+      const to = JSON.parse(String(init.body)) as FolderMove;
+      const position = folderPosition(all, movedFolder[1]!, to)!;
+      const context = all.find((f) => f.id === to.parentId)?.context;
+      bodies["/api/folders"] = all.map((f) => (f.id === movedFolder[1] ? { ...f, parentId: to.parentId, position, ...(context ? { context } : {}) } : f));
+      return json((bodies["/api/folders"] as Folder[]).find((f) => f.id === movedFolder[1]));
     }
     // Labels: POST creates (a taken name is a 409), PATCH renames or recolours (a rename reaches the tasks) and DELETE
     // takes it off every task.

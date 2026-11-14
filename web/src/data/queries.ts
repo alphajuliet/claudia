@@ -1,7 +1,8 @@
-import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, ViewSummarySchema, type ContextFilter, type Label, type LabelColour, type List, type Task, type ViewId } from "@claudia/shared";
+import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, ViewSummarySchema, type ContextFilter, type CONTEXTS, type Folder, type Label, type LabelColour, type List, type Task, type ViewId } from "@claudia/shared";
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
+import { folderPosition, type FolderMove } from "../lib/folderMove";
 import { listPosition, type ListMove } from "../lib/listMove";
 import { useSession } from "../session/SessionProvider";
 
@@ -15,6 +16,7 @@ export async function json<T>(res: Response, schema: { parse(data: unknown): T }
   return schema.parse(body);
 }
 
+type Context = (typeof CONTEXTS)[number];
 const TasksSchema = TaskSchema.array();
 const NoContent = { parse: () => undefined };
 const SettingsSchema = { parse: (data: unknown) => (data ?? {}) as Record<string, unknown> };
@@ -396,6 +398,7 @@ function movedInCache(queryClient: QueryClient, { id, ...to }: TaskMove): Map<st
 
 const moveKey = taskWriteKey("move");
 const moveListKey = ["lists", "move"];
+const moveFolderKey = ["folders", "move"];
 
 /**
  * Moves a task (and its subtasks) to another list or parent, or reorders it; with `withSection`, a heading takes its
@@ -529,6 +532,108 @@ export function useRename(kind: "lists" | "folders") {
       if (context?.before) queryClient.setQueryData([kind], context.before);
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: [kind] }),
+  });
+}
+
+/** Creates a list, last in its folder (or among the unfiled lists). The lists are refetched; the promise gives the list. */
+export function useCreateList() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { name: string; folderId: string | null }) => json(await api("/api/lists", send("POST", input)), ListSchema),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["lists"] }),
+  });
+}
+
+/** Creates a folder, last among its siblings. A subfolder takes its parent's context; a top-level one needs `context`. */
+export function useCreateFolder() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { name: string; parentId: string | null; context?: Context }) => json(await api("/api/folders", send("POST", input)), FolderSchema),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["folders"] }),
+  });
+}
+
+/**
+ * Archives or unarchives a list, taking it out of (or back into) the sidebar at once; on failure it comes back and the
+ * promise rejects. Lists, counts and task lists are refetched, since views leave out archived lists.
+ */
+export function useArchiveList() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, archived }: { id: string; archived: boolean }) => json(await api(`/api/lists/${id}`, send("PATCH", { archived })), ListSchema),
+    onMutate: async ({ id, archived }) => {
+      await queryClient.cancelQueries({ queryKey: ["lists"] });
+      const before = queryClient.getQueryData<List[]>(["lists"]);
+      const at = new Date().toISOString();
+      queryClient.setQueryData<List[]>(["lists"], (all) => all?.map((l) => (l.id === id ? { ...l, archivedAt: archived ? at : null } : l)));
+      return { before };
+    },
+    onError: (_e, _vars, context) => {
+      if (context?.before) queryClient.setQueryData(["lists"], context.before);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ["lists"] });
+      void queryClient.invalidateQueries({ queryKey: ["counts"] });
+      void queryClient.invalidateQueries(tasksKey);
+    },
+  });
+}
+
+/**
+ * Deletes an empty list or folder (the server refuses one with tasks, lists or folders in it, and the promise rejects
+ * with its message). It leaves the sidebar at once and comes back on failure.
+ */
+export function useDeleteContainer(kind: "lists" | "folders") {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => json(await api(`/api/${kind}/${id}`, { method: "DELETE" }), NoContent),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: [kind] });
+      const before = queryClient.getQueryData<{ id: string }[]>([kind]);
+      queryClient.setQueryData<{ id: string }[]>([kind], (all) => all?.filter((x) => x.id !== id));
+      return { before };
+    },
+    onError: (_e, _id, context) => {
+      if (context?.before) queryClient.setQueryData([kind], context.before);
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: [kind] }),
+  });
+}
+
+/**
+ * Moves a folder (under another, or among its siblings), in the cache at once; on failure it goes back and the promise
+ * rejects. Moving under another folder changes its context, so folders, counts and task lists are refetched after.
+ */
+export function useMoveFolder() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: moveFolderKey,
+    scope: { id: "folder-move" },
+    mutationFn: async ({ id, ...to }: FolderMove & { id: string }) => json(await api(`/api/folders/${id}/move`, send("POST", to)), FolderSchema),
+    onMutate: async ({ id, ...to }) => {
+      await queryClient.cancelQueries({ queryKey: ["folders"] });
+      const before = queryClient.getQueryData<Folder[]>(["folders"]);
+      const position = before ? folderPosition(before, id, to) : null;
+      const parent = before?.find((f) => f.id === to.parentId);
+      if (position) {
+        queryClient.setQueryData<Folder[]>(["folders"], before?.map((f) => (f.id === id ? { ...f, parentId: to.parentId, position, context: parent?.context ?? f.context } : f)));
+      }
+      return { before };
+    },
+    onError: (_e, _vars, context) => {
+      if (context?.before) queryClient.setQueryData(["folders"], context.before);
+    },
+    onSettled: () => {
+      if (queryClient.isMutating({ mutationKey: moveFolderKey }) > 1) return;
+      void queryClient.invalidateQueries({ queryKey: ["folders"] });
+      void queryClient.invalidateQueries({ queryKey: ["counts"] });
+      void queryClient.invalidateQueries(tasksKey);
+    },
   });
 }
 

@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import type { Counts, List } from "@claudia/shared";
-import { useCounts, useFilters, useFolders, useLists, useMoveList, useViews } from "../data/queries";
+import type { CONTEXTS, Counts, Folder, List } from "@claudia/shared";
+import { useArchiveList, useCounts, useCreateFolder, useCreateList, useDeleteContainer, useFilters, useFolders, useLists, useMoveFolder, useMoveList, useViews } from "../data/queries";
+import { folderMoveForDrop, type FolderMove } from "../lib/folderMove";
 import { moveForDrop, moveForStep, type ListMove } from "../lib/listMove";
 import { listOrder, sidebarTree, type FolderNode } from "../lib/sidebar";
 import { findInbox, VIEWS } from "../lib/views";
@@ -15,6 +16,60 @@ import { canShake, useShakeSetting } from "./shakeToUndo";
 import { THEME_CHOICES, useTheme } from "./theme";
 import { useToast } from "./Toast";
 import { useListDrag } from "./useListDrag";
+import { RowMenu, type MenuItem } from "./RowMenu";
+
+type Context = (typeof CONTEXTS)[number];
+
+/** A list or folder being named, before it's made: where it goes, and for a top-level folder its context. */
+interface Creating { kind: "list" | "folder"; parentId: string | null; context?: Context }
+
+/** What the rows' menus do, given by the Sidebar. */
+interface SidebarActions {
+  creating: Creating | null;
+  create: (what: Creating) => void;
+  finishCreate: (name: string | null) => void;
+  archiveList: (list: List) => void;
+  deleteList: (list: List) => void;
+  deleteFolder: (folder: Folder) => void;
+}
+const ActionsContext = createContext<SidebarActions | null>(null);
+const useActions = () => useContext(ActionsContext)!;
+
+const CONTEXT_NAMES: Record<Context, string> = { work: "Work", personal: "Personal", home: "Home" };
+
+/** The field that names a new list or folder: Enter (or leaving it with a name) makes it, Escape cancels. */
+function NewItemField({ kind }: { kind: "list" | "folder" }) {
+  const { finishCreate } = useActions();
+  const done = useRef(false);
+  const finish = (name: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    finishCreate(name?.trim() || null);
+  };
+  return (
+    <li className="nav-new">
+      <input
+        autoFocus
+        className="nav-rename"
+        aria-label={kind === "list" ? "New list name" : "New folder name"}
+        placeholder={kind === "list" ? "List name" : "Folder name"}
+        onKeyDown={(e) => {
+          if (e.nativeEvent.isComposing) return;
+          if (e.key === "Enter") finish(e.currentTarget.value);
+          else if (e.key === "Escape") {
+            e.stopPropagation();
+            finish(null);
+          }
+        }}
+        onBlur={(e) => finish(e.currentTarget.value)}
+      />
+    </li>
+  );
+}
+
+/** Whether the field for a new `kind` in `parentId` is showing. */
+const isCreating = (creating: Creating | null, kind: "list" | "folder", parentId: string | null) =>
+  creating?.kind === kind && creating.parentId === parentId;
 
 /** A sidebar link, with its count of open tasks when there are any. */
 function NavLink({ href, children, count, onNavigate, onDoubleClick, dropList }: {
@@ -45,15 +100,24 @@ function NavLink({ href, children, count, onNavigate, onDoubleClick, dropList }:
   );
 }
 
-/** A list's link, renamed in place on double-click. */
+/** A list's link, renamed in place on double-click, with a menu: Rename, Archive and Delete. */
 function ListLink({ list, counts, onNavigate }: { list: List; counts: Counts | undefined; onNavigate: () => void }) {
   const rename = useRenameReported("lists");
+  const { archiveList, deleteList } = useActions();
+  const open = listCount(counts, list.id) ?? 0;
   return (
     <InlineRename name={list.name} label="List name" className="nav-rename" onRename={(name) => rename(list.id, name)}>
       {(start) => (
-        <NavLink href={`/list/${list.id}`} count={listCount(counts, list.id)} onNavigate={onNavigate} onDoubleClick={start} dropList={list.id}>
-          {list.name}
-        </NavLink>
+        <div className="nav-row">
+          <NavLink href={`/list/${list.id}`} count={listCount(counts, list.id)} onNavigate={onNavigate} onDoubleClick={start} dropList={list.id}>
+            {list.name}
+          </NavLink>
+          <RowMenu label={`${list.name} list menu`} items={[
+            { label: "Rename", onSelect: start },
+            { label: "Archive", onSelect: () => archiveList(list) },
+            { label: "Delete", danger: true, onSelect: () => deleteList(list), disabledNote: open > 0 ? "Move or delete its tasks first" : undefined },
+          ]} />
+        </div>
       )}
     </InlineRename>
   );
@@ -62,17 +126,32 @@ function ListLink({ list, counts, onNavigate }: { list: List; counts: Counts | u
 /** Open tasks in a list, from the counts. */
 const listCount = (counts: Counts | undefined, id: string) => counts?.lists[id]?.open;
 
+/**
+ * A folder: its name (renamed on double-click, dragged like a list) with a menu of New list, New folder, Rename and
+ * Delete (only when empty), then its lists and subfolders.
+ */
 function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Counts | undefined; onNavigate: () => void }) {
   const rename = useRenameReported("folders");
+  const { creating, create, deleteFolder } = useActions();
+  const { folder } = node;
+  const empty = node.lists.length === 0 && node.folders.length === 0;
   return (
     <li>
-      <details open className="folder">
-        <summary data-folder-row={node.folder.id}>
-          <InlineRename name={node.folder.name} label="Folder name" className="nav-rename" onRename={(name) => rename(node.folder.id, name)}>
+      <details open className="folder" data-folder={folder.id}>
+        <summary data-folder-row={folder.id}>
+          <InlineRename name={folder.name} label="Folder name" className="nav-rename" onRename={(name) => rename(folder.id, name)}>
             {(start) => (
-              <span className="folder-name" title="Double-click to rename" onDoubleClick={(e) => { e.preventDefault(); start(); }}>
-                {node.folder.name}
-              </span>
+              <>
+                <span className="folder-name" title="Double-click to rename" onDoubleClick={(e) => { e.preventDefault(); start(); }}>
+                  {folder.name}
+                </span>
+                <RowMenu label={`${folder.name} folder menu`} items={[
+                  { label: "New list", onSelect: () => create({ kind: "list", parentId: folder.id }) },
+                  { label: "New folder", onSelect: () => create({ kind: "folder", parentId: folder.id }) },
+                  { label: "Rename", onSelect: start },
+                  { label: "Delete", danger: true, onSelect: () => deleteFolder(folder), disabledNote: empty ? undefined : "Move or delete its lists and folders first" },
+                ]} />
+              </>
             )}
           </InlineRename>
         </summary>
@@ -80,11 +159,22 @@ function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Co
           {node.lists.map((l) => (
             <li key={l.id} data-list-row={l.id}><ListLink list={l} counts={counts} onNavigate={onNavigate} /></li>
           ))}
+          {isCreating(creating, "list", folder.id) && <NewItemField kind="list" />}
           {node.folders.map((f) => <FolderItem key={f.folder.id} node={f} counts={counts} onNavigate={onNavigate} />)}
+          {isCreating(creating, "folder", folder.id) && <NewItemField kind="folder" />}
         </ul>
       </details>
     </li>
   );
+}
+
+/** The Lists heading's menu: a list outside any folder, or a top-level folder in the context shown (or a chosen one under All). */
+function ListsHeadingMenu({ context }: { context: "all" | Context }) {
+  const { create } = useActions();
+  const folderItems: MenuItem[] = context === "all"
+    ? (["work", "personal", "home"] as const).map((c) => ({ label: `New ${CONTEXT_NAMES[c]} folder`, onSelect: () => create({ kind: "folder", parentId: null, context: c }) }))
+    : [{ label: "New folder", onSelect: () => create({ kind: "folder", parentId: null, context }) }];
+  return <RowMenu label="Lists menu" items={[{ label: "New list", onSelect: () => create({ kind: "list", parentId: null }) }, ...folderItems]} />;
 }
 
 /** The keys for a context (1 to 4, in the order of the buttons). */
@@ -144,9 +234,65 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   const move = (id: string, to: ListMove) => {
     moveList.mutateAsync({ id, ...to }).catch((e: Error) => toast.show({ message: e.message, error: true }));
   };
-  const drag = useListDrag({ plan: (id, drop) => moveForDrop(tree, id, drop), onMove: move });
+  const moveFolder = useMoveFolder();
+  const onMoveFolder = (id: string, to: FolderMove) => {
+    moveFolder.mutateAsync({ id, ...to }).catch((e: Error) => toast.show({ message: e.message, error: true }));
+  };
+  const drag = useListDrag({
+    plan: (id, drop) => moveForDrop(tree, id, drop),
+    onMove: move,
+    planFolder: (id, drop) => folderMoveForDrop(folders, id, drop),
+    onMoveFolder,
+  });
   // The open list moves with Alt+Shift+↑ and Alt+Shift+↓.
   const [location, navigate] = useLocation();
+
+  // Making, archiving and deleting lists and folders from the rows' menus.
+  const [creating, setCreating] = useState<Creating | null>(null);
+  const createList = useCreateList();
+  const createFolder = useCreateFolder();
+  const archive = useArchiveList();
+  const removeList = useDeleteContainer("lists");
+  const removeFolder = useDeleteContainer("folders");
+  const fail = (e: Error) => toast.show({ message: e.message, error: true });
+  const actions: SidebarActions = {
+    creating,
+    create: (what) => {
+      // The field shows inside the folder, so open it if it was closed.
+      if (what.parentId) {
+        const details = ref.current?.querySelector<HTMLDetailsElement>(`details[data-folder="${CSS.escape(what.parentId)}"]`);
+        if (details) details.open = true;
+      }
+      setCreating(what);
+    },
+    finishCreate: (name) => {
+      const what = creating;
+      setCreating(null);
+      if (!what || !name) return;
+      if (what.kind === "list") {
+        createList.mutateAsync({ name, folderId: what.parentId }).then((made) => {
+          navigate(`/list/${made.id}`);
+          onNavigate();
+        }, fail);
+      } else {
+        createFolder.mutateAsync({ name, parentId: what.parentId, ...(what.context ? { context: what.context } : {}) }).catch(fail);
+      }
+    },
+    archiveList: (list) => {
+      archive.mutateAsync({ id: list.id, archived: true }).then(() => {
+        toast.show({ message: `Archived “${list.name}”`, undo: () => { archive.mutateAsync({ id: list.id, archived: false }).catch(fail); } });
+      }, fail);
+    },
+    deleteList: (list) => {
+      removeList.mutateAsync(list.id).then(() => {
+        if (location === `/list/${list.id}`) navigate("/");
+        toast.show({ message: `Deleted “${list.name}”` });
+      }, fail);
+    },
+    deleteFolder: (folder) => {
+      removeFolder.mutateAsync(folder.id).then(() => toast.show({ message: `Deleted “${folder.name}”` }), fail);
+    },
+  };
   const openList = location.match(/^\/list\/([^/]+)$/)?.[1];
   const step = (delta: 1 | -1) => () => {
     const to = openList && moveForStep(tree, openList, delta);
@@ -211,17 +357,22 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
           </section>
         )}
 
-        {(tree.lists.length > 0 || tree.folders.length > 0) && (
+        <ActionsContext.Provider value={actions}>
           <section aria-labelledby="sidebar-lists">
-            <h2 id="sidebar-lists" className="nav-heading" data-folder-row="">Lists</h2>
+            <div className="nav-heading-row" data-folder-row="">
+              <h2 id="sidebar-lists" className="nav-heading">Lists</h2>
+              <ListsHeadingMenu context={context} />
+            </div>
             <ul className="nav-list">
               {tree.lists.map((l) => (
                 <li key={l.id} data-list-row={l.id}><ListLink list={l} counts={counts} onNavigate={onNavigate} /></li>
               ))}
+              {isCreating(creating, "list", null) && <NewItemField kind="list" />}
               {tree.folders.map((f) => <FolderItem key={f.folder.id} node={f} counts={counts} onNavigate={onNavigate} />)}
+              {isCreating(creating, "folder", null) && <NewItemField kind="folder" />}
             </ul>
           </section>
-        )}
+        </ActionsContext.Provider>
       </div>
 
       <footer className="sidebar-footer">

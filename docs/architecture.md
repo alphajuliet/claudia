@@ -107,7 +107,9 @@ Routes parse the request and call plain functions; the rules live in `worker/src
 - **`domain/tasks.ts`**: creating, reading, updating, moving, completing and deleting tasks, and the shared query conditions (`openTask`, `dueBy`, `activeBy`, `hasLabel`, `notSnoozed`). Each change writes its rows and its event in one batch.
 - **`domain/views.ts`**: the built-in views (Inbox, Today, Next, WIP, Waiting, Someday), defined once so the web app, MCP and the counts agree. A view is open, unsnoozed tasks in the chosen context's lists; Today is due or started by today in the user's time zone, and the others are a label.
 
-Some resources (folders, lists, labels, filters) still keep their logic in the route files. They are simpler and have less shared logic.
+- **`domain/folders.ts`**: a subfolder's context follows its parent's. Creating, moving or changing the context of a folder sets it on every folder under it too, because the sidebar shows a subfolder only in its own context.
+
+The other resources (lists, labels, filters, and the rest of folders) still keep their logic in the route files. They are simpler and have less shared logic.
 
 ### Data model
 
@@ -184,6 +186,8 @@ One responsive layout covers three devices:
 - **Desktop**: a sidebar (folders, lists, views, filters, narrowed by the All/Work/Personal/Home context), the task list, and the task panel beside it.
 - **iPad**: the same panes. The sidebar becomes a drawer below 900px, and from 700px wide the panel sits beside the list at 340px.
 - **Phone**: the list full-screen, with the task as a sheet. Rows swipe right to complete and left for Date and Snooze. Touch screens get a compact layout with 36px rows on a phone and 40px on an iPad.
+
+Lists and folders are managed from the sidebar. Each list, folder and the Lists heading has a ⋯ menu (`ui/RowMenu.tsx`), shown on hover with a mouse and always on touch. New lists and folders are named in place, and empty ones can be deleted. Lists and folders drag to a new place with the same gesture as tasks (`ui/useListDrag.ts`, with the rules in `lib/listMove.ts` and `lib/folderMove.ts`).
 
 ### Data layer
 
