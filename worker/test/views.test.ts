@@ -1,6 +1,8 @@
+import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it } from "vitest";
+import { folders } from "../src/db/schema";
 import { addDays, todayIn } from "../src/lib/recurrence";
-import { client, makeToken, reset } from "./helpers";
+import { client, db, makeToken, reset } from "./helpers";
 
 let api: ReturnType<typeof client>;
 const today = todayIn("Australia/Sydney");
@@ -16,8 +18,10 @@ beforeEach(async () => {
   await api("PUT", "/api/settings/timeZone", { value: "Australia/Sydney" });
   const work = (await api("POST", "/api/folders", { name: "Acme", context: "work" })).body;
   const home = (await api("POST", "/api/folders", { name: "House", context: "home" })).body;
-  // A personal folder inside a work one: hidden in Work, and in Personal too (its parent isn't shown).
-  const odd = (await api("POST", "/api/folders", { name: "Odd", context: "personal", parentId: work.id })).body;
+  // A personal folder inside a work one: hidden in Work, and in Personal too (its parent isn't shown). The API now
+  // gives a subfolder its parent's context, so this is older data, written straight to the table.
+  const odd = (await api("POST", "/api/folders", { name: "Odd", parentId: work.id })).body;
+  await db.update(folders).set({ context: "personal" }).where(eq(folders.id, odd.id));
   inbox = (await api("POST", "/api/lists", { name: "📥 Capture", inbox: true })).body;
   loose = (await api("POST", "/api/lists", { name: "Errands" })).body;
   job = (await api("POST", "/api/lists", { name: "Projects", folderId: work.id })).body;
