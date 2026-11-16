@@ -1,5 +1,6 @@
 import { extendZodWithOpenApi } from "@asteasolutions/zod-to-openapi";
 import { z } from "zod";
+import { parseGroup, parseSort, SEARCH_GROUPS, SEARCH_SORTS } from "./search";
 
 extendZodWithOpenApi(z);
 
@@ -304,6 +305,35 @@ export const TaskQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(500).default(100),
   offset: z.coerce.number().int().min(0).default(0),
 });
+
+// Search: the query language is described in docs/plans/2026-11-16-search-language-design.md.
+const SortParam = z.string().refine((s) => parseSort(s) !== null, "sort is a key (list, priority, due, start, created, updated, title), optionally with -desc");
+const GroupParam = z.string().refine((s) => parseGroup(s) !== null, "group is list, due, none, label, or label:a,b");
+export const SearchQuerySchema = z.object({
+  q: z.string().default("").openapi({
+    description:
+      "The search: words match title or notes; fields such as #next, label:, list:, folder:, context:, priority:, due:<=today, start:, is:available, has:due; AND, OR, NOT, -term and parentheses. sort: and group: at the top level set the sort and grouping",
+    example: "folder:Work (#wip OR due:<=today) sort:due",
+  }),
+  context: ContextFilterSchema.openapi({ description: "Narrow to the lists of one context, unless the query names context: or folder:" }),
+  status: z.enum(["open", "completed", "all"]).optional().openapi({
+    description: "Overrides which tasks by completion. Without it: open ones, unless the query mentions is:completed, is:open or completed:",
+  }),
+  sort: SortParam.optional().openapi({ description: "Overrides sort: in the query, e.g. due-desc" }),
+  group: GroupParam.optional().openapi({ description: "Overrides group: in the query, e.g. label:wip,next" }),
+  limit: z.coerce.number().int().min(1).max(500).default(500),
+  offset: z.coerce.number().int().min(0).default(0),
+});
+export const SearchSortSchema = z.object({ by: z.enum(SEARCH_SORTS), desc: z.boolean() }).openapi("SearchSort");
+export const SearchGroupSchema = z.object({ by: z.enum(SEARCH_GROUPS), labels: z.array(z.string()).optional() }).openapi("SearchGroup");
+export const SearchResultSchema = z
+  .object({
+    tasks: z.array(TaskSchema),
+    sort: SearchSortSchema.openapi({ description: "The sort in effect" }),
+    group: SearchGroupSchema.openapi({ description: "The grouping in effect (applied by the client: tasks come as one sorted list)" }),
+  })
+  .openapi("SearchResult");
+export type SearchResult = z.infer<typeof SearchResultSchema>;
 
 export type Task = z.infer<typeof TaskSchema>;
 export type TaskCompletion = z.infer<typeof TaskCompletionSchema>;

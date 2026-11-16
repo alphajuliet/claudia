@@ -224,9 +224,9 @@ export const notSnoozed = (at: string) => or(isNull(tasks.snoozedUntil), lte(tas
 /** What views and counts call open: an open, unsnoozed task (not a heading), subtasks included. */
 export const openTask = (at: string) => and(live, isNull(tasks.completedAt), eq(tasks.kind, "task"), notSnoozed(at));
 
-/** Live tasks matching `where`, in list order, with their labels. */
-export async function fetchTasks(db: Db, where: SQL | undefined, page: { limit: number; offset: number }) {
-  const rows = await db.select().from(tasks).where(and(live, where)).orderBy(asc(tasks.listId), asc(tasks.position)).limit(page.limit).offset(page.offset);
+/** Live tasks matching `where`, in list order (or `order`), with their labels. */
+export async function fetchTasks(db: Db, where: SQL | undefined, page: { limit: number; offset: number }, order: SQL[] = [asc(tasks.listId), asc(tasks.position)]) {
+  const rows = await db.select().from(tasks).where(and(live, where)).orderBy(...order).limit(page.limit).offset(page.offset);
   return present(db, rows);
 }
 
