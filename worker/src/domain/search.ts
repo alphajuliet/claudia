@@ -101,7 +101,7 @@ type DateField = keyof typeof DATE_FIELDS;
 
 const FIELDS = ["label", "list", "folder", "context", "priority", "is", "has", ...Object.keys(DATE_FIELDS), "sort", "group"];
 const IS_VALUES = ["open", "completed", "snoozed", "available", "recurring", "heading", "subtask"] as const;
-const HAS_VALUES = ["due", "start", "notes", "labels", "parent"] as const;
+const HAS_VALUES = ["due", "start", "notes", "labels", "status", "parent"] as const;
 const PRIORITY_RANK = { low: 0, normal: 1, high: 2 } as const;
 
 /** The live folders and lists, for matching names. */
@@ -199,6 +199,8 @@ function hasCondition(tag: TagToken): SQL {
     case "start": return isNotNull(tasks.startDate);
     case "notes": return sql`coalesce(${tasks.notes}, '') <> ''`;
     case "labels": return sql`EXISTS (SELECT 1 FROM ${taskLabels} tl WHERE tl.task_id = ${tasks.id})`;
+    case "status":
+      return sql`EXISTS (SELECT 1 FROM ${taskLabels} tl JOIN ${labels} l ON l.id = tl.label_id WHERE tl.task_id = ${tasks.id} AND l.status_position IS NOT NULL AND l.deleted_at IS NULL)`;
     case "parent": return isNotNull(tasks.parentId);
     default: throw invalid(`has: is one of ${HAS_VALUES.join(", ")}, not "${value}"`, columnOf(tag));
   }
@@ -330,7 +332,7 @@ export function parseSearch(q: string): ParsedSearch {
         if (!sort) throw invalid(`sort: is list, priority, due, start, created, updated or title, optionally with -desc (due-desc), not "${value}"`, columnOf(node));
       } else {
         group = parseGroup(value);
-        if (!group) throw invalid(`group: is list, due, label, none, or "label:wip,next", not "${value}"`, columnOf(node));
+        if (!group) throw invalid(`group: is list, due, label, status, none, or "label:wip,next", not "${value}"`, columnOf(node));
       }
       cuts.push([node.location.start, node.location.end]);
       return null;

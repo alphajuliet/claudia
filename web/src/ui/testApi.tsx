@@ -70,8 +70,8 @@ export interface StubOptions {
   gate?: (method: string, path: string, body: unknown) => Promise<void> | undefined;
   filters?: Filter[];
   lists?: List[];
-  /** Labels served by GET /api/labels: names, or names with a colour. */
-  labels?: (string | { name: string; color: LabelColour | null })[];
+  /** Labels served by GET /api/labels: names, or names with a colour and whether it's a status label (in the order given). */
+  labels?: (string | { name: string; color?: LabelColour | null; status?: boolean })[];
   failLabel?: boolean;
 }
 
@@ -90,9 +90,10 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     "/api/lists": opts.lists ?? [inbox, errands, projects, garden],
     "/api/filters": opts.filters ?? [],
     "/api/settings": {},
-    "/api/labels": (opts.labels ?? []).map((l, i) => ({
-      id: `01JD${String(i).padStart(22, "0")}`, ...(typeof l === "string" ? { name: l, color: null } : l), createdAt: at,
-    })),
+    "/api/labels": (opts.labels ?? []).map((l, i) => {
+      const { status = false, ...rest } = typeof l === "string" ? { name: l, color: null } : l;
+      return { id: `01JD${String(i).padStart(22, "0")}`, color: null, ...rest, status, statusPosition: status ? `a${i}` : null, createdAt: at };
+    }),
   };
   const descendants = (id: string): Task[] =>
     [...store.values()].filter((t) => t.parentId === id).flatMap((t) => [t, ...descendants(t.id)]);
@@ -214,9 +215,20 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
       const body = JSON.parse(String(init.body)) as { name: string; color?: LabelColour | null };
       if (items.some((l) => l.name.toLowerCase() === body.name.toLowerCase()))
         return json({ error: { code: "name_taken", message: `A label named '${body.name}' already exists` } }, 409);
-      const made: Label = { id: `01JE${String(items.length).padStart(22, "0")}`, name: body.name, color: body.color ?? null, createdAt: at };
+      const made: Label = { id: `01JE${String(items.length).padStart(22, "0")}`, name: body.name, color: body.color ?? null, status: false, statusPosition: null, createdAt: at };
       bodies["/api/labels"] = [...items, made];
       return json(made, 201);
+    }
+    const movedLabel = path.match(/^\/api\/labels\/(\w+)\/move$/);
+    if (movedLabel && init?.method === "POST") {
+      const items = bodies["/api/labels"] as Label[];
+      const { beforeId, afterId } = JSON.parse(String(init.body)) as { beforeId?: string; afterId?: string };
+      const others = items.filter((l) => l.status && l.id !== movedLabel[1]).sort((a, b) => (a.statusPosition! < b.statusPosition! ? -1 : 1));
+      const at = others.findIndex((l) => l.id === (afterId ?? beforeId));
+      const [low, high] = afterId ? [others[at], others[at + 1]] : [others[at - 1], others[at]];
+      const statusPosition = generateKeyBetween(low?.statusPosition ?? null, high?.statusPosition ?? null);
+      bodies["/api/labels"] = items.map((l) => (l.id === movedLabel[1] ? { ...l, statusPosition } : l));
+      return json((bodies["/api/labels"] as Label[]).find((l) => l.id === movedLabel[1]));
     }
     const label = path.match(/^\/api\/labels\/(\w+)$/);
     if (label && (init?.method === "PATCH" || init?.method === "DELETE")) {
@@ -230,8 +242,13 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
         for (const t of store.values()) if (has(t)) store.set(t.id, { ...t, labels: t.labels.filter((n) => n.toLowerCase() !== before.name.toLowerCase()) });
         return new Response(null, { status: 204 });
       }
-      const change = JSON.parse(String(init.body)) as { name?: string; color?: LabelColour | null };
-      const after = { ...before, ...change };
+      const { status, ...change } = JSON.parse(String(init.body)) as { name?: string; color?: LabelColour | null; status?: boolean };
+      const lastStatus = items.map((l) => l.statusPosition).filter((p): p is string => p !== null).sort().at(-1) ?? null;
+      const after: Label = {
+        ...before,
+        ...change,
+        ...(status === undefined ? {} : { status, statusPosition: status ? (before.statusPosition ?? generateKeyBetween(lastStatus, null)) : null }),
+      };
       bodies["/api/labels"] = items.map((l) => (l === before ? after : l));
       if (change.name !== undefined)
         for (const t of store.values()) if (has(t)) store.set(t.id, { ...t, labels: t.labels.map((n) => (n.toLowerCase() === before.name.toLowerCase() ? after.name : n)) });

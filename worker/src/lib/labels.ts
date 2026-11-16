@@ -1,5 +1,5 @@
 import type { BatchItem } from "drizzle-orm/batch";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { labels } from "../db/schema";
 import type { Db } from "./db";
 import { eventQuery } from "./events";
@@ -54,4 +54,26 @@ export async function resolveLabelIds(
     }
   }
   return { ids, names: canonical.sort((a, b) => a.localeCompare(b)), pending };
+}
+
+/**
+ * Label names with at most one status label among them. Given several, the one the task didn't have already wins (the
+ * last given, if more than one is new), so adding a status replaces the old one; the rest are dropped.
+ */
+export async function oneStatus(db: Db, names: string[], before: string[] = []): Promise<string[]> {
+  const lower = [...new Set(names.map((n) => n.toLowerCase()))];
+  if (lower.length < 2) return names;
+  const status = new Set<string>();
+  for (const part of chunk(lower)) {
+    const rows = await db
+      .select({ name: labels.name })
+      .from(labels)
+      .where(and(inArray(sql`lower(${labels.name})`, part), isNotNull(labels.statusPosition), isNull(labels.deletedAt)));
+    for (const r of rows) status.add(r.name.toLowerCase());
+  }
+  const given = names.filter((n) => status.has(n.toLowerCase()));
+  if (new Set(given.map((n) => n.toLowerCase())).size < 2) return names;
+  const had = new Set(before.map((n) => n.toLowerCase()));
+  const keep = (given.filter((n) => !had.has(n.toLowerCase())).at(-1) ?? given.at(-1)!).toLowerCase();
+  return names.filter((n) => !status.has(n.toLowerCase()) || n.toLowerCase() === keep);
 }

@@ -159,13 +159,22 @@ export type Me = z.infer<typeof MeSchema>;
 export const LabelNameSchema = z.string().trim().min(1).max(64);
 export const LabelColourSchema = z.enum(LABEL_COLOURS).nullable().openapi({ description: "A palette colour, or null for the default grey" });
 export const LabelSchema = z
-  .object({ id: IdSchema, name: z.string(), color: LabelColourSchema, createdAt: Timestamp })
+  .object({
+    id: IdSchema,
+    name: z.string(),
+    color: LabelColourSchema,
+    status: z.boolean().openapi({ description: "A status label (next, wip, waitingOn, ...): a task has one at most" }),
+    statusPosition: z.string().nullable().openapi({ description: "Its place among the status labels (sort by it); null when not one" }),
+    createdAt: Timestamp,
+  })
   .openapi("Label");
-export const LabelCreateSchema = z.object({ name: LabelNameSchema, color: LabelColourSchema.optional() }).openapi("LabelCreate");
+const makeStatus = z.boolean().optional().openapi({ description: "Make it a status label (last among them) or an ordinary one" });
+export const LabelCreateSchema = z.object({ name: LabelNameSchema, color: LabelColourSchema.optional(), status: makeStatus }).openapi("LabelCreate");
 export const LabelUpdateSchema = z
-  .object({ name: LabelNameSchema.optional(), color: LabelColourSchema.optional() })
-  .refine((b) => b.name !== undefined || b.color !== undefined, "Send a name or a color")
+  .object({ name: LabelNameSchema.optional(), color: LabelColourSchema.optional(), status: makeStatus })
+  .refine((b) => b.name !== undefined || b.color !== undefined || b.status !== undefined, "Send a name, color or status")
   .openapi("LabelUpdate");
+export const LabelMoveSchema = PlacementSchema.openapi("LabelMove");
 
 // Tasks. `kind: "heading"` rows are section headings within a list.
 export const TaskSchema = z
@@ -206,7 +215,9 @@ export const taskFieldShapes = {
   recurRule: z.string().min(1).nullable(),
   recurFrom: z.enum(RECUR_FROM).nullable(),
   priority: z.enum(PRIORITIES).openapi({ description: "Normal unless set" }),
-  labels: z.array(LabelNameSchema).openapi({ description: "Replaces the task's labels; missing ones are created" }),
+  labels: z.array(LabelNameSchema).openapi({
+    description: "Replaces the task's labels; missing ones are created. A task has one status label (next, wip, waitingOn, ...) at most: given more, the one it didn't have already (the last of those) wins",
+  }),
   metadata: z.record(z.unknown()).nullable(),
 };
 
@@ -308,7 +319,7 @@ export const TaskQuerySchema = z.object({
 
 // Search: the query language is described in docs/plans/2026-11-16-search-language-design.md.
 const SortParam = z.string().refine((s) => parseSort(s) !== null, "sort is a key (list, priority, due, start, created, updated, title), optionally with -desc");
-const GroupParam = z.string().refine((s) => parseGroup(s) !== null, "group is list, due, none, label, or label:a,b");
+const GroupParam = z.string().refine((s) => parseGroup(s) !== null, "group is list, due, label, status, none, or label:a,b");
 export const SearchQuerySchema = z.object({
   q: z.string().default("").openapi({
     description:

@@ -8,8 +8,11 @@ export const SEARCH_SORTS = ["list", "priority", "due", "start", "created", "upd
 export type SearchSortKey = (typeof SEARCH_SORTS)[number];
 export interface SearchSort { by: SearchSortKey; desc: boolean }
 
-/** `list` is the default. `due` uses the views' buckets (Overdue, Today, …). */
-export const SEARCH_GROUPS = ["list", "due", "label", "none"] as const;
+/**
+ * `list` is the default. `due` uses the views' buckets (Overdue, Today, …). `status` groups by status label, in the
+ * status labels' order, with No status last.
+ */
+export const SEARCH_GROUPS = ["list", "due", "label", "status", "none"] as const;
 export type SearchGroupKey = (typeof SEARCH_GROUPS)[number];
 /** For `label`, `labels` puts those groups first, in that order. */
 export interface SearchGroup { by: SearchGroupKey; labels?: string[] }
@@ -26,7 +29,7 @@ export function parseSort(text: string): SearchSort | null {
 
 export const formatSort = (s: SearchSort) => (s.desc ? `${s.by}-desc` : s.by);
 
-/** `list`, `due`, `none`, `label` or `label:a,b`; null if it isn't one. */
+/** `list`, `due`, `status`, `none`, `label` or `label:a,b`; null if it isn't one. */
 export function parseGroup(text: string): SearchGroup | null {
   const [head, rest, ...more] = text.trim().split(":");
   const by = head!.toLowerCase();

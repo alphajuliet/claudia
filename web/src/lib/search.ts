@@ -9,6 +9,8 @@ interface Context {
   listOrder: string[];
   today: string;
   timeZone: string;
+  /** The status labels' names, in order, for grouping by status. */
+  status?: string[];
 }
 
 const isDefault = (sort: SearchSort) => sort.by === "list" && !sort.desc;
@@ -50,7 +52,8 @@ const flat = (tasks: Task[]): Row[] => tasks.map((task) => ({ task, depth: 0 }))
 /**
  * Search results as sections. By list: in sidebar order, each in outline order by priority, or flat in the sort if
  * one is chosen. By due: the views' buckets. By label: each task once, under its first label in the given order (then
- * alphabetical), with "No label" last. None: one section.
+ * alphabetical), with "No label" last. By status: each status label in order (those with tasks), then "No status".
+ * None: one section.
  */
 export function searchSections(tasks: Task[], how: { sort: SearchSort; group: SearchGroup }, ctx: Context): SearchSection[] {
   const { sort, group } = how;
@@ -85,6 +88,20 @@ export function searchSections(tasks: Task[], how: { sort: SearchSort; group: Se
       return [
         ...names.map((n) => ({ key: `label:${n.toLowerCase()}`, title: n, rows: flat(buckets.get(n.toLowerCase())!.sort(order)) })),
         { key: "label:", title: "No label", rows: flat(none.sort(order)) },
+      ].filter((s) => s.rows.length > 0);
+    }
+    case "status": {
+      const names = ctx.status ?? [];
+      const buckets = new Map<string, Task[]>(names.map((n) => [n.toLowerCase(), []]));
+      const none: Task[] = [];
+      for (const t of tasks) {
+        const mine = new Set(t.labels.map((l) => l.toLowerCase()));
+        const first = names.find((n) => mine.has(n.toLowerCase()));
+        (first ? buckets.get(first.toLowerCase())! : none).push(t);
+      }
+      return [
+        ...names.map((n) => ({ key: `status:${n.toLowerCase()}`, title: n, rows: flat(buckets.get(n.toLowerCase())!.sort(order)) })),
+        { key: "status:", title: "No status", rows: flat(none.sort(order)) },
       ].filter((s) => s.rows.length > 0);
     }
     case "none":

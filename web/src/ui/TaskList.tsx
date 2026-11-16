@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import type { Task } from "@claudia/shared";
-import { type TaskCreate, useCreateTask, useDeleteTask, useLists, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
+import { type TaskCreate, useCreateTask, useDeleteTask, useLabels, useLists, useMoveTask, usePendingCompletions, useSetCompleted, useTask, useTimeZone, useUpdateTask } from "../data/queries";
 import { formatDue, todayIn } from "../lib/dates";
 import { wrapIndex } from "../lib/keymap";
 import { displayItems, indentMove, moveFor, outdentMove, placeOf, stepMove, withoutDragged, type Item, type MoveRequest } from "../lib/reorder";
+import { isStatus, statusLabels, statusOf, withStatus } from "../lib/status";
 import { collapseRows, dueDateOf, parentsIn, rowsUnder, type Row } from "../lib/tasks";
 import { setCollapsed, useCollapsed } from "./collapsed";
 import { BottomSheet } from "./BottomSheet";
@@ -565,16 +566,21 @@ export function TaskList({ query, sections, empty, reorder, split, rowNote }: {
     arriving = { path, id: target.id };
     navigate(selectedId ? `${path}?task=${target.id}` : path);
   });
-  // e 1 to e 4: toggle one of the built-in views' labels (the names the views show) on the highlighted task.
+  // e 1 to e 4: toggle one of the built-in views' labels (the names the views show) on the highlighted task. A status
+  // label replaces the task's status.
+  const status = statusLabels(useLabels().data ?? []);
   const toggleLabel = (label: string) => () => {
     if (!current || current.kind !== "task") return false;
     const had = current.labels.some((l) => l.toLowerCase() === label.toLowerCase());
     const before = current.labels;
-    const labels = had ? before.filter((l) => l.toLowerCase() !== label.toLowerCase()) : [...before, label];
+    const replaced = !had && isStatus(label, status) ? statusOf(current, status) : null;
+    const labels = had
+      ? before.filter((l) => l.toLowerCase() !== label.toLowerCase())
+      : isStatus(label, status) ? withStatus(before, label, status) : [...before, label];
     const fail = (e: Error) => toast.show({ message: e.message, error: true });
     update.mutateAsync({ id: current.id, patch: { labels } }).then(() => {
       toast.show({
-        message: had ? `Removed ${label}` : `Added ${label}`,
+        message: had ? `Removed ${label}` : replaced ? `Changed ${replaced} to ${label}` : `Added ${label}`,
         action: { label: "Undo", run: () => { update.mutateAsync({ id: current.id, patch: { labels: before } }).catch(fail); } },
       });
     }, fail);

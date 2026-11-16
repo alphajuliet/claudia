@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from "react";
 import type { Label, LabelColour } from "@claudia/shared";
 import { useCounts, useLabelChanges, useLabels } from "../data/queries";
 import { PALETTE } from "../lib/labelColours";
+import { statusLabels } from "../lib/status";
 import { InlineRename } from "./InlineRename";
 import { useCommand } from "./keyboard";
 import { LabelChip } from "./LabelChip";
@@ -15,22 +16,25 @@ export function openTasks(n: number) {
 }
 
 /**
- * Every label, alphabetically: add one, rename it (click its chip, or e t), pick its colour from the palette and
- * delete it (Delete or Backspace), which takes it off every task. Each row shows how many open tasks carry it.
- * j and k move between rows.
+ * Every label: the status labels first, in their order (a task has one at most; Search groups by them in this order),
+ * then the rest alphabetically. Add one, rename it (click its chip, or e t), make it a status label or not, move a
+ * status label up or down, pick its colour from the palette and delete it (Delete or Backspace), which takes it off
+ * every task. Each row shows how many open tasks carry it. j and k move between rows.
  */
 export function LabelsScreen() {
   const labels = useLabels();
   const counts = useCounts().data;
-  const { create, update, remove } = useLabelChanges();
+  const { create, update, remove, move } = useLabelChanges();
   const toast = useToast();
   const [draft, setDraft] = useState("");
   const [picking, setPicking] = useState<string | null>(null);
-  const list = useRef<HTMLUListElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   // Each row's way into renaming, so e t can start it on the focused row.
   const starts = useRef(new Map<string, () => void>());
 
-  const sorted = [...(labels.data ?? [])].sort(byName);
+  const status = statusLabels(labels.data ?? []);
+  const others = (labels.data ?? []).filter((l) => !l.status).sort(byName);
+  const sorted = [...status, ...others];
   const countOf = (name: string) =>
     Object.values(counts?.lists ?? {}).reduce((n, c) => n + (c.labels[name.toLowerCase()] ?? 0), 0);
   const report = (e: Error) => toast.show({ message: e.message, error: true });
@@ -56,6 +60,14 @@ export function LabelsScreen() {
     const after = sorted[at + 1] ?? sorted[at - 1];
     remove.mutateAsync(label.id).catch(report);
     if (after) requestAnimationFrame(() => rowOf(after.id)?.focus());
+  };
+
+  const setStatus = (label: Label, on: boolean) => update.mutateAsync({ id: label.id, status: on }).catch(report);
+  const shift = (label: Label, delta: 1 | -1) => {
+    const at = status.findIndex((l) => l.id === label.id);
+    const other = status[at + delta];
+    if (!other) return;
+    move.mutateAsync(delta < 0 ? { id: label.id, beforeId: other.id } : { id: label.id, afterId: other.id }).catch(report);
   };
 
   const rowOf = (id: string) => list.current?.querySelector<HTMLElement>(`[data-label-id="${id}"]`);
@@ -110,46 +122,119 @@ export function LabelsScreen() {
       ) : sorted.length === 0 ? (
         <p className="muted">No labels yet. Add one above, or with #name in quick add.</p>
       ) : (
-        <ul ref={list} className="label-rows" aria-label="Labels">
-          {sorted.map((label) => (
-            <li key={label.id} className="label-row" tabIndex={-1} data-label-id={label.id}>
-              <div className="label-row-main">
-                <InlineRename name={label.name} label={`Name of ${label.name}`} className="label-rename" onRename={(name) => void rename(label, name)}>
-                  {(start) => {
-                    starts.current.set(label.id, start);
-                    return (
-                      <button type="button" className="label-name-button" title="Click to rename" onClick={start}>
-                        <LabelChip name={label.name} color={label.color} />
-                        <span className="sr-only">, rename</span>
-                      </button>
-                    );
-                  }}
-                </InlineRename>
-                <span className="label-count muted">{openTasks(countOf(label.name))}</span>
-                <button
-                  type="button"
-                  className="quiet small label-colour-button"
-                  aria-expanded={picking === label.id}
-                  aria-label={`Colour for ${label.name}: ${PALETTE.find((p) => p.id === label.color)?.name ?? "Default"}`}
-                  onClick={() => setPicking((p) => (p === label.id ? null : label.id))}
-                >
-                  <span className="label-dot" data-color={label.color ?? undefined} aria-hidden="true" />
-                  Colour
-                </button>
-                <button type="button" className="quiet small danger" aria-label={`Delete ${label.name}`} onClick={() => del(label)}>
-                  Delete
-                </button>
-              </div>
-              {picking === label.id && (
-                <Swatches
-                  label={label}
-                  onPick={(color) => recolour(label, color)}
-                  onClose={() => { setPicking(null); rowOf(label.id)?.focus(); }}
-                />
-              )}
-            </li>
-          ))}
-        </ul>
+        <div ref={list}>
+          {status.length > 0 && (
+            <section aria-labelledby="labels-status">
+              <h2 id="labels-status" className="label-section">Status labels</h2>
+              <p className="muted label-section-note">A task has one of these at most. Search groups by them in this order.</p>
+              <ul className="label-rows" aria-labelledby="labels-status">
+                {status.map((label, i) => (
+                <li key={label.id} className="label-row" tabIndex={-1} data-label-id={label.id}>
+                  <div className="label-row-main">
+                    <InlineRename name={label.name} label={`Name of ${label.name}`} className="label-rename" onRename={(name) => void rename(label, name)}>
+                      {(start) => {
+                        starts.current.set(label.id, start);
+                        return (
+                          <button type="button" className="label-name-button" title="Click to rename" onClick={start}>
+                            <LabelChip name={label.name} color={label.color} />
+                            <span className="sr-only">, rename</span>
+                          </button>
+                        );
+                      }}
+                    </InlineRename>
+                    <span className="label-count muted">{openTasks(countOf(label.name))}</span>
+                    {label.status && (
+                      <>
+                        <button type="button" className="quiet small" aria-label={`Move ${label.name} up`} title="Move up" disabled={i === 0} onClick={() => shift(label, -1)}>↑</button>
+                        <button type="button" className="quiet small" aria-label={`Move ${label.name} down`} title="Move down" disabled={i === status.length - 1} onClick={() => shift(label, 1)}>↓</button>
+                      </>
+                    )}
+                    <label className="label-status-switch">
+                      <input type="checkbox" role="switch" aria-label={`Status label: ${label.name}`} checked={label.status} onChange={(e) => void setStatus(label, e.target.checked)} />
+                      <span aria-hidden="true">Status</span>
+                    </label>
+                    <button
+                      type="button"
+                      className="quiet small label-colour-button"
+                      aria-expanded={picking === label.id}
+                      aria-label={`Colour for ${label.name}: ${PALETTE.find((p) => p.id === label.color)?.name ?? "Default"}`}
+                      onClick={() => setPicking((p) => (p === label.id ? null : label.id))}
+                    >
+                      <span className="label-dot" data-color={label.color ?? undefined} aria-hidden="true" />
+                      Colour
+                    </button>
+                    <button type="button" className="quiet small danger" aria-label={`Delete ${label.name}`} onClick={() => del(label)}>
+                      Delete
+                    </button>
+                  </div>
+                  {picking === label.id && (
+                    <Swatches
+                      label={label}
+                      onPick={(color) => recolour(label, color)}
+                      onClose={() => { setPicking(null); rowOf(label.id)?.focus(); }}
+                    />
+                  )}
+                </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {others.length > 0 && (
+            <section aria-labelledby={status.length > 0 ? "labels-other" : undefined} aria-label={status.length > 0 ? undefined : "Labels"}>
+              {status.length > 0 && <h2 id="labels-other" className="label-section">Other labels</h2>}
+              <ul className="label-rows" aria-label={status.length > 0 ? "Other labels" : "Labels"}>
+                {others.map((label, i) => (
+                <li key={label.id} className="label-row" tabIndex={-1} data-label-id={label.id}>
+                  <div className="label-row-main">
+                    <InlineRename name={label.name} label={`Name of ${label.name}`} className="label-rename" onRename={(name) => void rename(label, name)}>
+                      {(start) => {
+                        starts.current.set(label.id, start);
+                        return (
+                          <button type="button" className="label-name-button" title="Click to rename" onClick={start}>
+                            <LabelChip name={label.name} color={label.color} />
+                            <span className="sr-only">, rename</span>
+                          </button>
+                        );
+                      }}
+                    </InlineRename>
+                    <span className="label-count muted">{openTasks(countOf(label.name))}</span>
+                    {label.status && (
+                      <>
+                        <button type="button" className="quiet small" aria-label={`Move ${label.name} up`} title="Move up" disabled={i === 0} onClick={() => shift(label, -1)}>↑</button>
+                        <button type="button" className="quiet small" aria-label={`Move ${label.name} down`} title="Move down" disabled={i === status.length - 1} onClick={() => shift(label, 1)}>↓</button>
+                      </>
+                    )}
+                    <label className="label-status-switch">
+                      <input type="checkbox" role="switch" aria-label={`Status label: ${label.name}`} checked={label.status} onChange={(e) => void setStatus(label, e.target.checked)} />
+                      <span aria-hidden="true">Status</span>
+                    </label>
+                    <button
+                      type="button"
+                      className="quiet small label-colour-button"
+                      aria-expanded={picking === label.id}
+                      aria-label={`Colour for ${label.name}: ${PALETTE.find((p) => p.id === label.color)?.name ?? "Default"}`}
+                      onClick={() => setPicking((p) => (p === label.id ? null : label.id))}
+                    >
+                      <span className="label-dot" data-color={label.color ?? undefined} aria-hidden="true" />
+                      Colour
+                    </button>
+                    <button type="button" className="quiet small danger" aria-label={`Delete ${label.name}`} onClick={() => del(label)}>
+                      Delete
+                    </button>
+                  </div>
+                  {picking === label.id && (
+                    <Swatches
+                      label={label}
+                      onPick={(color) => recolour(label, color)}
+                      onClose={() => { setPicking(null); rowOf(label.id)?.focus(); }}
+                    />
+                  )}
+                </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
       )}
     </div>
   );

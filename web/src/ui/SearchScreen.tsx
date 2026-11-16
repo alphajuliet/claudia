@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useLocation, useSearch } from "wouter";
 import { formatGroup, formatSort, type Filter, type SearchGroup, type SearchSort, type Task } from "@claudia/shared";
-import { SearchQueryError, useCreateFilter, useDeleteContainer, useFilters, useLists, useSearchTasks, useTimeZone, useUpdateFilter } from "../data/queries";
+import { SearchQueryError, useCreateFilter, useDeleteContainer, useFilters, useLabels, useLists, useSearchTasks, useTimeZone, useUpdateFilter } from "../data/queries";
 import { todayIn } from "../lib/dates";
 import { searchSections } from "../lib/search";
+import { statusLabels } from "../lib/status";
 import { useContextFilter } from "./contextFilter";
 import { useRenameReported } from "./InlineRename";
 import { useCommand } from "./keyboard";
@@ -32,6 +33,7 @@ const GROUPS: { value: string; label: string }[] = [
   { value: "list", label: "List" },
   { value: "due", label: "Due date" },
   { value: "label", label: "Label" },
+  { value: "status", label: "Status" },
   { value: "none", label: "None" },
 ];
 
@@ -45,9 +47,9 @@ const EXAMPLES: [string, string][] = [
   ["due:today  due:<=today  due:<7d", "Due today, by today, within a week"],
   ['start:<=today  completed:>=today-7d  due:["today" TO "2w"]', "Dates: today, tomorrow, yesterday, 7d, 2w, 3m, today-7d, 2026-12-25"],
   ["is:available  is:snoozed  is:completed", "Also open, recurring, heading, subtask"],
-  ["has:due  -has:start", "Also notes, labels, parent"],
+  ["has:due  -has:start", "Also notes, labels, status, parent"],
   ["#next AND (due:<=today OR #wip)", "AND, OR, NOT, -term and brackets; a space means AND"],
-  ["sort:due-desc  group:label", 'Sort (due, start, created, updated, title, priority) and group (list, due, label, none, "label:wip,next")'],
+  ["sort:due-desc  group:label", 'Sort (due, start, created, updated, title, priority) and group (list, due, label, status, none, "label:wip,next")'],
 ];
 
 function CheatSheet() {
@@ -194,7 +196,8 @@ function QueryView({ title, value, onChange, onRename, actions, below, empty, fo
   );
   const { lists, order } = useListOrder();
   const timeZone = useTimeZone();
-  const sections = searchSections(tasks.data ?? [], how, { lists, listOrder: order, today: todayIn(timeZone), timeZone });
+  const status = statusLabels(useLabels().data ?? []).map((l) => l.name);
+  const sections = searchSections(tasks.data ?? [], how, { lists, listOrder: order, today: todayIn(timeZone), timeZone, status });
   const allLists = useLists().data ?? [];
   const listName = (t: Task) => allLists.find((l) => l.id === t.listId)?.name;
 

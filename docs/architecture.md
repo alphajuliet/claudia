@@ -122,7 +122,7 @@ D1 (SQLite) through Drizzle ORM. The schema is `worker/src/db/schema.ts`; migrat
 | `folders` | Nested folders. A top-level folder's `context` (work, personal, home) applies to everything under it. |
 | `lists` | Lists, in a folder or none. One list is flagged as the Inbox (`inbox`), so renaming it is safe. Archived lists drop out of views. |
 | `tasks` | Tasks and headings (`kind`), nested with `parent_id`. Dates: `due_date` or `due_at` (never both), `start_date`, `snoozed_until`. Recurrence: `recur_rule` and `recur_from`. Also `priority`, `completed_at`, `metadata` (JSON, such as Godspeed fields). |
-| `labels`, `task_labels` | Labels with a colour, and which tasks carry them. Names are unique ignoring case. |
+| `labels`, `task_labels` | Labels with a colour, and which tasks carry them. Names are unique ignoring case. A status label (next, waitingOn, wip, ...) has a `status_position`, its place among them; a task has one at most. `lib/labels.ts` (`oneStatus`) enforces that on create and update: given several, the one the task didn't have already wins. The web app shows it as the task's Status field (`lib/status.ts`). |
 | `filters` | Smart views: a name, a search-language query, a sort and grouping (null for the defaults), `display` JSON (`showCompleted`), and the folder it sits in (or none), placed like a list. A folder with one in it can't be deleted. |
 | `settings` | Key/value settings, such as `timeZone` and `keymap`. |
 | `tokens` | API tokens: SHA-256 hash, name, scopes, expiry, last use, revocation. |

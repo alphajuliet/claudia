@@ -125,6 +125,8 @@ export const labels = sqliteTable(
     name: text("name").notNull(),
     // A palette name (LABEL_COLOURS); null is the default grey.
     color: text("color", { enum: LABEL_COLOURS }),
+    // A status label (next, wip, waitingOn, ...) has a place among the status labels; a task has one at most.
+    statusPosition: text("status_position"),
     createdAt: createdAt(),
     deletedAt: deletedAt(),
   },

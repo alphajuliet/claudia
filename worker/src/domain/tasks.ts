@@ -13,7 +13,7 @@ import { retryOnConflict, runBatch, type Db } from "../lib/db";
 import { ApiError, notFound } from "../lib/errors";
 import { eventQuery } from "../lib/events";
 import { newId, now } from "../lib/ids";
-import { chunk, resolveLabelIds } from "../lib/labels";
+import { chunk, oneStatus, resolveLabelIds } from "../lib/labels";
 import { positionFor } from "../lib/position";
 import { addDays, daysBetween, isValidRule, nextDueDate, startOfDayIn, todayIn, userTimeZone } from "../lib/recurrence";
 import type { Actor } from "../lib/router";
@@ -268,7 +268,7 @@ async function insertTask(db: Db, actor: Actor, input: TaskCreate) {
   };
   checkRecurrence(row);
 
-  const { ids, names, pending } = await resolveLabelIds(db, input.labels ?? [], actor);
+  const { ids, names, pending } = await resolveLabelIds(db, await oneStatus(db, input.labels ?? []), actor);
   await runBatch(db, [
     ...pending,
     db.insert(tasks).values(row),
@@ -301,7 +301,7 @@ export function updateTask(db: Db, actor: Actor, id: string, input: TaskUpdate) 
     const statements: BatchItem<"sqlite">[] = [];
     let afterNames = beforeNames;
     if (newLabels) {
-      const { ids, names, pending } = await resolveLabelIds(db, newLabels, actor);
+      const { ids, names, pending } = await resolveLabelIds(db, await oneStatus(db, newLabels, beforeNames), actor);
       statements.push(...pending, ...setLabels(db, id, ids));
       afterNames = names;
     }

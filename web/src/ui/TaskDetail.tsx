@@ -4,7 +4,7 @@ import { useCreateTask, usePendingCompletions, useTask, useTasks, useTimeZone } 
 import { focusPanelTitle, useComplete, useDelete } from "./TaskList";
 import { useCommand } from "./keyboard";
 import { DateFields } from "./DateFields";
-import { FieldStatus, LabelsField, ListField, NotesField, PriorityField, RepeatField, TitleField, useSave } from "./TaskFields";
+import { FieldStatus, LabelsField, ListField, NotesField, PriorityField, RepeatField, StatusField, TitleField, useSave } from "./TaskFields";
 import { isMade, wasFollowed } from "./selection";
 import { InlineMarkdown, plainText } from "./Markdown";
 import { useSheet, useVisualViewport } from "./useVisualViewport";
@@ -124,6 +124,7 @@ function Body({ id, onClose }: { id: string; onClose: () => void }) {
         {/* Keyed so a date still being typed can't show on, or save to, the next task. */}
         <DateFields key={task.id} task={task} timeZone={timeZone} onClose={onClose} />
         {task.kind === "task" && <PriorityField task={task} />}
+        {task.kind === "task" && <StatusField task={task} />}
         <LabelsField task={task} />
         <ListField task={task} />
         <RepeatField task={task} />

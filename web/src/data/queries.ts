@@ -707,7 +707,7 @@ export function useMoveFolder() {
   });
 }
 
-type LabelChange = { name?: string; color?: LabelColour | null };
+type LabelChange = { name?: string; color?: LabelColour | null; status?: boolean };
 
 /**
  * Creating, renaming, recolouring and deleting labels. A rename or delete changes the names tasks carry, so task lists
@@ -738,9 +738,33 @@ export function useLabelChanges() {
   });
   const update = useMutation({
     mutationFn: async ({ id, ...change }: LabelChange & { id: string }) => json(await api(`/api/labels/${id}`, send("PATCH", change)), LabelSchema),
-    onMutate: ({ id, ...change }) => optimistic((labels) => labels.map((l) => (l.id === id ? { ...l, ...change } : l))),
+    onMutate: ({ id, ...change }) =>
+      optimistic((labels) => {
+        // A new status label goes last among them until the server says where.
+        const last = labels.map((l) => l.statusPosition).filter((p): p is string => p !== null).sort().at(-1) ?? null;
+        return labels.map((l) => {
+          if (l.id !== id) return l;
+          const status = change.status === undefined ? {} : { status: change.status, statusPosition: change.status ? (l.statusPosition ?? generateKeyBetween(last, null)) : null };
+          return { ...l, ...change, ...status };
+        });
+      }),
     onError: restore,
     onSettled: (_d, _e, vars) => refresh(vars.name !== undefined)(),
+  });
+  /** Reorders a status label (before or after another), in the cache at once. */
+  const move = useMutation({
+    mutationFn: async ({ id, ...to }: { id: string; beforeId?: string; afterId?: string }) => json(await api(`/api/labels/${id}/move`, send("POST", to)), LabelSchema),
+    onMutate: ({ id, beforeId, afterId }) =>
+      optimistic((labels) => {
+        const others = labels.filter((l) => l.status && l.id !== id).sort((a, b) => (a.statusPosition! < b.statusPosition! ? -1 : 1));
+        const at = others.findIndex((l) => l.id === (afterId ?? beforeId));
+        if (at < 0) return labels;
+        const [low, high] = afterId ? [others[at], others[at + 1]] : [others[at - 1], others[at]];
+        const statusPosition = generateKeyBetween(low?.statusPosition ?? null, high?.statusPosition ?? null);
+        return labels.map((l) => (l.id === id ? { ...l, statusPosition } : l));
+      }),
+    onError: restore,
+    onSettled: refresh(false),
   });
   const remove = useMutation({
     mutationFn: async (id: string) => json(await api(`/api/labels/${id}`, { method: "DELETE" }), NoContent),
@@ -748,5 +772,5 @@ export function useLabelChanges() {
     onError: restore,
     onSettled: refresh(true),
   });
-  return { create, update, remove };
+  return { create, update, remove, move };
 }

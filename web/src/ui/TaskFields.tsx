@@ -7,6 +7,7 @@ import { usePendingEdit } from "./selection";
 import { useFolders, useLabels, useLists, useMoveTask, useUpdateTask, type TaskPatch } from "../data/queries";
 import { PRESETS, presetFor, ruleFor, type Preset } from "../lib/repeat";
 import { sidebarTree, type FolderNode } from "../lib/sidebar";
+import { isStatus, statusLabels, statusOf, withStatus } from "../lib/status";
 import { findInbox } from "../lib/views";
 import { useCommand } from "./keyboard";
 import { LabelPicker } from "./LabelPicker";
@@ -259,20 +260,26 @@ export function NotesField({ task }: { task: Task }) {
 export function LabelsField({ task }: { task: Task }) {
   const { state, patch } = usePatch(task);
   const queryClient = useQueryClient();
-  const all = (useLabels().data ?? []).map((l) => l.name);
+  const allLabels = useLabels().data ?? [];
+  const status = statusLabels(allLabels);
+  // Status labels have a field of their own.
+  const all = allLabels.filter((l) => !l.status).map((l) => l.name);
+  const shown = task.labels.filter((l) => !isStatus(l, status));
   const colourOf = useLabelColour();
   const current = () => queryClient.getQueryData<Task[]>(["tasks", "one", task.id])?.[0]?.labels ?? task.labels;
   const add = (name: string) => {
     const labels = current();
     if (labels.some((l) => l.toLowerCase() === name.toLowerCase())) return Promise.resolve(true);
-    // A new name becomes a label on the server; the update refreshes the labels afterwards.
+    // A status label typed here replaces the task's status. A new name becomes a label on the server; the update
+    // refreshes the labels afterwards.
+    if (isStatus(name, status)) return patch({ labels: withStatus(labels, status.find((s) => s.name.toLowerCase() === name.toLowerCase())!.name, status) });
     return patch({ labels: [...labels, name] });
   };
   return (
     <Field label="Labels" group>
-      {task.labels.length > 0 && (
+      {shown.length > 0 && (
         <ul className="detail-chips">
-          {task.labels.map((l) => (
+          {shown.map((l) => (
             <LabelChip key={l} as="li" name={l} color={colourOf(l)} className="chip-removable">
               <button
                 type="button"
@@ -350,6 +357,38 @@ export function ListField({ task }: { task: Task }) {
         onPick={(c) => { setPicking(false); onChange(c.id); }} />
     )}
     </>
+  );
+}
+
+/**
+ * The task's status label (next, wip, waitingOn, ...), or None: choosing one takes off the one it had. The status
+ * labels and their order come from the Labels screen.
+ */
+export function StatusField({ task }: { task: Task }) {
+  const id = useId();
+  const { state, patch } = usePatch(task);
+  const queryClient = useQueryClient();
+  const status = statusLabels(useLabels().data ?? []);
+  const value = statusOf(task, status);
+  const current = () => queryClient.getQueryData<Task[]>(["tasks", "one", task.id])?.[0]?.labels ?? task.labels;
+  const known = value === null || isStatus(value, status);
+  return (
+    <Field label="Status" htmlFor={id}>
+      <select
+        id={id}
+        className="detail-select"
+        value={value?.toLowerCase() ?? ""}
+        onChange={(e) => {
+          const next = status.find((s) => s.name.toLowerCase() === e.target.value)?.name ?? null;
+          void patch({ labels: withStatus(current(), next, status) });
+        }}
+      >
+        <option value="">None</option>
+        {!known && <option value={value!.toLowerCase()}>{value}</option>}
+        {status.map((s) => <option key={s.id} value={s.name.toLowerCase()}>{s.name}</option>)}
+      </select>
+      <FieldStatus state={state} />
+    </Field>
   );
 }
 

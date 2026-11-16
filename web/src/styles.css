@@ -1307,6 +1307,10 @@ button.label-name-button:hover { filter: none; }
 .label-name-button .chip { font-size: 0.85rem; }
 input.label-rename { width: 14rem; padding: 0.1rem 0.4rem; font-size: 0.9rem; }
 .label-count { margin-right: auto; font-size: 0.85rem; white-space: nowrap; }
+.label-section { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 1.25rem 0.5rem 0.15rem; }
+.label-section-note { font-size: 0.85rem; margin: 0 0.5rem 0.4rem; }
+.label-status-switch { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; color: var(--muted); }
+.label-status-switch input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--accent); }
 .label-colour-button { display: inline-flex; align-items: center; }
 .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: 0.35rem; padding: 0.5rem 0 0.6rem; }
 button.swatch { display: flex; justify-content: flex-start; padding: 0.15rem; border: 1px solid transparent; border-radius: var(--radius); background: none; color: inherit; font-weight: inherit; }

@@ -45,7 +45,7 @@ const withPlacement = <T extends z.ZodRawShape>(shape: T) =>
   z.object({ ...shape, ...placement }).strict().refine(notBoth, "Give afterId or beforeId, not both");
 
 const CONVENTIONS =
-  " Dates are YYYY-MM-DD. Labels hold state (for example next, wip, waitingOn, someday). IDs are ULIDs taken from earlier results.";
+  " Dates are YYYY-MM-DD. Status labels hold state (for example next, wip, waitingOn, someday): a task has one at most, and a new one replaces the old. IDs are ULIDs taken from earlier results.";
 
 export const TOOLS: ToolDef[] = [
   // ---- Read
@@ -118,7 +118,7 @@ export const TOOLS: ToolDef[] = [
   }),
   tool({
     name: "list_labels",
-    description: "List all labels. Labels carry task state, such as next, wip, waitingOn and someday.",
+    description: "List all labels. Status labels (status true, ordered by statusPosition), such as next, wip, waitingOn and someday, carry task state: a task has one at most, and giving a task a new one replaces the old.",
     access: "read",
     input: strict({}),
     request: () => ({ method: "GET", path: "/api/labels" }),
@@ -231,9 +231,14 @@ export const TOOLS: ToolDef[] = [
   }),
   tool({
     name: "update_label",
-    description: `Rename a label everywhere it is used, and/or set its colour: one of ${LABEL_COLOURS.join(", ")}, or null for the default grey.`,
+    description: `Rename a label everywhere it is used, set its colour (one of ${LABEL_COLOURS.join(", ")}, or null for the default grey), and/or make it a status label or not.`,
     access: "write",
-    input: strict({ id: id("label"), name: LabelNameSchema.optional(), color: LabelColourSchema.optional() }),
+    input: strict({
+      id: id("label"),
+      name: LabelNameSchema.optional(),
+      color: LabelColourSchema.optional(),
+      status: z.boolean().optional().describe("true: a status label (a task has one at most), added last among them; false: an ordinary label"),
+    }),
     request: (a) => ({ method: "PATCH", path: `/api/labels/${a.id}`, body: noId(a) }),
   }),
   tool({
@@ -241,10 +246,10 @@ export const TOOLS: ToolDef[] = [
     description:
       "Save a smart view. query is in the search language: words match title or notes; #name or label:name; list:, folder: (with subfolders), context:, " +
       "priority: (low < normal < high); due:, start:, snoozed:, completed:, created:, updated: with today, tomorrow, yesterday, 7d, 2w, 3m, today-7d " +
-      "or YYYY-MM-DD and :<, :<=, :>, :>=; is: (open, completed, snoozed, available, recurring, heading, subtask); has: (due, start, notes, labels, parent); " +
+      "or YYYY-MM-DD and :<, :<=, :>, :>=; is: (open, completed, snoozed, available, recurring, heading, subtask); has: (due, start, notes, labels, status, parent); " +
       "AND, OR, NOT, -term, parentheses (a space means AND). Open, unsnoozed tasks unless it says otherwise. " +
       "For example: \"#next is:available\", \"folder:Work (#wip OR due:<=today)\", \"completed:>=today-7d\". " +
-      "sort: due, start, priority, created, updated, title or list, with -desc for reverse (due-desc). group: list, due, label, none, or label:wip,next for a label order.",
+      "sort: due, start, priority, created, updated, title or list, with -desc for reverse (due-desc). group: list, due, label, status, none, or label:wip,next for a label order.",
     access: "write",
     input: strict({
       name: z.string().min(1),
