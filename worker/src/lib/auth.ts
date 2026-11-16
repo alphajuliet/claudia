@@ -84,7 +84,7 @@ export const authenticate = createMiddleware<AppEnv>(async (c, next) => {
 
   // The caller says which client it is; this is audit information, not authorisation.
   const claimed = c.req.header("X-Claudia-Client") as Actor | undefined;
-  c.set("actor", claimed && ACTORS.includes(claimed) && claimed !== "system" ? claimed : "cli");
+  c.set("actor", claimed && ACTORS.includes(claimed) && claimed !== "system" && claimed !== "email" ? claimed : "cli");
   c.set("scopes", row.scopes as Scope[]);
   c.set("identity", { name: row.name, expiresAt: row.expiresAt });
   await next();

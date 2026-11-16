@@ -2,7 +2,7 @@
 
 A personal task manager with a complete API, built on Cloudflare Workers and D1.
 
-Claudia keeps work, home and personal tasks in one place. It is built API-first, so the web UIs for desktop, iPad and phone, the iOS Shortcut, the CLI and AI assistants (through MCP) all use the same interface.
+Claudia keeps work, home and personal tasks in one place. It is built API-first, so the web UIs for desktop, iPad and phone, the iOS Shortcut, email capture, the CLI and AI assistants (through MCP) all use the same interface.
 
 > **Status:** in daily use at `https://claudia.alphajuliet.com`, and still in active development.
 
@@ -16,6 +16,7 @@ Claudia keeps work, home and personal tasks in one place. It is built API-first,
 - **One responsive web app.** Phone, iPad and desktop layouts, installable to the home screen, with swipes and shake to undo on touch screens.
 - **A complete REST API** with an OpenAPI spec, including update and move, which many hosted task managers lack.
 - **A remote MCP server** so AI assistants can read and change tasks.
+- **Capture from anywhere:** an iOS Shortcut, and email to the Inbox address, which Claude reads into a task.
 - **A full change history.** Every change is written to an append-only event log.
 
 Still to come: an editable keymap, offline capture and a cached Today, and an API for the change history. Not planned: push or timed notifications, full offline sync, and sharing.

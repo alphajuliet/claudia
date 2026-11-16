@@ -15,6 +15,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^1.8.0",
     "@claudia/shared": "*",
     "@cloudflare/workers-oauth-provider": "1.2.3",
     "@hono/zod-openapi": "^0.19.0",
@@ -24,6 +25,7 @@
     "fractional-indexing": "^4.0.0",
     "hono": "^4.6.0",
     "liqe": "^3.8.9",
+    "postal-mime": "^2.7.6",
     "rrule": "^2.8.1",
     "ulidx": "^2.4.1",
     "zod-to-json-schema": "^3.25.2"

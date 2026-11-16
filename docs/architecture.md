@@ -17,6 +17,7 @@ flowchart LR
     claude["claude.ai and phone<br/>(OAuth)"]
     cc["Claude Code<br/>(API token)"]
     shortcut["iOS Shortcut<br/>(capture)"]
+    mail["Email<br/>(inbox@claudia...)"]
     cli["Scripts<br/>(token, Godspeed import)"]
   end
 
@@ -26,6 +27,7 @@ flowchart LR
     api["Hono app<br/>/api/*"]
     assets["Static assets<br/>web/dist"]
     cron["Cron: nightly backup"]
+    emailh["Email handler"]
   end
 
   d1[("D1<br/>claudia")]
@@ -35,6 +37,9 @@ flowchart LR
   web -->|Bearer token| api
   web --> assets
   shortcut -->|POST /api/capture| api
+  mail -->|Email Routing| emailh
+  emailh --> d1
+  emailh -->|reads it| claudeapi["Claude API<br/>(Haiku)"]
   cli --> api
   claude --> oauth
   cc --> oauth
@@ -138,7 +143,7 @@ Conventions that hold across the tables:
 
 ### Events
 
-Every change writes a row to `events`: entity type and ID, event type, `before` and `after` JSON, time and actor. SQLite triggers (`migrations/0001_events_append_only.sql`) abort any `UPDATE` or `DELETE` on the table. The actor comes from the `X-Claudia-Client` header (`web`, `mcp`, `shortcut`, `cli`, `import`). It is for the audit trail and doesn't grant anything. There is no API to read the log yet.
+Every change writes a row to `events`: entity type and ID, event type, `before` and `after` JSON, time and actor. SQLite triggers (`migrations/0001_events_append_only.sql`) abort any `UPDATE` or `DELETE` on the table. The actor comes from the `X-Claudia-Client` header (`web`, `mcp`, `shortcut`, `cli`, `import`); `email` and `system` are set only by the Worker itself. It is for the audit trail and doesn't grant anything. There is no API to read the log yet.
 
 ### Recurrence
 
@@ -214,6 +219,7 @@ Completing, snoozing and moving to another list offer Undo in a toast, and the l
 ## Getting data in
 
 - **Quick add** in the app and **`POST /api/capture`** (the iOS Shortcut) share the parser in `shared/src/quickAdd.ts`: `#labels`, plus a date or time at the end of the text.
+- **Email** to `inbox@claudia.alphajuliet.com`: Email Routing hands it to the Worker's `email` handler (`domain/email.ts`). An allowed, authenticated sender's email becomes a task: Claude (Haiku, with structured output) reads it into a title, list, labels and dates, falling back to quick add on the subject, and the text becomes the notes. See [`email-capture.md`](email-capture.md).
 - **Godspeed import**: `godspeed:fetch` downloads the account to `worker/godspeed-export/`, and `godspeed:import` sends it through `POST /api/import`. Import IDs are derived from Godspeed's, so it is safe to repeat.
 
 ## Known gaps

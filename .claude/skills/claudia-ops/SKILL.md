@@ -1,6 +1,6 @@
 ---
 name: claudia-ops
-description: Claudia operations - backups and restores, minting API tokens, the Godspeed export and import, connecting MCP clients (claude.ai, phone, Claude Code), the iPhone capture Shortcut, and web app sign-in. Use when doing any of these.
+description: Claudia operations - backups and restores, minting API tokens, the Godspeed export and import, connecting MCP clients (claude.ai, phone, Claude Code), the iPhone capture Shortcut, email capture, and web app sign-in. Use when doing any of these.
 ---
 
 # Claudia operations
@@ -18,5 +18,7 @@ Run commands from the repo root.
   `claude mcp add --transport http claudia https://claudia.alphajuliet.com/mcp --header "Authorization: Bearer $(cat ~/.config/claudia/write-token)"`
 
 - iPhone capture: an iOS Shortcut posts one line to `POST /api/capture` (Inbox, parsed like quick add: `#labels` and a trailing date) with its own `write` token. Set-up steps: `docs/shortcut-capture.md`.
+
+- Email capture: mail to `inbox@claudia.alphajuliet.com` (Email Routing on the subdomain, sent to the Worker) becomes a task, read by Claude Haiku (Worker secret `ANTHROPIC_API_KEY`) or as quick add. Only addresses in the `emailSenders` setting are accepted. Set-up and the sender rules: `docs/email-capture.md`.
 
 - Web app sign-in: the app asks for an API token on first use, checks it with `GET /api/me` and keeps it in the browser's `localStorage` (`claudia.token`) until Sign out. Mint one with `npm run token:create -w @claudia/worker -- --remote --name browser --scopes write`.

@@ -57,6 +57,13 @@
       "when": 1794806862874,
       "tag": "0007_status_labels",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794823621897,
+      "tag": "0008_email_actor",
+      "breakpoints": true
     }
   ]
 }

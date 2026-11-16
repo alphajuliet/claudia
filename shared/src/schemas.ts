@@ -16,7 +16,7 @@ export const LABEL_COLOURS = [
   "red", "orange", "amber", "yellow", "lime", "green", "teal", "cyan",
   "sky", "blue", "indigo", "violet", "purple", "pink", "rose", "brown",
 ] as const;
-export const ACTORS = ["web", "mcp", "shortcut", "cli", "import", "system"] as const;
+export const ACTORS = ["web", "mcp", "shortcut", "cli", "import", "email", "system"] as const;
 export const SCOPES = ["read", "write", "admin"] as const;
 
 export const HealthSchema = z.object({

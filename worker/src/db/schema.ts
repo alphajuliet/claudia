@@ -20,7 +20,7 @@ export const CONTEXTS = ["work", "personal", "home"] as const;
 export const TASK_KINDS = ["task", "heading"] as const;
 export const RECUR_FROM = ["due", "completion"] as const;
 export const PRIORITIES = ["low", "normal", "high"] as const;
-export const ACTORS = ["web", "mcp", "shortcut", "cli", "import", "system"] as const;
+export const ACTORS = ["web", "mcp", "shortcut", "cli", "import", "email", "system"] as const;
 export const LABEL_COLOURS = [
   "red", "orange", "amber", "yellow", "lime", "green", "teal", "cyan",
   "sky", "blue", "indigo", "violet", "purple", "pink", "rose", "brown",

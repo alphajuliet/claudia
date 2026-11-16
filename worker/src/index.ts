@@ -24,6 +24,7 @@ import { backupRoutes } from "./routes/backup";
 import { viewRoutes } from "./routes/views";
 import { searchRoutes } from "./routes/search";
 import { backUp } from "./backup";
+import { captureEmail, claudeExtractor, parseEmail } from "./domain/email";
 
 export const app = newRouter();
 
@@ -144,7 +145,33 @@ async function scheduled(controller: ScheduledController, env: Cloudflare.Env): 
   console.log(`Backed up to ${result.key}: ${result.bytes} bytes`, result.rows);
 }
 
+/** The most the Inbox address takes, in bytes: a task, not an archive. */
+const MAX_EMAIL = 5 * 1024 * 1024;
+
+/**
+ * Mail to the Inbox address (Email Routing on claudia.alphajuliet.com) becomes a task. Unknown senders and problems
+ * are rejected, so the sender gets a bounce saying why. See docs/email-capture.md.
+ */
+async function email(message: ForwardableEmailMessage, env: Cloudflare.Env): Promise<void> {
+  if (message.rawSize > MAX_EMAIL) return message.setReject("Too large for a task: send the text without attachments");
+  try {
+    const parsed = await parseEmail(message.raw, message.from);
+    const outcome = await captureEmail(createDb(env.DB), parsed, env.ANTHROPIC_API_KEY ? claudeExtractor(env.ANTHROPIC_API_KEY) : null);
+    if (outcome.ok) return console.log(`Captured task ${outcome.taskId} from email (read by ${outcome.read})`);
+    console.warn(`Email from ${message.from} not captured: ${outcome.reason}`);
+    message.setReject(
+      outcome.reason === "sender" ? "This address doesn't take mail from you"
+      : outcome.reason === "no_inbox" ? "Claudia has no Inbox list to capture into"
+      : "The email has no subject or text to make a task from",
+    );
+  } catch (e) {
+    console.error("Email capture failed", e);
+    message.setReject("Claudia couldn't make a task from this email; try again later");
+  }
+}
+
 export default {
   fetch: (req: Request, env: Cloudflare.Env, ctx: ExecutionContext) => provider.fetch(req, env, ctx),
   scheduled,
+  email,
 } satisfies ExportedHandler<Cloudflare.Env>;
