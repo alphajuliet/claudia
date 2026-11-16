@@ -39,7 +39,7 @@ Work is tracked on the Workflowy **Claudia** board (`🔅 My projects › Produc
 - **Language:** TypeScript end to end.
 - **API first:** Hono with `@hono/zod-openapi`. Zod schemas are the single source for the OpenAPI spec, the typed web client and the MCP tool definitions. Every capability the UI has must exist in the API.
 - **Data:** Drizzle ORM over D1, with migrations via `wrangler d1 migrations`. IDs are ULIDs. Ordering uses fractional indexes. Deletes are soft (`deleted_at`). Every change writes a row to the append-only `events` table.
-- **Domain model:** folders (with `context`: work, personal, home), lists, tasks (with `kind`: task or heading), labels, saved filters, settings, API tokens. Labels carry state (`wip`, `waitingOn`, `next`, `someday`, …).
+- **Domain model:** folders (with `context`: work, personal, home), lists, tasks (with `kind`: task or heading), labels, saved filters (smart views: a search-language query with sort, grouping and display, in a folder), settings, API tokens. Status labels (`next`, `waitingOn`, `wip`, `recurring`, `onHold`, `someday`, flagged and ordered on the Labels screen) carry state, one to a task.
 - **Recurrence:** RRULE plus `recur_from` (`due` or `completion`). Completing a recurring task advances it in place and logs a `completed` event.
 - **Keyboard:** every UI action is a registered command. The keymap lives in user settings and is editable in the app. Defaults follow Godspeed.
 - **Front-end:** one responsive web app with phone, iPad and desktop layouts, installable to the home screen. Offline is limited to a capture queue and a cached Today view.
@@ -52,7 +52,7 @@ Work is tracked on the Workflowy **Claudia** board (`🔅 My projects › Produc
 - Australian English in UI copy and docs. Dates are stored in UTC, and date-only fields as `YYYY-MM-DD`. The default time zone is `Australia/Sydney`.
 - Small, focused commits with imperative messages.
 - Never commit secrets. Use `wrangler secret` and `.dev.vars` (git-ignored).
-- Domain rules live in `worker/src/domain/` as plain functions over the database (tasks, and the built-in views in `views.ts`); routes in `worker/src/routes/` only parse the request and call them.
+- Domain rules live in `worker/src/domain/` as plain functions over the database (tasks, the search language in `search.ts`, smart views in `filters.ts`, and the built-in views in `views.ts`, which are search queries); routes in `worker/src/routes/` only parse the request and call them.
 - Tests come with features: unit tests for the domain logic (recurrence, ordering, filters) and API tests against a local D1.
 
 ## Commands

@@ -2,7 +2,7 @@
 
 Date: 2026-11-16. Status: approved. The engine, `GET /api/search`, the Search view and smart views (saved filters with sort, group and Show completed, in folders, Save as smart view) are built; the views as queries are built; MCP `search_tasks` and the other display options are still to do.
 
-Board card (WIP): "Design a framework and syntax for semantic search in Search view. Use an existing library if possible." It also covers the backlog card "Semantic search" (boolean expressions over structured data, `#label`, sorting and grouping) and answers the note's open question on a richer filter language for smart lists.
+Board card (now DONE): "Design a framework and syntax for semantic search in Search view. Use an existing library if possible." It also covers the backlog card "Semantic search" (boolean expressions over structured data, `#label`, sorting and grouping) and answers the note's open question on a richer filter language for smart lists.
 
 "Semantic" here means a structured query language over the task fields, not embedding search.
 
@@ -25,7 +25,7 @@ Bare words and quoted phrases (`report`, `"weekly report"`) match the title or n
 | `priority:` | `low`, `normal`, `high` | Ordered, so `priority:>=normal` works |
 | `due:`, `start:`, `snoozed:`, `completed:`, `created:`, `updated:` | a date | `:` means on that day; also `:<`, `:<=`, `:>`, `:>=` and ranges |
 | `is:` | `open`, `completed`, `snoozed`, `available`, `recurring`, `heading`, `subtask`, `inbox` | `available`: open, not snoozed, and not starting after today. `inbox`: in the list flagged as the Inbox |
-| `has:` | `due`, `start`, `notes`, `labels`, `parent` | `-has:due`: no due date |
+| `has:` | `due`, `start`, `notes`, `labels`, `status`, `parent` | `-has:due`: no due date. `status`: carries a status label |
 
 **Dates:** `today`, `tomorrow`, `yesterday`, `7d`, `2w` or `3m` (from today), `today-7d` (past; an unquoted `-7d` is a liqe syntax error), or `2026-11-20`. They resolve in the user's time zone when the query runs, so a saved filter stays relative. Due conditions match a due date, or a due time by its day, as `dueBy` does now.
 
@@ -38,7 +38,7 @@ Bare words and quoted phrases (`report`, `"weekly report"`) match the title or n
 
 **Sort:** `sort:` takes `due`, `start`, `priority`, `created`, `updated`, `title` or `list`, with an optional `-desc` (`sort:due-desc`; `sort:-due` is a liqe syntax error). The default is priority, then sidebar list order and position, as views use now.
 
-**Group:** `group:` takes `list` (the default), `due` (the buckets views use: Overdue, Today, Tomorrow, This week, This month, Later, No date), `label` or `none`. A label order is quoted: `group:"label:event,wip,next"`.
+**Group:** `group:` takes `list` (the default), `due` (the buckets views use: Overdue, Today, Tomorrow, This week, This month, Later, No date), `label`, `status` (in the status labels' order, then No status) or `none`. A label order is quoted: `group:"label:event,wip,next"`.
 
 **Errors:** a query that doesn't parse, an unknown field, or an unknown `is:`, `has:`, sort or group value is a 422 `invalid_query` with `{ message, column }`. Nothing is silently ignored.
 
@@ -72,7 +72,7 @@ The built-in views stay in `views.ts`. Each is a query in `VIEWS` (Inbox `is:inb
 
 ## MCP
 
-- `search_tasks` takes `query` in the language. Its description gives the vocabulary and three or four examples. Check by hand that Claude writes valid queries from it.
+- Still to do (backlog card): `search_tasks` takes `query` in the language. Its description gives the vocabulary and three or four examples. Check by hand that Claude writes valid queries from it. For now it keeps its older parameters (list, label, due range, `activeBy`, text).
 - `run_filter` takes `context` and returns `{ tasks, sort, group }`. `create_filter` and `update_filter` take `query`, `sort`, `group` and `showCompleted` (`create_filter` also `folderId`), and `move_filter` places one in a folder. There is no MCP delete, as for everything else.
 - Task results keep their shape. List and folder names are their own backlog card.
 
