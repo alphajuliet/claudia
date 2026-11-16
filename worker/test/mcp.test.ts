@@ -99,10 +99,12 @@ describe("working through the tools", () => {
     const sub = (await call(write, "create_task", { listId: list.id, title: "Buy paint", parentId: a.id })).data;
     expect(sub.parentId).toBe(a.id);
 
-    const titles = (await call(write, "search_tasks", { listId: list.id })).data.map((t: any) => t.title);
+    const titles = (await call(write, "search_tasks", { query: "list:renovations" })).data.tasks.map((t: any) => t.title);
     expect([...titles].sort()).toEqual(["Buy paint", "Paint", "Plaster"]);
     expect(b.position < a.position).toBe(true); // placed before Paint
-    expect((await call(write, "search_tasks", { label: "next" })).data.map((t: any) => t.title)).toEqual(["Paint"]);
+    expect((await call(write, "search_tasks", { query: "#next folder:home" })).data.tasks.map((t: any) => t.title)).toEqual(["Paint"]);
+    const bad = await call(write, "search_tasks", { query: "colour:red" });
+    expect(bad).toMatchObject({ isError: true, text: expect.stringContaining("column") });
 
     const updated = (await call(write, "update_task", { id: b.id, title: "Plaster walls", notes: "Two coats", labels: ["wip"] })).data;
     expect(updated).toMatchObject({ title: "Plaster walls", notes: "Two coats", labels: ["wip"] });
@@ -111,7 +113,7 @@ describe("working through the tools", () => {
     expect(moved.position > a.position).toBe(true); // now after Paint
 
     expect((await call(write, "complete_task", { id: a.id })).data).toMatchObject({ completedAt: expect.any(String), subtasks: 1 });
-    const completed = (await call(write, "search_tasks", { status: "completed" })).data.map((t: any) => t.title);
+    const completed = (await call(write, "search_tasks", { query: "is:completed" })).data.tasks.map((t: any) => t.title);
     expect([...completed].sort()).toEqual(["Buy paint", "Paint"]); // its subtask too
     expect((await call(write, "uncomplete_task", { id: a.id })).data).toMatchObject({ completedAt: null, subtasks: 1 });
 
@@ -129,8 +131,8 @@ describe("working through the tools", () => {
   it("applies the default limit of 50", async () => {
     const list = (await call(write, "create_list", { name: "Many" })).data;
     for (let i = 0; i < 55; i++) await call(write, "create_task", { listId: list.id, title: `T${i}` });
-    expect((await call(write, "search_tasks", {})).data).toHaveLength(50);
-    expect((await call(write, "search_tasks", { offset: 50 })).data).toHaveLength(5);
+    expect((await call(write, "search_tasks", {})).data.tasks).toHaveLength(50);
+    expect((await call(write, "search_tasks", { offset: 50 })).data.tasks).toHaveLength(5);
   });
 });
 

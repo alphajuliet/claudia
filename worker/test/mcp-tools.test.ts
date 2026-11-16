@@ -38,11 +38,13 @@ describe("tool list", () => {
 });
 
 describe("request mapping", () => {
-  it("search_tasks applies the default limit and passes filters as a query", () => {
-    expect(req("search_tasks", {})).toEqual({ method: "GET", path: "/api/tasks", query: { status: "open", limit: 50, offset: 0 } });
-    expect(req("search_tasks", { label: "next", dueBefore: "2026-11-01", limit: 10 }).query).toMatchObject({
-      label: "next", dueBefore: "2026-11-01", limit: 10,
+  it("search_tasks sends its query to /api/search, with the default limit", () => {
+    expect(req("search_tasks", {})).toEqual({ method: "GET", path: "/api/search", query: { q: "", limit: 50, offset: 0 } });
+    expect(req("search_tasks", { query: "#next due:<=today", context: "work", sort: "due", limit: 10 })).toEqual({
+      method: "GET", path: "/api/search", query: { q: "#next due:<=today", context: "work", sort: "due", limit: 10, offset: 0 },
     });
+    // The old filters are gone: the query says it.
+    expect(() => req("search_tasks", { label: "next" })).toThrow();
   });
 
   it("reads use GET and the id in the path", () => {

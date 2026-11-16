@@ -1,6 +1,6 @@
 # Search language
 
-Date: 2026-11-16. Status: approved. The engine, `GET /api/search`, the Search view and smart views (saved filters with sort, group and Show completed, in folders, Save as smart view) are built; the views as queries are built; MCP `search_tasks` and the other display options are still to do.
+Date: 2026-11-16. Status: approved. The engine, `GET /api/search`, the Search view and smart views (saved filters with sort, group and Show completed, in folders, Save as smart view) are built; the views as queries and MCP `search_tasks` are built; the other display options are still to do.
 
 Board card (now DONE): "Design a framework and syntax for semantic search in Search view. Use an existing library if possible." It also covers the backlog card "Semantic search" (boolean expressions over structured data, `#label`, sorting and grouping) and answers the note's open question on a richer filter language for smart lists.
 
@@ -72,7 +72,7 @@ The built-in views stay in `views.ts`. Each is a query in `VIEWS` (Inbox `is:inb
 
 ## MCP
 
-- Still to do (backlog card): `search_tasks` takes `query` in the language. Its description gives the vocabulary and three or four examples. Check by hand that Claude writes valid queries from it. For now it keeps its older parameters (list, label, due range, `activeBy`, text).
+- `search_tasks` takes `query` in the language (plus `context`, `status`, `sort`, `group`, `limit` 50 by default, `offset`) and calls `GET /api/search`, returning `{ tasks, sort, group }`. Its older parameters (list ID, label, due range, `activeBy`, text) are gone. Its description, shared with `create_filter`, gives the vocabulary and examples. Check by hand that Claude writes valid queries from it.
 - `run_filter` takes `context` and returns `{ tasks, sort, group }`. `create_filter` and `update_filter` take `query`, `sort`, `group` and `showCompleted` (`create_filter` also `folderId`), and `move_filter` places one in a folder. There is no MCP delete, as for everything else.
 - Task results keep their shape. List and folder names are their own backlog card.
 

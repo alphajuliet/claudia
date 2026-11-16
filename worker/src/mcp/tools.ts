@@ -5,7 +5,6 @@ import {
   LABEL_COLOURS,
   LabelColourSchema,
   LabelNameSchema,
-  TaskQuerySchema,
   VIEW_IDS,
   placementShape,
   taskCreateShape,
@@ -47,18 +46,37 @@ const withPlacement = <T extends z.ZodRawShape>(shape: T) =>
 const CONVENTIONS =
   " Dates are YYYY-MM-DD. Status labels hold state (for example next, wip, waitingOn, someday): a task has one at most, and a new one replaces the old. IDs are ULIDs taken from earlier results.";
 
+/** The search language, for search_tasks, create_filter and update_filter. */
+const LANGUAGE =
+  "The search language: words match title or notes; #name or label:name; list:, folder: (with subfolders), context:, " +
+  "priority: (low < normal < high); due:, start:, snoozed:, completed:, created:, updated: with today, tomorrow, yesterday, 7d, 2w, 3m, today-7d " +
+  "or YYYY-MM-DD and :<, :<=, :>, :>=; is: (open, completed, snoozed, available, recurring, heading, subtask, inbox); has: (due, start, notes, labels, status, parent); " +
+  "AND, OR, NOT, -term, parentheses (a space means AND). Names ignore case and a leading emoji, and take * as a wildcard; quote names with spaces (list:\"Home admin\"). " +
+  "Open, unsnoozed tasks (not headings) unless it says otherwise. " +
+  "For example: \"#next is:available\", \"folder:Work (#wip OR due:<=today)\", \"completed:>=today-7d\", \"list:Garden -has:due\". " +
+  "sort: due, start, priority, created, updated, title or list, with -desc for reverse (due-desc). group: list, due, label, status, none, or label:wip,next for a label order.";
+const SORT = z.string().optional().describe("Overrides sort: in the query, e.g. due or due-desc");
+const GROUP = z.string().optional().describe("Overrides group: in the query, e.g. status or label:wip,next");
+
 export const TOOLS: ToolDef[] = [
   // ---- Read
   tool({
     name: "search_tasks",
     description:
-      "Find tasks. Returns open tasks by default, in list order, up to 50 at a time (use offset to page). Combine filters to build smart lists: list, label, due range, activeBy (due or started by a date, as the Today view), text." + CONVENTIONS,
+      "Find tasks with a query in the search language, as the app's Search screen does. Returns { tasks, sort, group }: up to 50 tasks at a time " +
+      "(use offset to page), sorted, with the sort and grouping in effect. An empty query gives every open task. A query that can't be read is an error " +
+      "naming the column. " + LANGUAGE + CONVENTIONS,
     access: "read",
-    input: TaskQuerySchema.extend({
+    input: strict({
+      query: z.string().default("").describe("The search, e.g. \"folder:Work #next\""),
+      context: z.enum(["all", ...CONTEXTS]).optional().describe("Narrow to one context's lists, unless the query names context: or folder:"),
+      status: z.enum(["open", "completed", "all"]).optional().describe("Overrides which tasks by completion; without it, open ones unless the query mentions is:completed, is:open or completed:"),
+      sort: SORT,
+      group: GROUP,
       limit: z.number().int().min(1).max(500).default(50),
       offset: z.number().int().min(0).default(0),
-    }).strict(),
-    request: (a) => ({ method: "GET", path: "/api/tasks", query: { ...a } }),
+    }),
+    request: ({ query, ...rest }) => ({ method: "GET", path: "/api/search", query: { q: query, ...rest } }),
   }),
   tool({
     name: "get_task",
@@ -244,12 +262,7 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: "create_filter",
     description:
-      "Save a smart view. query is in the search language: words match title or notes; #name or label:name; list:, folder: (with subfolders), context:, " +
-      "priority: (low < normal < high); due:, start:, snoozed:, completed:, created:, updated: with today, tomorrow, yesterday, 7d, 2w, 3m, today-7d " +
-      "or YYYY-MM-DD and :<, :<=, :>, :>=; is: (open, completed, snoozed, available, recurring, heading, subtask, inbox); has: (due, start, notes, labels, status, parent); " +
-      "AND, OR, NOT, -term, parentheses (a space means AND). Open, unsnoozed tasks unless it says otherwise. " +
-      "For example: \"#next is:available\", \"folder:Work (#wip OR due:<=today)\", \"completed:>=today-7d\". " +
-      "sort: due, start, priority, created, updated, title or list, with -desc for reverse (due-desc). group: list, due, label, status, none, or label:wip,next for a label order.",
+      "Save a smart view. query is in the search language (sort: and group: at its top level are saved as its sort and grouping). " + LANGUAGE,
     access: "write",
     input: strict({
       name: z.string().min(1),

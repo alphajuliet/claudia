@@ -189,7 +189,7 @@ One responsive layout covers three devices:
 - **iPad**: the same panes, with a 280px sidebar on touch screens. The sidebar becomes a drawer (320px, at most 85% of the width) below 900px, and from 700px wide the panel sits beside the list at 340px. The sidebar never scrolls sideways: a long name ends in an ellipsis.
 - **Phone**: the list full-screen, with the task as a sheet. Rows swipe right to complete and left for Date and Snooze. Touch screens get a compact layout with 36px rows on a phone and 40px on an iPad.
 
-Lists, folders and smart views are managed from the sidebar. Each one, and the Lists heading, has a ⋯ menu (`ui/RowMenu.tsx`), shown on hover with a mouse and always on touch. New lists and folders are named in place, and empty ones can be deleted (a folder with a list, smart view or subfolder in it isn't empty). Smart views sit in their folder after the lists, or under a Smart views heading when in no folder. All three drag to a new place with the same gesture as tasks (`ui/useListDrag.ts`, with the rules in `lib/listMove.ts`, `lib/folderMove.ts` and `lib/filterMove.ts`).
+Lists, folders and smart views are managed from the sidebar. Each one, and the Lists heading, has a ⋯ menu (`ui/RowMenu.tsx`), shown on hover with a mouse and always on touch. New lists and folders are named in place, and empty ones can be deleted (a folder with a list, smart view or subfolder in it isn't empty). Smart views sit in their folder after the lists, or under a Smart views heading when in no folder; that heading opens and closes the section, remembered on the device. All three drag to a new place with the same gesture as tasks (`ui/useListDrag.ts`, with the rules in `lib/listMove.ts`, `lib/folderMove.ts` and `lib/filterMove.ts`).
 
 The Labels screen (`ui/LabelsScreen.tsx`) adds, renames, recolours and deletes labels, and lists the status labels first in their order, with a Status switch on each label and ↑/↓ to reorder. In the task panel a status label is its own Status menu beside Priority rather than a label chip, and choosing one replaces the old one (`lib/status.ts`).
 
@@ -224,5 +224,4 @@ These are tracked on the Workflowy board:
 - No events/history endpoint, and deleted tasks can't be restored yet.
 - Recurring tasks with a due time don't advance.
 - The web app parses responses with the shared schemas but has no generated, typed API client.
-- MCP `search_tasks` still takes its older parameters, not the search language (smart views and `run_filter` do).
 - Not built: offline capture and a cached Today, a keymap editor, notifications and sharing.
