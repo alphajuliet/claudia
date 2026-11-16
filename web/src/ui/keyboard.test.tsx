@@ -72,7 +72,7 @@ describe("keyboard commands", () => {
     await userEvent.keyboard("/");
     const field = await main().findByRole("searchbox", { name: "Search" });
     expect(document.activeElement).toBe(field);
-    expect(main().getByText("Type to search titles and notes.")).toBeTruthy();
+    expect(main().getByText(/Type to search/)).toBeTruthy();
     await userEvent.type(field, "compost");
     expect(await main().findByText("Order mulch")).toBeTruthy();
     expect(main().getByText("Compost bin")).toBeTruthy();

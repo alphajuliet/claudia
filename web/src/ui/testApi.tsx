@@ -224,6 +224,36 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
         && (!q.get("q") || `${t.title}\n${t.notes ?? ""}`.toLowerCase().includes(q.get("q")!.toLowerCase())));
       return json(out);
     }
+    // Search, roughly: words match title or notes, #name a label, sort: and group: are lifted, and any other
+    // field: is a 422 with its column, as the server says it.
+    if (pathname === "/api/search") {
+      if (changed) await opts.holdRefetch;
+      const q = new URLSearchParams(search);
+      let sort = { by: "list", desc: false } as { by: string; desc: boolean };
+      let group = { by: "list" } as { by: string; labels?: string[] };
+      const tests: ((t: Task) => boolean)[] = [];
+      let column = 1;
+      for (const term of (q.get("q") ?? "").split(" ")) {
+        const field = /^(\w+):(.*)$/.exec(term);
+        if (field?.[1] === "sort") sort = { by: field[2]!.replace(/-desc$/, ""), desc: field[2]!.endsWith("-desc") };
+        else if (field?.[1] === "group") group = field[2]!.startsWith("label:") ? { by: "label", labels: field[2]!.slice(6).split(",") } : { by: field[2]! };
+        else if (field) return json({ error: { code: "invalid_query", message: `There's no field "${field[1]}" (column ${column})`, issues: [{ column }] } }, 422);
+        else if (term.startsWith("#")) tests.push((t) => t.labels.some((l) => l.toLowerCase() === term.slice(1).toLowerCase()));
+        else if (term) tests.push((t) => `${t.title}\n${t.notes ?? ""}`.toLowerCase().includes(term.toLowerCase()));
+        column += term.length + 1;
+      }
+      const sortParam = q.get("sort");
+      if (sortParam) sort = { by: sortParam.replace(/-desc$/, ""), desc: sortParam.endsWith("-desc") };
+      const groupParam = q.get("group");
+      if (groupParam) group = groupParam.startsWith("label:") ? { by: "label", labels: groupParam.slice(6).split(",") } : { by: groupParam };
+      const status = q.get("status") ?? "open";
+      const out = [...store.values()].filter((t) =>
+        t.kind === "task"
+        && (status !== "open" || t.completedAt === null)
+        && (status !== "completed" || t.completedAt !== null)
+        && tests.every((test) => test(t)));
+      return json({ tasks: out, sort, group });
+    }
     // Views, as worker/src/domain/views.ts decides them (due times aside).
     if (pathname === "/api/views") {
       const context = new URLSearchParams(search).get("context") ?? "all";

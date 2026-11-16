@@ -1,6 +1,6 @@
 # Search language
 
-Date: 2026-11-16. Status: approved; not built.
+Date: 2026-11-16. Status: approved. The engine, `GET /api/search` and the Search view are built; saved filters' sort, group and display, Save as filter, MCP `search_tasks` and the views as queries are still to do.
 
 Board card (WIP): "Design a framework and syntax for semantic search in Search view. Use an existing library if possible." It also covers the backlog card "Semantic search" (boolean expressions over structured data, `#label`, sorting and grouping) and answers the note's open question on a richer filter language for smart lists.
 
@@ -31,6 +31,7 @@ Bare words and quoted phrases (`report`, `"weekly report"`) match the title or n
 
 **Defaults:**
 
+- Unsnoozed tasks only, unless the query has `is:snoozed` or a `snoozed:` condition (as Search did before).
 - Open tasks only, unless the query has `is:completed` or a `completed:` condition. Show completed works as it does now.
 - No headings, unless the query has `is:heading`.
 - The sidebar's context switch narrows the results, unless the query names `context:` or `folder:`.

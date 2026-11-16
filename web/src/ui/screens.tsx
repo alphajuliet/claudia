@@ -42,13 +42,13 @@ const withStatus = (query: string, status: string) => {
   return q.toString();
 };
 
-interface Loaded { data: Task[] | undefined; isPending: boolean; error: Error | null; refetch: () => unknown }
+export interface Loaded { data: Task[] | undefined; isPending: boolean; error: Error | null; refetch: () => unknown }
 
 /**
  * Combines a screen's open tasks with its completed ones (when shown). Completed tasks come from a query of their own,
  * so they never crowd open ones out of the limit, and the screen shows its open tasks without waiting for them.
  */
-function combine(open: Loaded, done: Loaded, show: boolean, include: (t: Task) => boolean = () => true): Loaded {
+export function combine(open: Loaded, done: Loaded, show: boolean, include: (t: Task) => boolean = () => true): Loaded {
   return {
     data: open.data && (show ? merge(open.data, (done.data ?? []).filter((t) => t.completedAt !== null && include(t))) : open.data),
     isPending: open.isPending,
@@ -83,7 +83,7 @@ function GroupButton({ grouping, onChange }: { grouping: Grouping; onChange: (g:
 }
 
 /** A screen's title (click to rename, when `onRename` is given), any actions of its own and its Show completed toggle. */
-function ScreenHeader({ title, onRename, children }: { title: string; onRename?: (name: string) => void; children?: ReactNode }) {
+export function ScreenHeader({ title, onRename, children }: { title: string; onRename?: (name: string) => void; children?: ReactNode }) {
   return (
     <header className="screen-header">
       {onRename ? (
@@ -109,7 +109,7 @@ function ScreenHeader({ title, onRename, children }: { title: string; onRename?:
  * Sections for a view or filter: open, unsnoozed tasks (headings left out) grouped by list in sidebar order,
  * narrowed to the current context. The Inbox list is not in the sidebar tree, so it is put first.
  */
-function useListOrder() {
+export function useListOrder() {
   const { context } = useContextFilter();
   const folders = useFolders().data ?? [];
   const lists = useLists().data ?? [];

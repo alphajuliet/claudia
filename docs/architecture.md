@@ -63,7 +63,7 @@ An npm workspaces monorepo, TypeScript throughout:
 worker/src/
   index.ts          entry point: OAuthProvider, Hono app, cron handler
   routes/           one file per resource; parse the request, call the domain, shape the response
-  domain/           the rules: tasks.ts (create, update, move, complete, delete, find), views.ts (built-in views)
+  domain/           the rules: tasks.ts (create, update, move, complete, delete, find), views.ts (built-in views), search.ts (the search language)
   lib/              auth, D1 helpers, events, IDs, fractional positions, labels, recurrence, the router factory
   mcp/              MCP handler, server and tool definitions
   oauth/            consent page, passphrase check, redirect allowlist
@@ -98,7 +98,7 @@ Every capability the web app has exists in the API. The Zod schemas in `shared/`
 - the MCP tool input schemas (`mcp/tools.ts` reuses the shapes, converted to JSON Schema),
 - parsing responses in the web app (`data/queries.ts` parses with the same schemas).
 
-Resources: `folders`, `lists`, `tasks` (including `move`, `complete`, `uncomplete`), `labels`, `filters` (saved queries, run with `/api/filters/{id}/tasks`), `views` (built-in views and their counts), `counts` (per-list counts for the sidebar), `capture` (one line into the Inbox), `settings`, `tokens`, `me`, `import` and `backup`.
+Resources: `folders`, `lists`, `tasks` (including `move`, `complete`, `uncomplete`), `labels`, `filters` (saved queries, run with `/api/filters/{id}/tasks`), `views` (built-in views and their counts), `search` (tasks matching a query in the search language), `counts` (per-list counts for the sidebar), `capture` (one line into the Inbox), `settings`, `tokens`, `me`, `import` and `backup`.
 
 ### Routes and domain
 
@@ -107,6 +107,7 @@ Routes parse the request and call plain functions; the rules live in `worker/src
 - **`domain/tasks.ts`**: creating, reading, updating, moving, completing and deleting tasks, and the shared query conditions (`openTask`, `dueBy`, `activeBy`, `hasLabel`, `notSnoozed`). Each change writes its rows and its event in one batch.
 - **`domain/views.ts`**: the built-in views (Inbox, Today, Next, WIP, Waiting, Someday), defined once so the web app, MCP and the counts agree. A view is open, unsnoozed tasks in the chosen context's lists; Today is due or started by today in the user's time zone, and the others are a label.
 
+- **`domain/search.ts`**: the search language behind `GET /api/search`. liqe parses a Lucene-style query; this module lifts `sort:` and `group:` from its top level, checks every term against the task fields and compiles it to SQL, reusing the conditions in `tasks.ts`. Unless the query says otherwise it shows open, unsnoozed tasks (not headings) in the context's lists. The response carries the sort and grouping in effect; the web app builds the groups (`web/src/lib/search.ts`), since list order is the sidebar's. See `docs/plans/2026-11-16-search-language-design.md`.
 - **`domain/folders.ts`**: a subfolder's context follows its parent's. Creating, moving or changing the context of a folder sets it on every folder under it too, because the sidebar shows a subfolder only in its own context.
 
 The other resources (lists, labels, filters, and the rest of folders) still keep their logic in the route files. They are simpler and have less shared logic.
@@ -191,7 +192,7 @@ Lists and folders are managed from the sidebar. Each list, folder and the Lists 
 
 ### Data layer
 
-`data/queries.ts` wraps every API call in TanStack Query hooks, with query keys such as `["tasks", …]`, `["lists"]` and `["counts", …]`. Task changes are optimistic. They update every cached list that holds the task at once, put back only the affected tasks on failure, and refetch once the last change settles. Creates are refetched rather than placed locally, because which views a new task belongs in is the server's decision. The views' contents come from the server (`/api/views/{id}/tasks`); the web app only names and links them (`lib/views.ts`).
+`data/queries.ts` wraps every API call in TanStack Query hooks, with query keys such as `["tasks", …]`, `["lists"]` and `["counts", …]`. Task changes are optimistic. They update every cached list that holds the task at once, put back only the affected tasks on failure, and refetch once the last change settles. Creates are refetched rather than placed locally, because which views a new task belongs in is the server's decision. The views' contents come from the server (`/api/views/{id}/tasks`); the web app only names and links them (`lib/views.ts`). Search results (`useSearchTasks`) are cached as a task list like the others, with the sort and grouping beside them under `["search-how", …]`, so every cache under `["tasks"]` stays a plain task array.
 
 ### Keyboard
 

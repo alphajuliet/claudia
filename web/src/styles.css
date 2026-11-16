@@ -1319,3 +1319,20 @@ button.swatch[aria-pressed="true"] { border-color: var(--accent); }
 /* Shake to undo, in the sidebar footer on touch screens: a full-width row above who's signed in. */
 .footer-switch { display: flex; flex-basis: 100%; align-items: center; gap: 0.5rem; min-height: var(--touch); color: var(--muted); font-size: 0.9rem; }
 .footer-switch input { width: 1.1rem; height: 1.1rem; margin: 0; accent-color: var(--accent); }
+
+/* Search: the field with its help button, a query problem under it, the cheat sheet, and the Sort and Group menus. */
+.search-field { display: flex; align-items: center; gap: 0.25rem; }
+.search-field .quick-add-input { flex: 1; min-width: 0; }
+.search-problem { color: var(--danger); font-size: 0.9em; margin: 0.25rem 0 0.75rem; }
+.search-help { margin: 0.5rem 0 1rem; font-size: 0.9em; }
+.search-help table { border-collapse: collapse; width: 100%; }
+.search-help td { padding: 0.2rem 0.75rem 0.2rem 0; vertical-align: top; }
+.search-help td:first-child { white-space: nowrap; }
+.search-help code { font-size: 0.95em; }
+.search-menu { display: inline-flex; align-items: baseline; gap: 0.3rem; font-size: 0.85em; }
+.search-menu select { border: 1px solid transparent; background: transparent; border-radius: 4px; padding: 0.1rem 0.2rem; }
+.search-menu select:hover, .search-menu select:focus { border-color: var(--border); }
+@media (max-width: 640px) {
+  .search-help td:first-child { white-space: normal; }
+  .search-menu > span { display: none; }
+}

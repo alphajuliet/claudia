@@ -1,4 +1,4 @@
-import { CountsSchema, FilterSchema, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, ViewSummarySchema, type ContextFilter, type CONTEXTS, type Folder, type Label, type LabelColour, type List, type Task, type ViewId } from "@claudia/shared";
+import { CountsSchema, FilterSchema, SearchResultSchema, type SearchResult, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, ViewSummarySchema, type ContextFilter, type CONTEXTS, type Folder, type Label, type LabelColour, type List, type Task, type ViewId } from "@claudia/shared";
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
@@ -96,6 +96,39 @@ export const useFilterTasks = (id: string | null, opts: TaskListOptions & { stat
     TasksSchema,
     opts,
   );
+
+/** The server couldn't read a search query: the message says what and where (column). */
+export class SearchQueryError extends Error {}
+
+const SearchHowSchema = SearchResultSchema.pick({ sort: true, group: true });
+type SearchHow = Pick<SearchResult, "sort" | "group">;
+
+/**
+ * Tasks matching a search (`params`: q, context, status, sort, group), with the sort and grouping the server says
+ * are in effect. The tasks sit under ["tasks"] like every task list, so changes reach them; the sort and grouping
+ * are kept beside them under ["search-how"]. Null waits.
+ */
+export function useSearchTasks(params: URLSearchParams | null, opts: TaskListOptions = {}) {
+  const { state, api } = useSession();
+  const queryClient = useQueryClient();
+  const query = params?.toString() ?? null;
+  const tasks = useQuery({
+    queryKey: listKey(["tasks", "search", query], opts),
+    queryFn: async () => {
+      const res = await api(`/api/search?${query}`);
+      if (res.status === 422) throw new SearchQueryError(await json(res, NoContent).then(() => "The query has a problem", (e: Error) => e.message));
+      const result = await json(res, SearchResultSchema);
+      queryClient.setQueryData<SearchHow>(["search-how", query], SearchHowSchema.parse(result));
+      return result.tasks;
+    },
+    enabled: state.status === "signedIn" && query !== null,
+    // A query the server can't read won't read better the second time.
+    retry: (count, error) => !(error instanceof SearchQueryError) && count < 3,
+    ...(opts.keepPrevious ? { placeholderData: keepPreviousData } : {}),
+  });
+  const how = useQuery<SearchHow | null>({ queryKey: ["search-how", query], queryFn: () => null, enabled: false, staleTime: Infinity });
+  return { ...tasks, how: how.data ?? undefined };
+}
 
 /** A JSON request body. */
 const send = (method: string, body: unknown): RequestInit => ({
