@@ -1,6 +1,6 @@
 # Search language
 
-Date: 2026-11-16. Status: approved. The engine, `GET /api/search`, the Search view and smart views (saved filters with sort, group and Show completed, in folders, Save as smart view) are built; MCP `search_tasks`, the views as queries and the other display options are still to do.
+Date: 2026-11-16. Status: approved. The engine, `GET /api/search`, the Search view and smart views (saved filters with sort, group and Show completed, in folders, Save as smart view) are built; the views as queries are built; MCP `search_tasks` and the other display options are still to do.
 
 Board card (WIP): "Design a framework and syntax for semantic search in Search view. Use an existing library if possible." It also covers the backlog card "Semantic search" (boolean expressions over structured data, `#label`, sorting and grouping) and answers the note's open question on a richer filter language for smart lists.
 
@@ -24,7 +24,7 @@ Bare words and quoted phrases (`report`, `"weekly report"`) match the title or n
 | `context:` | `work`, `personal`, `home` | |
 | `priority:` | `low`, `normal`, `high` | Ordered, so `priority:>=normal` works |
 | `due:`, `start:`, `snoozed:`, `completed:`, `created:`, `updated:` | a date | `:` means on that day; also `:<`, `:<=`, `:>`, `:>=` and ranges |
-| `is:` | `open`, `completed`, `snoozed`, `available`, `recurring`, `heading`, `subtask` | `available`: open, not snoozed, and not starting after today |
+| `is:` | `open`, `completed`, `snoozed`, `available`, `recurring`, `heading`, `subtask`, `inbox` | `available`: open, not snoozed, and not starting after today. `inbox`: in the list flagged as the Inbox |
 | `has:` | `due`, `start`, `notes`, `labels`, `parent` | `-has:due`: no due date |
 
 **Dates:** `today`, `tomorrow`, `yesterday`, `7d`, `2w` or `3m` (from today), `today-7d` (past; an unquoted `-7d` is a liqe syntax error), or `2026-11-20`. They resolve in the user's time zone when the query runs, so a saved filter stays relative. Due conditions match a due date, or a due time by its day, as `dueBy` does now.
@@ -56,7 +56,7 @@ folder:Work (#wip OR due:<=today OR start:<=today) sort:due group:"label:event,w
 2. **Check:** fields, values and dates are validated against the vocabulary.
 3. **Compile:** the tree becomes a Drizzle `SQL` condition, reusing `dueBy`, `hasLabel`, `notSnoozed`, `openTask` and `listsInContext`. It runs through `fetchTasks` with the resolved sort.
 
-The built-in views stay in `views.ts`. Each is expressed as a query (Next is `#next is:available`), so a view and the same typed search can't disagree.
+The built-in views stay in `views.ts`. Each is a query in `VIEWS` (Inbox `is:inbox`, Today `due:<=today OR start:<=today`, Next `#next`, WIP `#wip`, Waiting `#waitingOn`, Someday `#someday`) run through the engine, so a view and the same typed search can't disagree. They keep what they showed before: Next isn't narrowed to `is:available`. With Show completed, Today adds `completed:today`. `GET /api/views` gives each view's `query`.
 
 ## API
 

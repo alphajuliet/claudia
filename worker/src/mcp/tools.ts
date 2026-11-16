@@ -83,7 +83,7 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: "list_views",
     description:
-      "List the built-in views (inbox, today, next, wip, waiting, someday) with how many open tasks each shows, optionally in one context (work, personal or home). Use get_view for their tasks.",
+      "List the built-in views (inbox, today, next, wip, waiting, someday) with the search query each one is and how many open tasks it shows, optionally in one context (work, personal or home). Use get_view for their tasks.",
     access: "read",
     input: strict({ context: z.enum(["all", ...CONTEXTS]).optional().describe("Narrow to one context; all by default") }),
     request: (a) => ({ method: "GET", path: "/api/views", query: { ...a } }),
@@ -91,7 +91,7 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: "get_view",
     description:
-      "Get a built-in view's tasks, exactly as the app shows them: open, unsnoozed tasks (not headings). inbox: the Inbox list. today: due or started today or earlier (the user's day). next, wip, waiting, someday: tasks with the label next, wip, waitingOn or someday. Prefer this over search_tasks for these.",
+      "Get a built-in view's tasks, exactly as the app shows them: open, unsnoozed tasks (not headings). inbox: the Inbox list. today: due or started today or earlier (the user's day). next, wip, waiting, someday: tasks with the label next, wip, waitingOn or someday. Each view is a search query (list_views gives it), so it can be narrowed in search, e.g. \"#next folder:Work\". Prefer this over search_tasks for these.",
     access: "read",
     input: strict({
       id: z.enum(VIEW_IDS).describe("Which view"),
@@ -246,7 +246,7 @@ export const TOOLS: ToolDef[] = [
     description:
       "Save a smart view. query is in the search language: words match title or notes; #name or label:name; list:, folder: (with subfolders), context:, " +
       "priority: (low < normal < high); due:, start:, snoozed:, completed:, created:, updated: with today, tomorrow, yesterday, 7d, 2w, 3m, today-7d " +
-      "or YYYY-MM-DD and :<, :<=, :>, :>=; is: (open, completed, snoozed, available, recurring, heading, subtask); has: (due, start, notes, labels, status, parent); " +
+      "or YYYY-MM-DD and :<, :<=, :>, :>=; is: (open, completed, snoozed, available, recurring, heading, subtask, inbox); has: (due, start, notes, labels, status, parent); " +
       "AND, OR, NOT, -term, parentheses (a space means AND). Open, unsnoozed tasks unless it says otherwise. " +
       "For example: \"#next is:available\", \"folder:Work (#wip OR due:<=today)\", \"completed:>=today-7d\". " +
       "sort: due, start, priority, created, updated, title or list, with -desc for reverse (due-desc). group: list, due, label, status, none, or label:wip,next for a label order.",

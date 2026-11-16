@@ -96,7 +96,7 @@ describe("views", () => {
     expect(await counts()).toEqual({ inbox: 1, today: 1, next: 0, wip: 2, waiting: 0, someday: 0 });
     expect(await counts("?context=home")).toEqual({ inbox: 1, today: 0, next: 0, wip: 1, waiting: 0, someday: 0 });
     const [summary] = (await api("GET", "/api/views")).body;
-    expect(summary).toEqual({ id: "inbox", name: "Inbox", label: null, count: 1 });
+    expect(summary).toEqual({ id: "inbox", name: "Inbox", label: null, query: "is:inbox", count: 1 });
   });
 
   it("says when there's no Inbox, and refuses an unknown view", async () => {
@@ -105,5 +105,31 @@ describe("views", () => {
     expect(await view("inbox")).toMatchObject({ status: 422, body: { error: { code: "no_inbox" } } });
     expect((await api("GET", "/api/views")).body[0]).toMatchObject({ id: "inbox", count: 0 });
     expect((await api("GET", "/api/views/nope/tasks")).status).toBe(400);
+  });
+});
+
+describe("views as search queries", () => {
+  it("each view shows what its query shows in Search, in every context", async () => {
+    const tomorrow = addDays(today, 1);
+    await add(inbox.id, "Inbox plain");
+    await add(loose.id, "Due today", { dueDate: today, labels: ["next"] });
+    await add(job.id, "Started", { startDate: addDays(today, -2), labels: ["wip"] });
+    await add(job.id, "Due tomorrow", { dueDate: tomorrow, labels: ["waitingOn"] });
+    await add(garden.id, "Someday", { labels: ["someday"] });
+    await add(garden.id, "Snoozed next", { labels: ["next"], snoozedUntil: `${tomorrow}T00:00:00Z` });
+    await add(hidden.id, "Odd next", { labels: ["next"] });
+    await add(job.id, "Heading", { kind: "heading", dueDate: today });
+    const done = await add(loose.id, "Done today", { dueDate: today });
+    await api("POST", `/api/tasks/${done.id}/complete`);
+
+    const summaries = (await api("GET", "/api/views")).body as { id: string; query: string }[];
+    expect(summaries.find((v) => v.id === "next")!.query).toBe("#next");
+    for (const context of ["all", "work", "personal", "home"]) {
+      for (const { id, query } of summaries) {
+        const searched = (await api("GET", `/api/search?q=${encodeURIComponent(query)}&context=${context}&limit=500`)).body.tasks.map((t: { title: string }) => t.title).sort();
+        expect(await view(id, `?context=${context}`), `${id} in ${context}`).toEqual(searched);
+      }
+    }
+    expect(await view("today", "?status=completed")).toEqual(["Done today"]);
   });
 });

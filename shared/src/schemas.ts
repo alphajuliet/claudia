@@ -270,13 +270,17 @@ export const TaskMoveSchema = z
   .openapi("TaskMove");
 
 // Views: the built-in smart lists. What each shows is decided by the server (worker/src/domain/views.ts).
+/**
+ * The built-in views. Each is a search-language query (with the search defaults: open, unsnoozed, no headings, the
+ * context's lists), so a view and the same typed search can't disagree.
+ */
 export const VIEWS = [
-  { id: "inbox", name: "Inbox", label: null },
-  { id: "today", name: "Today", label: null },
-  { id: "next", name: "Next", label: "next" },
-  { id: "wip", name: "WIP", label: "wip" },
-  { id: "waiting", name: "Waiting", label: "waitingOn" },
-  { id: "someday", name: "Someday", label: "someday" },
+  { id: "inbox", name: "Inbox", label: null, query: "is:inbox" },
+  { id: "today", name: "Today", label: null, query: "due:<=today OR start:<=today" },
+  { id: "next", name: "Next", label: "next", query: "#next" },
+  { id: "wip", name: "WIP", label: "wip", query: "#wip" },
+  { id: "waiting", name: "Waiting", label: "waitingOn", query: "#waitingOn" },
+  { id: "someday", name: "Someday", label: "someday", query: "#someday" },
 ] as const;
 export const VIEW_IDS = ["inbox", "today", "next", "wip", "waiting", "someday"] as const satisfies readonly (typeof VIEWS)[number]["id"][];
 export type ViewId = (typeof VIEW_IDS)[number];
@@ -291,6 +295,7 @@ export const ViewSummarySchema = z
     id: z.enum(VIEW_IDS),
     name: z.string(),
     label: z.string().nullable().openapi({ description: "The label the view shows (and quick add in it gives), if any" }),
+    query: z.string().openapi({ description: "What it shows, as a search query (GET /api/search?q=...)", example: "#next" }),
     count: z.number().int().openapi({ description: "Open tasks it shows now" }),
   })
   .openapi("ViewSummary");
@@ -323,7 +328,7 @@ const GroupParam = z.string().refine((s) => parseGroup(s) !== null, "group is li
 export const SearchQuerySchema = z.object({
   q: z.string().default("").openapi({
     description:
-      "The search: words match title or notes; fields such as #next, label:, list:, folder:, context:, priority:, due:<=today, start:, is:available, has:due; AND, OR, NOT, -term and parentheses. sort: and group: at the top level set the sort and grouping",
+      "The search: words match title or notes; fields such as #next, label:, list:, folder:, context:, priority:, due:<=today, start:, is:available, is:inbox, has:due; AND, OR, NOT, -term and parentheses. sort: and group: at the top level set the sort and grouping",
     example: "folder:Work (#wip OR due:<=today) sort:due",
   }),
   context: ContextFilterSchema.openapi({ description: "Narrow to the lists of one context, unless the query names context: or folder:" }),

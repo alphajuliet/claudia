@@ -27,7 +27,6 @@ import type { Column } from "drizzle-orm";
 import { ApiError } from "../lib/errors";
 import { addDays, startOfDayIn, todayIn, userTimeZone } from "../lib/recurrence";
 import { fetchTasks, hasLabel, notSnoozed } from "./tasks";
-import { listsInContext } from "./views";
 
 export interface SearchInput {
   q: string;
@@ -42,6 +41,30 @@ export interface SearchInput {
 /** A query error, with the column (from 1) it was found at. */
 const invalid = (message: string, column: number) => new ApiError(422, "invalid_query", `${message} (column ${column})`, [{ column }]);
 const columnOf = (node: { location?: { start: number } }) => (node.location?.start ?? 0) + 1;
+
+/**
+ * The lists a context covers, as the sidebar shows them: lists in no folder, lists in the context's folders (a
+ * folder of another context hides what's under it), and the Inbox. Archived lists are left out. Null for "all".
+ */
+export async function listsInContext(db: Db, context: ContextFilter, inboxId: string | null): Promise<string[] | null> {
+  if (context === "all") return null;
+  const [allFolders, allLists] = await Promise.all([
+    db.select({ id: folders.id, parentId: folders.parentId, context: folders.context }).from(folders).where(isNull(folders.deletedAt)),
+    db.select({ id: lists.id, folderId: lists.folderId }).from(lists).where(and(isNull(lists.deletedAt), isNull(lists.archivedAt))),
+  ]);
+  const shown = new Set<string>();
+  const walk = (parentId: string | null) => {
+    for (const f of allFolders) {
+      if (f.parentId === parentId && f.context === context) {
+        shown.add(f.id);
+        walk(f.id);
+      }
+    }
+  };
+  walk(null);
+  const ids = allLists.filter((l) => l.folderId === null || shown.has(l.folderId)).map((l) => l.id);
+  return inboxId && !ids.includes(inboxId) ? [inboxId, ...ids] : ids;
+}
 
 // ---- Dates
 
@@ -100,7 +123,7 @@ type DateField = keyof typeof DATE_FIELDS;
 // ---- What a query can say
 
 const FIELDS = ["label", "list", "folder", "context", "priority", "is", "has", ...Object.keys(DATE_FIELDS), "sort", "group"];
-const IS_VALUES = ["open", "completed", "snoozed", "available", "recurring", "heading", "subtask"] as const;
+const IS_VALUES = ["open", "completed", "snoozed", "available", "recurring", "heading", "subtask", "inbox"] as const;
 const HAS_VALUES = ["due", "start", "notes", "labels", "status", "parent"] as const;
 const PRIORITY_RANK = { low: 0, normal: 1, high: 2 } as const;
 
@@ -110,7 +133,7 @@ interface Names {
   lists: { id: string; name: string; folderId: string | null }[];
 }
 
-interface Scope {
+export interface Scope {
   today: string;
   timeZone: string;
   now: string;
@@ -187,6 +210,8 @@ function isCondition(tag: TagToken, scope: Scope): SQL {
     case "recurring": return isNotNull(tasks.recurRule);
     case "heading": return eq(tasks.kind, "heading");
     case "subtask": return isNotNull(tasks.parentId);
+    // In the list flagged as the Inbox, whatever it's called.
+    case "inbox": return scope.inboxId ? eq(tasks.listId, scope.inboxId) : sql`0`;
     default: throw invalid(`is: is one of ${IS_VALUES.join(", ")}, not "${value}"`, columnOf(tag));
   }
 }
@@ -393,7 +418,8 @@ function orderFor(sort: SearchSort): SQL[] {
   }
 }
 
-async function searchScope(db: Db, at = new Date()): Promise<Scope> {
+/** What a query needs to know about now: the day, the time zone, the Inbox and the names of folders and lists. */
+export async function searchScope(db: Db, at = new Date()): Promise<Scope> {
   const timeZone = await userTimeZone(db);
   const [folderRows, listRows] = await Promise.all([
     db.select({ id: folders.id, name: folders.name, parentId: folders.parentId }).from(folders).where(isNull(folders.deletedAt)),
@@ -413,24 +439,35 @@ export async function checkSearch(db: Db, q: string): Promise<void> {
   await compile(db, parseSearch(q).ast, await searchScope(db));
 }
 
-/** Tasks matching a query, with the sort and grouping in effect (parameters win over `sort:` and `group:` in it). */
-export async function searchTasks(db: Db, input: SearchInput) {
-  const parsed = parseSearch(input.q);
-  const sort = (input.sort ? parseSort(input.sort) : null) ?? parsed.sort ?? DEFAULT_SORT;
-  const group = (input.group ? parseGroup(input.group) : null) ?? parsed.group ?? DEFAULT_GROUP;
-  const scope = await searchScope(db);
-  const { ast } = parsed;
-
-  const status = input.status ?? (mentions(ast, "is", ["open", "completed"]) || mentions(ast, "completed") ? "all" : "open");
+/**
+ * The condition for a parsed query's tasks, with the defaults (open, unsnoozed, no headings, the context's lists)
+ * unless the query or `status` says otherwise. Live tasks only, so it can be counted as it is.
+ */
+export async function searchCondition(
+  db: Db,
+  ast: ParserAst,
+  run: { context: ContextFilter; status?: "open" | "completed" | "all" },
+  scope: Scope,
+): Promise<SQL | undefined> {
+  const status = run.status ?? (mentions(ast, "is", ["open", "completed"]) || mentions(ast, "completed") ? "all" : "open");
   const contextLists =
-    input.context === "all" || mentions(ast, "context") || mentions(ast, "folder") ? null : await listsInContext(db, input.context, scope.inboxId);
-  const where = and(
+    run.context === "all" || mentions(ast, "context") || mentions(ast, "folder") ? null : await listsInContext(db, run.context, scope.inboxId);
+  return and(
+    isNull(tasks.deletedAt),
     await compile(db, ast, scope),
     status === "open" ? isNull(tasks.completedAt) : status === "completed" ? isNotNull(tasks.completedAt) : undefined,
     mentions(ast, "is", ["heading"]) ? undefined : eq(tasks.kind, "task"),
     mentions(ast, "is", ["snoozed"]) || mentions(ast, "snoozed") ? undefined : notSnoozed(scope.now),
     contextLists ? inListIds(contextLists) : undefined,
   );
+}
+
+/** Tasks matching a query, with the sort and grouping in effect (parameters win over `sort:` and `group:` in it). */
+export async function searchTasks(db: Db, input: SearchInput) {
+  const parsed = parseSearch(input.q);
+  const sort = (input.sort ? parseSort(input.sort) : null) ?? parsed.sort ?? DEFAULT_SORT;
+  const group = (input.group ? parseGroup(input.group) : null) ?? parsed.group ?? DEFAULT_GROUP;
+  const where = await searchCondition(db, parsed.ast, input, await searchScope(db));
   const found = await fetchTasks(db, where, input, orderFor(sort));
   return { tasks: found, sort, group };
 }

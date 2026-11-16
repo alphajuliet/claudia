@@ -7,7 +7,7 @@ const DESCRIPTION =
   "Tasks matching a query in the search language (Lucene-style, parsed by liqe). " +
   "Words and \"phrases\" match title or notes. Fields: label: (or #name), list:, folder: (with subfolders), context:, priority: (low < normal < high), " +
   "due:, start:, snoozed:, completed:, created:, updated: (today, tomorrow, yesterday, 7d, 2w, 3m, today-7d or YYYY-MM-DD; with :<, :<=, :>, :>= or [\"today\" TO \"7d\"]), " +
-  "is: (open, completed, snoozed, available, recurring, heading, subtask) and has: (due, start, notes, labels, status, parent). " +
+  "is: (open, completed, snoozed, available, recurring, heading, subtask, inbox) and has: (due, start, notes, labels, status, parent). " +
   "Combine with AND, OR, NOT, -term and parentheses; a space means AND. Names ignore case and a leading emoji, and take * wildcards. " +
   "Unless the query says otherwise: open, unsnoozed tasks, not headings, in the context's lists (unless it names context: or folder:). " +
   "sort: and group: at the top level set the sort and grouping. 422 invalid_query with the column of the problem.";

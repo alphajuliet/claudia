@@ -105,7 +105,7 @@ Resources: `folders`, `lists`, `tasks` (including `move`, `complete`, `uncomplet
 Routes parse the request and call plain functions; the rules live in `worker/src/domain/`:
 
 - **`domain/tasks.ts`**: creating, reading, updating, moving, completing and deleting tasks, and the shared query conditions (`openTask`, `dueBy`, `activeBy`, `hasLabel`, `notSnoozed`). Each change writes its rows and its event in one batch.
-- **`domain/views.ts`**: the built-in views (Inbox, Today, Next, WIP, Waiting, Someday), defined once so the web app, MCP and the counts agree. A view is open, unsnoozed tasks in the chosen context's lists; Today is due or started by today in the user's time zone, and the others are a label.
+- **`domain/views.ts`**: the built-in views (Inbox, Today, Next, WIP, Waiting, Someday). Each is a search query (`VIEWS` in `shared/src/schemas.ts`: `is:inbox`, `due:<=today OR start:<=today`, `#next`, …) run through `domain/search.ts` with the search defaults (open, unsnoozed tasks, not headings, in the chosen context's lists), so the web app, MCP, the counts and a typed search agree. `GET /api/views` gives each view's query.
 
 - **`domain/search.ts`**: the search language behind `GET /api/search`. liqe parses a Lucene-style query; this module lifts `sort:` and `group:` from its top level, checks every term against the task fields and compiles it to SQL, reusing the conditions in `tasks.ts`. Unless the query says otherwise it shows open, unsnoozed tasks (not headings) in the context's lists. The response carries the sort and grouping in effect; the web app builds the groups (`web/src/lib/search.ts`), since list order is the sidebar's. See `docs/plans/2026-11-16-search-language-design.md`.
 - **`domain/filters.ts`**: smart views (saved filters). Saving checks the query with the search engine and moves a top-level `sort:` or `group:` into the `sort` and `group_by` columns, so the stored query is filter only; running one is a search with those as parameters.
@@ -186,7 +186,7 @@ Routes (`ui/AppShell.tsx`): `/` (home), `/list/:id`, `/filter/:id`, `/search`, `
 One responsive layout covers three devices:
 
 - **Desktop**: a sidebar (views, smart views, folders and lists, narrowed by the All/Work/Personal/Home context), the task list, and the task panel beside it.
-- **iPad**: the same panes. The sidebar becomes a drawer below 900px, and from 700px wide the panel sits beside the list at 340px.
+- **iPad**: the same panes, with a 280px sidebar on touch screens. The sidebar becomes a drawer (320px, at most 85% of the width) below 900px, and from 700px wide the panel sits beside the list at 340px. The sidebar never scrolls sideways: a long name ends in an ellipsis.
 - **Phone**: the list full-screen, with the task as a sheet. Rows swipe right to complete and left for Date and Snooze. Touch screens get a compact layout with 36px rows on a phone and 40px on an iPad.
 
 Lists and folders are managed from the sidebar. Each list, folder and the Lists heading has a ⋯ menu (`ui/RowMenu.tsx`), shown on hover with a mouse and always on touch. New lists and folders are named in place, and empty ones can be deleted. Lists and folders drag to a new place with the same gesture as tasks (`ui/useListDrag.ts`, with the rules in `lib/listMove.ts` and `lib/folderMove.ts`).

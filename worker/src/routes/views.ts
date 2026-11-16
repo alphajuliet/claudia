@@ -6,7 +6,8 @@ import { commonErrors, jsonResponse, newRouter } from "../lib/router";
 const tag = ["Views"];
 const RULES =
   "Every view shows open, unsnoozed tasks (not headings; subtasks included) in the context's lists: lists in no folder and the Inbox show in every context. " +
-  "Inbox: the Inbox list. Today: due (by date, or by due time on that day) or started today or earlier. Next, WIP, Waiting, Someday: tasks with the label next, wip, waitingOn or someday.";
+  "Inbox: the Inbox list. Today: due (by date, or by due time on that day) or started today or earlier. Next, WIP, Waiting, Someday: tasks with the label next, wip, waitingOn or someday. " +
+  "Each view is a search query (`query` in GET /api/views: is:inbox, due:<=today OR start:<=today, #next, ...), run as GET /api/search runs it.";
 
 export const viewRoutes = newRouter()
   .openapi(

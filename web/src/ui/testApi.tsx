@@ -323,7 +323,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     // Views, as worker/src/domain/views.ts decides them (due times aside).
     if (pathname === "/api/views") {
       const context = new URLSearchParams(search).get("context") ?? "all";
-      return json(VIEWS.map((v) => ({ id: v.id, name: v.name, label: v.label, count: viewOf(v.id, context, "open").length })));
+      return json(VIEWS.map((v) => ({ id: v.id, name: v.name, label: v.label, query: v.query, count: viewOf(v.id, context, "open").length })));
     }
     const shownView = pathname!.match(/^\/api\/views\/(\w+)\/tasks$/);
     if (shownView) {
