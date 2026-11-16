@@ -1,9 +1,8 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { Filter } from "@claudia/shared";
 import { formatDue } from "../lib/dates";
-import { addDays, at, errands, garden, inbox, json, main, projects, renderAt, stubApi, task, today } from "./testApi";
+import { addDays, at, errands, garden, inbox, json, main, projects, renderAt, smartView, stubApi, task, today } from "./testApi";
 
 const groupTitles = () => main().getAllByRole("heading", { level: 2 }).map((h) => h.textContent);
 describe("task lists", () => {
@@ -196,15 +195,17 @@ describe("task lists", () => {
     await waitFor(() => expect((main().getByRole("checkbox", { name: "Complete Water the plants" }) as HTMLInputElement).disabled).toBe(false));
   });
 
-  it("shows a saved filter's open tasks, asking for up to 500", async () => {
-    const errand: Filter = { id: "01JD0000000000000000000001", name: "Errands", query: "label=errand", position: "a0", createdAt: at, updatedAt: at };
+  it("shows a smart view's open tasks, searching for its query", async () => {
+    const errand = smartView({ id: "01JD0000000000000000000001", name: "Errands", query: "#errand" });
     const fetchMock = stubApi([
-      task({ title: "Buy stamps", listId: errands.id }),
-      task({ title: "Post the parcel", listId: errands.id, completedAt: at }),
+      task({ title: "Buy stamps", listId: errands.id, labels: ["errand"] }),
+      task({ title: "Post the parcel", listId: errands.id, labels: ["errand"], completedAt: at }),
+      task({ title: "Water the beans", listId: errands.id }),
     ], { filters: [errand] });
     renderAt(`/filter/${errand.id}`);
     expect(await main().findByText("Buy stamps")).toBeTruthy();
     expect(main().queryByText("Post the parcel")).toBeNull();
-    expect(fetchMock).toHaveBeenCalledWith(`/api/filters/${errand.id}/tasks?limit=500`, expect.anything());
+    expect(main().queryByText("Water the beans")).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith("/api/search?q=%23errand&context=all&status=open", expect.anything());
   });
 });

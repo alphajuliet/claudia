@@ -1,24 +1,28 @@
-import type { Folder, List } from "@claudia/shared";
+import type { Filter, Folder, List } from "@claudia/shared";
 
 export type ContextFilter = "all" | Folder["context"];
-export interface FolderNode { folder: Folder; lists: List[]; folders: FolderNode[] }
-export interface SidebarTree { lists: List[]; folders: FolderNode[] }
+/** A folder with its lists, its smart views (saved filters) and its subfolders, each in position order. */
+export interface FolderNode { folder: Folder; lists: List[]; filters: Filter[]; folders: FolderNode[] }
+/** The unfiled lists and smart views, and the top-level folders. */
+export interface SidebarTree { lists: List[]; filters: Filter[]; folders: FolderNode[] }
 
 const byPosition = <T extends { position: string }>(a: T, b: T) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0);
 
 /**
- * Folders and live lists as a tree, both in position order. Folders outside the context are dropped
- * with everything under them; lists not in any folder show in every context.
+ * Folders, live lists and smart views as a tree, all in position order. Folders outside the context are dropped
+ * with everything under them; lists and smart views not in any folder show in every context.
  */
-export function sidebarTree(folders: Folder[], lists: List[], context: ContextFilter): SidebarTree {
+export function sidebarTree(folders: Folder[], lists: List[], context: ContextFilter, filters: Filter[] = []): SidebarTree {
   const live = lists.filter((l) => l.archivedAt === null);
   const node = (f: Folder): FolderNode => ({
     folder: f,
     lists: live.filter((l) => l.folderId === f.id).sort(byPosition),
+    filters: filters.filter((v) => v.folderId === f.id).sort(byPosition),
     folders: folders.filter((c) => c.parentId === f.id && (context === "all" || c.context === context)).sort(byPosition).map(node),
   });
   return {
     lists: live.filter((l) => l.folderId === null).sort(byPosition),
+    filters: filters.filter((v) => v.folderId === null).sort(byPosition),
     folders: folders.filter((f) => f.parentId === null && (context === "all" || f.context === context)).sort(byPosition).map(node),
   };
 }

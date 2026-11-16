@@ -165,16 +165,25 @@ export const events = sqliteTable(
   ],
 );
 
-// Saved queries: the smart lists.
-export const filters = sqliteTable("filters", {
-  id: id(),
-  name: text("name").notNull(),
-  query: text("query").notNull(),
-  position: text("position").notNull(),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-  deletedAt: deletedAt(),
-});
+// Saved searches: the smart views. `query` is in the search language (domain/search.ts), without sort: or group:,
+// which live in their own columns (null for the default). A smart view sits in a folder, or none, like a list.
+export const filters = sqliteTable(
+  "filters",
+  {
+    id: id(),
+    name: text("name").notNull(),
+    query: text("query").notNull(),
+    sort: text("sort"),
+    groupBy: text("group_by"),
+    display: text("display", { mode: "json" }).$type<{ showCompleted?: boolean }>().notNull().default({}),
+    folderId: text("folder_id").references(() => folders.id),
+    position: text("position").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
+  },
+  (t) => [index("filters_folder_idx").on(t.folderId, t.position)],
+);
 
 // Single-user key/value store (keymap, time zone, ...).
 export const settings = sqliteTable("settings", {

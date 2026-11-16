@@ -1,4 +1,4 @@
-import { CountsSchema, FilterSchema, SearchResultSchema, type SearchResult, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, ViewSummarySchema, type ContextFilter, type CONTEXTS, type Folder, type Label, type LabelColour, type List, type Task, type ViewId } from "@claudia/shared";
+import { CountsSchema, FilterSchema, SearchResultSchema, type SearchResult, FolderSchema, LabelSchema, ListSchema, TaskCompletionSchema, TaskSchema, ViewSummarySchema, type ContextFilter, type CONTEXTS, type Filter, type Folder, type Label, type LabelColour, type List, type Task, type ViewId } from "@claudia/shared";
 import { generateKeyBetween, generateNKeysBetween } from "fractional-indexing";
 import { keepPreviousData, useMutation, useMutationState, useQuery, useQueryClient, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import { DEFAULT_TIME_ZONE } from "../lib/dates";
@@ -87,15 +87,6 @@ export const useViewTasks = (id: ViewId | null, context: ContextFilter, opts: Ta
 
 /** The built-in views with how many tasks each shows in a context. Under ["counts"], so it's refetched with them. */
 export const useViews = (context: ContextFilter) => useGet(["counts", "views", context], `/api/views?context=${context}`, ViewSummarySchema.array());
-
-/** A saved filter's tasks; `status` overrides the filter's own (null leaves the query off). */
-export const useFilterTasks = (id: string | null, opts: TaskListOptions & { status?: "completed" } = {}) =>
-  useGet(
-    listKey(["tasks", "filter", id, ...(opts.status ? [opts.status] : [])], opts),
-    id === null ? null : `/api/filters/${id}/tasks?limit=500${opts.status ? `&status=${opts.status}` : ""}`,
-    TasksSchema,
-    opts,
-  );
 
 /** The server couldn't read a search query: the message says what and where (column). */
 export class SearchQueryError extends Error {}
@@ -548,11 +539,11 @@ export function useMoveList() {
  * Renames a list or folder, in the cache at once; on failure the old name comes back and the promise rejects.
  * Lists and folders are refetched afterwards.
  */
-export function useRename(kind: "lists" | "folders") {
+export function useRename(kind: "lists" | "folders" | "filters") {
   const { api } = useSession();
   const queryClient = useQueryClient();
   // Only the name matters here: the refetch brings the rest.
-  const schema: { parse(data: unknown): { id: string; name: string } } = kind === "lists" ? ListSchema : FolderSchema;
+  const schema: { parse(data: unknown): { id: string; name: string } } = kind === "lists" ? ListSchema : kind === "folders" ? FolderSchema : FilterSchema;
   return useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => json(await api(`/api/${kind}/${id}`, send("PATCH", { name })), schema),
     onMutate: async ({ id, name }) => {
@@ -565,6 +556,52 @@ export function useRename(kind: "lists" | "folders") {
       if (context?.before) queryClient.setQueryData([kind], context.before);
     },
     onSettled: () => void queryClient.invalidateQueries({ queryKey: [kind] }),
+  });
+}
+
+/** What a smart view (saved filter) keeps: its search, sort and grouping (null for the defaults), and display. */
+export type FilterFields = Pick<Filter, "name" | "query" | "sort" | "group" | "display">;
+
+/** Saves a search as a smart view, last among those outside any folder. The promise gives the saved filter. */
+export function useCreateFilter() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: FilterFields) => json(await api("/api/filters", send("POST", input)), FilterSchema),
+    onSuccess: (made) => queryClient.setQueryData<Filter[]>(["filters"], (all) => all && [...all, made]),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["filters"] }),
+  });
+}
+
+/** Changes a smart view's search, sort, grouping or display. The cache takes what the server saved. */
+export function useUpdateFilter() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: Partial<FilterFields> & { id: string }) => json(await api(`/api/filters/${id}`, send("PATCH", input)), FilterSchema),
+    onSuccess: (saved) => queryClient.setQueryData<Filter[]>(["filters"], (all) => all?.map((f) => (f.id === saved.id ? saved : f))),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["filters"] }),
+  });
+}
+
+/** Moves a smart view to a folder (or none) and among the others there, in the cache at once; on failure it goes back. */
+export function useMoveFilter() {
+  const { api } = useSession();
+  const queryClient = useQueryClient();
+  return useMutation({
+    scope: { id: "filter-move" },
+    mutationFn: async ({ id, ...to }: ListMove & { id: string }) => json(await api(`/api/filters/${id}/move`, send("POST", to)), FilterSchema),
+    onMutate: async ({ id, ...to }) => {
+      await queryClient.cancelQueries({ queryKey: ["filters"] });
+      const before = queryClient.getQueryData<Filter[]>(["filters"]);
+      const position = before ? listPosition(before, id, to) : null;
+      if (position) queryClient.setQueryData<Filter[]>(["filters"], before?.map((f) => (f.id === id ? { ...f, folderId: to.folderId, position } : f)));
+      return { before };
+    },
+    onError: (_e, _vars, context) => {
+      if (context?.before) queryClient.setQueryData(["filters"], context.before);
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["filters"] }),
   });
 }
 
@@ -619,7 +656,7 @@ export function useArchiveList() {
  * Deletes an empty list or folder (the server refuses one with tasks, lists or folders in it, and the promise rejects
  * with its message). It leaves the sidebar at once and comes back on failure.
  */
-export function useDeleteContainer(kind: "lists" | "folders") {
+export function useDeleteContainer(kind: "lists" | "folders" | "filters") {
   const { api } = useSession();
   const queryClient = useQueryClient();
   return useMutation({

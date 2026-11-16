@@ -41,6 +41,22 @@ export const task = (fields: Partial<Task> & Pick<Task, "title" | "listId">): Ta
   completedAt: null, labels: [], metadata: null, createdAt: at, updatedAt: at, ...fields,
 });
 
+/** A query's top-level sort: and group: words moved out, unless `sort` or `group` is given. */
+function liftSortGroup(query: string, sort: string | null, group: string | null) {
+  const words = query.split(" ").filter(Boolean);
+  const typed = (name: string) => words.find((w) => w.startsWith(`${name}:`))?.slice(name.length + 1) ?? null;
+  return {
+    query: words.filter((w) => !/^(sort|group):/.test(w)).join(" "),
+    sort: sort ?? typed("sort"),
+    group: group ?? typed("group"),
+  };
+}
+
+/** A saved smart view, outside any folder unless `folderId` says. */
+export const smartView = (fields: Partial<Filter> & Pick<Filter, "id" | "name" | "query">): Filter => ({
+  sort: null, group: null, display: {}, folderId: null, position: "a0", createdAt: at, updatedAt: at, ...fields,
+});
+
 export interface StubOptions {
   folders?: Folder[];
   failComplete?: boolean;
@@ -112,7 +128,39 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
   };
   let changed = false;
   const fetchMock = vi.fn(async (path: string, init?: RequestInit) => {
-    const renamed = path.match(/^\/api\/(lists|folders)\/(\w+)$/);
+    // Smart views: POST saves one last outside any folder, PATCH changes it (a top-level sort: or group: in the
+    // query moves out, roughly as the server does), and move places it as a list.
+    if (path === "/api/filters" && init?.method === "POST") {
+      const items = bodies[path] as Filter[];
+      const body = JSON.parse(String(init.body)) as Partial<Filter> & { name: string; query: string };
+      const id = `01JG${String(++made).padStart(22, "0")}`;
+      const last = items.filter((f) => f.folderId === null).map((f) => f.position).sort().at(-1) ?? null;
+      const item: Filter = {
+        id, name: body.name, ...liftSortGroup(body.query, body.sort ?? null, body.group ?? null), display: body.display ?? {},
+        folderId: body.folderId ?? null, position: generateKeyBetween(last, null), createdAt: at, updatedAt: at,
+      };
+      bodies[path] = [...items, item];
+      return json(item, 201);
+    }
+    const savedFilter = path.match(/^\/api\/filters\/(\w+)$/);
+    if (savedFilter && init?.method === "PATCH") {
+      const items = bodies["/api/filters"] as Filter[];
+      const before = items.find((f) => f.id === savedFilter[1])!;
+      const body = JSON.parse(String(init.body)) as Partial<Filter>;
+      const lifted = body.query === undefined ? {} : liftSortGroup(body.query, body.sort ?? before.sort, body.group ?? before.group);
+      const after = { ...before, ...body, ...lifted };
+      bodies["/api/filters"] = items.map((f) => (f === before ? after : f));
+      return json(after);
+    }
+    const movedFilter = path.match(/^\/api\/filters\/(\w+)\/move$/);
+    if (movedFilter && init?.method === "POST") {
+      const items = bodies["/api/filters"] as Filter[];
+      const to = JSON.parse(String(init.body)) as ListMove;
+      const position = listPosition(items, movedFilter[1]!, to)!;
+      bodies["/api/filters"] = items.map((f) => (f.id === movedFilter[1] ? { ...f, folderId: to.folderId, position } : f));
+      return json((bodies["/api/filters"] as Filter[]).find((f) => f.id === movedFilter[1]));
+    }
+    const renamed = path.match(/^\/api\/(lists|folders|filters)\/(\w+)$/);
     if (renamed && init?.method === "PATCH") {
       if (opts.failRename) return fail("Boom");
       const items = bodies[`/api/${renamed[1]}`] as { id: string; name: string }[];
@@ -140,9 +188,10 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
     }
     if (renamed && init?.method === "DELETE") {
       const [, kind, id] = renamed;
-      const busy = kind === "lists"
+      const busy = kind === "filters" ? false : kind === "lists"
         ? [...store.values()].some((t) => t.listId === id)
-        : (bodies["/api/lists"] as List[]).some((l) => l.folderId === id) || (bodies["/api/folders"] as Folder[]).some((f) => f.parentId === id);
+        : (bodies["/api/lists"] as List[]).some((l) => l.folderId === id) || (bodies["/api/folders"] as Folder[]).some((f) => f.parentId === id)
+          || (bodies["/api/filters"] as Filter[]).some((f) => f.folderId === id);
       if (busy) return json({ error: { code: "not_empty", message: kind === "lists" ? "Move or delete the list's tasks first" : "Move or delete the folder's contents first" } }, 409);
       bodies[`/api/${kind}`] = (bodies[`/api/${kind}`] as { id: string }[]).filter((x) => x.id !== id);
       return new Response(null, { status: 204 });
@@ -265,9 +314,6 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
       const q = new URLSearchParams(search);
       return json(viewOf(shownView[1] as ViewId, q.get("context") ?? "all", q.get("status") === "completed" ? "completed" : "open"));
     }
-    // A saved filter here matches every task, completed ones included (or only those, with status=completed).
-    if (/^\/api\/filters\/\w+\/tasks$/.test(pathname!))
-      return json([...store.values()].filter((t) => new URLSearchParams(search).get("status") !== "completed" || t.completedAt !== null));
     const one = pathname!.match(/^\/api\/tasks\/(\w+)$/);
     if (one && !store.has(one[1]!)) return json({ error: { code: "not_found", message: "Task not found" } }, 404);
     if (one && (!init?.method || init.method === "GET")) return json(store.get(one[1]!));

@@ -1,5 +1,6 @@
-import type { Folder, List } from "@claudia/shared";
+import type { Filter, Folder, List } from "@claudia/shared";
 import { describe, expect, it } from "vitest";
+import { filterMoveForDrop } from "./filterMove";
 import { listOrder, sidebarTree } from "./sidebar";
 
 const stamp = "2026-10-01T00:00:00.000Z";
@@ -21,6 +22,10 @@ const list = (id: string, position: string, folderId: string | null, archivedAt:
   archivedAt,
   createdAt: stamp,
   updatedAt: stamp,
+});
+
+const view = (id: string, position: string, folderId: string | null): Filter => ({
+  id, name: id, query: "", sort: null, group: null, display: {}, folderId, position, createdAt: stamp, updatedAt: stamp,
 });
 
 const folders = [
@@ -56,6 +61,31 @@ describe("sidebarTree", () => {
     const tree = sidebarTree([...folders, folder("Me", "a2", "personal")], [...lists, list("Diary", "a0", "Me")], "work");
     expect(tree.lists.map((l) => l.id)).toEqual(["Scratch", "Inbox"]);
     expect(tree.folders.map((n) => n.folder.id)).toEqual(["Work"]);
+  });
+});
+
+describe("smart views in the tree", () => {
+  const views = [view("Soon", "a1", null), view("Due", "a0", null), view("Desk", "a1", "Work"), view("Calls", "a0", "Work"), view("Beds", "a0", "Garden")];
+
+  it("sit outside folders or in them, in position order, and leave with their folder's context", () => {
+    const tree = sidebarTree(folders, lists, "all", views);
+    expect(tree.filters.map((f) => f.id)).toEqual(["Due", "Soon"]);
+    expect(tree.folders[0]!.filters.map((f) => f.id)).toEqual(["Calls", "Desk"]);
+    expect(tree.folders[1]!.folders[0]!.filters.map((f) => f.id)).toEqual(["Beds"]);
+    const work = sidebarTree(folders, lists, "work", views);
+    expect(work.filters.map((f) => f.id)).toEqual(["Due", "Soon"]);
+    expect(work.folders.flatMap((n) => n.filters.map((f) => f.id))).toEqual(["Calls", "Desk"]);
+  });
+
+  it("move beside another smart view, or last into a folder, and not when nothing would change", () => {
+    const tree = sidebarTree(folders, lists, "all", views);
+    expect(filterMoveForDrop(tree, "Soon", { kind: "before", filterId: "Desk" })).toEqual({ folderId: "Work", beforeId: "Desk" });
+    expect(filterMoveForDrop(tree, "Soon", { kind: "after", filterId: "Desk" })).toEqual({ folderId: "Work" });
+    expect(filterMoveForDrop(tree, "Desk", { kind: "into", folderId: null })).toEqual({ folderId: null });
+    expect(filterMoveForDrop(tree, "Soon", { kind: "into", folderId: "Projects" })).toEqual({ folderId: "Projects" });
+    expect(filterMoveForDrop(tree, "Due", { kind: "before", filterId: "Soon" })).toBeNull();
+    expect(filterMoveForDrop(tree, "Soon", { kind: "into", folderId: null })).toBeNull();
+    expect(filterMoveForDrop(tree, "Soon", { kind: "before", filterId: "Due" })).toEqual({ folderId: null, beforeId: "Due" });
   });
 });
 

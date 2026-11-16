@@ -7,7 +7,7 @@ import {
   FolderUpdateSchema,
   IdParam,
 } from "@claudia/shared";
-import { folders, lists } from "../db/schema";
+import { filters, folders, lists } from "../db/schema";
 import { cascadeContext } from "../domain/folders";
 import { runBatch, type Db } from "../lib/db";
 import { ApiError, notFound } from "../lib/errors";
@@ -180,7 +180,7 @@ export const folderRoutes = newRouter()
       method: "delete",
       path: "/api/folders/{id}",
       tags: tag,
-      summary: "Delete a folder (soft). It must be empty.",
+      summary: "Delete a folder (soft). It must be empty: no folders, lists or saved filters.",
       request: { params: IdParam },
       responses: { 204: { description: "Deleted" }, ...commonErrors, ...notFoundError, ...conflictError },
     }),
@@ -190,7 +190,8 @@ export const folderRoutes = newRouter()
       const before = await getFolder(db, id);
       const [child] = await db.select({ id: folders.id }).from(folders).where(and(live, eq(folders.parentId, id))).limit(1);
       const [list] = await db.select({ id: lists.id }).from(lists).where(and(isNull(lists.deletedAt), eq(lists.folderId, id))).limit(1);
-      if (child || list) throw new ApiError(409, "not_empty", "Move or delete the folder's contents first");
+      const [view] = await db.select({ id: filters.id }).from(filters).where(and(isNull(filters.deletedAt), eq(filters.folderId, id))).limit(1);
+      if (child || list || view) throw new ApiError(409, "not_empty", "Move or delete the folder's contents first");
       const at = now();
       await db.batch([
         db.update(folders).set({ deletedAt: at, updatedAt: at }).where(eq(folders.id, id)),

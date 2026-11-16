@@ -1,7 +1,8 @@
 import { createContext, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import type { CONTEXTS, Counts, Folder, List } from "@claudia/shared";
-import { useArchiveList, useCounts, useCreateFolder, useCreateList, useDeleteContainer, useFilters, useFolders, useLists, useMoveFolder, useMoveList, useViews } from "../data/queries";
+import type { CONTEXTS, Counts, Filter, Folder, List } from "@claudia/shared";
+import { useArchiveList, useCounts, useCreateFolder, useCreateList, useDeleteContainer, useFilters, useFolders, useLists, useMoveFilter, useMoveFolder, useMoveList, useViews } from "../data/queries";
+import { filterMoveForDrop } from "../lib/filterMove";
 import { folderMoveForDrop, type FolderMove } from "../lib/folderMove";
 import { moveForDrop, moveForStep, type ListMove } from "../lib/listMove";
 import { listOrder, sidebarTree, type FolderNode } from "../lib/sidebar";
@@ -31,6 +32,7 @@ interface SidebarActions {
   archiveList: (list: List) => void;
   deleteList: (list: List) => void;
   deleteFolder: (folder: Folder) => void;
+  deleteFilter: (filter: Filter) => void;
 }
 const ActionsContext = createContext<SidebarActions | null>(null);
 const useActions = () => useContext(ActionsContext)!;
@@ -123,18 +125,43 @@ function ListLink({ list, counts, onNavigate }: { list: List; counts: Counts | u
   );
 }
 
+/** A smart view's link, renamed in place on double-click, with a menu: Rename and Delete. It drags like a list. */
+function FilterLink({ filter, onNavigate }: { filter: Filter; onNavigate: () => void }) {
+  const rename = useRenameReported("filters");
+  const { deleteFilter } = useActions();
+  return (
+    <InlineRename name={filter.name} label="Smart view name" className="nav-rename" onRename={(name) => rename(filter.id, name)}>
+      {(start) => (
+        <div className="nav-row nav-smart">
+          <NavLink href={`/filter/${filter.id}`} onNavigate={onNavigate} onDoubleClick={start}>
+            <svg className="nav-smart-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="6.5" cy="6.5" r="4.25" fill="none" stroke="currentColor" strokeWidth="1.5" />
+              <path d="M9.8 9.8 14 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+            {filter.name}
+          </NavLink>
+          <RowMenu label={`${filter.name} smart view menu`} items={[
+            { label: "Rename", onSelect: start },
+            { label: "Delete", danger: true, onSelect: () => deleteFilter(filter) },
+          ]} />
+        </div>
+      )}
+    </InlineRename>
+  );
+}
+
 /** Open tasks in a list, from the counts. */
 const listCount = (counts: Counts | undefined, id: string) => counts?.lists[id]?.open;
 
 /**
  * A folder: its name (renamed on double-click, dragged like a list) with a menu of New list, New folder, Rename and
- * Delete (only when empty), then its lists and subfolders.
+ * Delete (only when empty), then its lists, its smart views and its subfolders.
  */
 function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Counts | undefined; onNavigate: () => void }) {
   const rename = useRenameReported("folders");
   const { creating, create, deleteFolder } = useActions();
   const { folder } = node;
-  const empty = node.lists.length === 0 && node.folders.length === 0;
+  const empty = node.lists.length === 0 && node.filters.length === 0 && node.folders.length === 0;
   return (
     <li>
       <details open className="folder" data-folder={folder.id}>
@@ -149,7 +176,7 @@ function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Co
                   { label: "New list", onSelect: () => create({ kind: "list", parentId: folder.id }) },
                   { label: "New folder", onSelect: () => create({ kind: "folder", parentId: folder.id }) },
                   { label: "Rename", onSelect: start },
-                  { label: "Delete", danger: true, onSelect: () => deleteFolder(folder), disabledNote: empty ? undefined : "Move or delete its lists and folders first" },
+                  { label: "Delete", danger: true, onSelect: () => deleteFolder(folder), disabledNote: empty ? undefined : "Move or delete what's in it first" },
                 ]} />
               </>
             )}
@@ -160,6 +187,9 @@ function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Co
             <li key={l.id} data-list-row={l.id}><ListLink list={l} counts={counts} onNavigate={onNavigate} /></li>
           ))}
           {isCreating(creating, "list", folder.id) && <NewItemField kind="list" />}
+          {node.filters.map((f) => (
+            <li key={f.id} data-filter-row={f.id}><FilterLink filter={f} onNavigate={onNavigate} /></li>
+          ))}
           {node.folders.map((f) => <FolderItem key={f.folder.id} node={f} counts={counts} onNavigate={onNavigate} />)}
           {isCreating(creating, "folder", folder.id) && <NewItemField kind="folder" />}
         </ul>
@@ -186,7 +216,7 @@ function ContextCommand({ choice, onChoose }: { choice: (typeof CONTEXT_CHOICES)
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), summary, [tabindex]:not([tabindex="-1"])';
 
 /**
- * Views, filters and lists. As a drawer (`drawerOpen`, on narrow screens) it takes focus when it opens and keeps
+ * Views, smart views, lists and folders. As a drawer (`drawerOpen`, on narrow screens) it takes focus when it opens and keeps
  * Tab inside it, and Escape calls `onCloseDrawer`.
  */
 export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onNavigate: () => void; drawerOpen?: boolean; onCloseDrawer?: () => void }) {
@@ -224,10 +254,10 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   const { context, setContext } = useContextFilter();
   const folders = useFolders().data ?? [];
   const lists = useLists().data ?? [];
-  const filters = [...(useFilters().data ?? [])].sort((a, b) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0));
+  const filters = useFilters().data ?? [];
   const inboxId = findInbox(lists)?.id;
   // The Inbox list already shows as the Inbox view, so it stays out of the tree.
-  const tree = sidebarTree(folders, lists.filter((l) => l.id !== inboxId), context);
+  const tree = sidebarTree(folders, lists.filter((l) => l.id !== inboxId), context, filters);
   const counts = useCounts().data;
   const toast = useToast();
   const moveList = useMoveList();
@@ -238,11 +268,16 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   const onMoveFolder = (id: string, to: FolderMove) => {
     moveFolder.mutateAsync({ id, ...to }).catch((e: Error) => toast.show({ message: e.message, error: true }));
   };
+  const moveFilter = useMoveFilter();
   const drag = useListDrag({
     plan: (id, drop) => moveForDrop(tree, id, drop),
     onMove: move,
     planFolder: (id, drop) => folderMoveForDrop(folders, id, drop),
     onMoveFolder,
+    planFilter: (id, drop) => filterMoveForDrop(tree, id, drop),
+    onMoveFilter: (id, to) => {
+      moveFilter.mutateAsync({ id, ...to }).catch((e: Error) => toast.show({ message: e.message, error: true }));
+    },
   });
   // The open list moves with Alt+Shift+↑ and Alt+Shift+↓.
   const [location, navigate] = useLocation();
@@ -254,6 +289,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   const archive = useArchiveList();
   const removeList = useDeleteContainer("lists");
   const removeFolder = useDeleteContainer("folders");
+  const removeFilter = useDeleteContainer("filters");
   const fail = (e: Error) => toast.show({ message: e.message, error: true });
   const actions: SidebarActions = {
     creating,
@@ -291,6 +327,12 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
     },
     deleteFolder: (folder) => {
       removeFolder.mutateAsync(folder.id).then(() => toast.show({ message: `Deleted “${folder.name}”` }), fail);
+    },
+    deleteFilter: (filter) => {
+      removeFilter.mutateAsync(filter.id).then(() => {
+        if (location === `/filter/${filter.id}`) navigate("/");
+        toast.show({ message: `Deleted “${filter.name}”` });
+      }, fail);
     },
   };
   const openList = location.match(/^\/list\/([^/]+)$/)?.[1];
@@ -346,18 +388,19 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
           ))}
         </ul>
 
-        {filters.length > 0 && (
-          <section aria-labelledby="sidebar-filters">
-            <h2 id="sidebar-filters" className="nav-heading">Filters</h2>
-            <ul className="nav-list">
-              {filters.map((f) => (
-                <li key={f.id}><NavLink href={`/filter/${f.id}`} onNavigate={onNavigate}>{f.name}</NavLink></li>
-              ))}
-            </ul>
-          </section>
-        )}
-
         <ActionsContext.Provider value={actions}>
+          {/* Smart views outside any folder; the heading shows while there are any at all, to drag them out of folders. */}
+          {filters.length > 0 && (
+            <section aria-labelledby="sidebar-filters">
+              <h2 id="sidebar-filters" className="nav-heading" data-filter-heading="">Smart views</h2>
+              <ul className="nav-list">
+                {tree.filters.map((f) => (
+                  <li key={f.id} data-filter-row={f.id}><FilterLink filter={f} onNavigate={onNavigate} /></li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section aria-labelledby="sidebar-lists">
             <div className="nav-heading-row" data-folder-row="">
               <h2 id="sidebar-lists" className="nav-heading">Lists</h2>

@@ -1,6 +1,6 @@
 # Search language
 
-Date: 2026-11-16. Status: approved. The engine, `GET /api/search` and the Search view are built; saved filters' sort, group and display, Save as filter, MCP `search_tasks` and the views as queries are still to do.
+Date: 2026-11-16. Status: approved. The engine, `GET /api/search`, the Search view and smart views (saved filters with sort, group and Show completed, in folders, Save as smart view) are built; MCP `search_tasks`, the views as queries and the other display options are still to do.
 
 Board card (WIP): "Design a framework and syntax for semantic search in Search view. Use an existing library if possible." It also covers the backlog card "Semantic search" (boolean expressions over structured data, `#label`, sorting and grouping) and answers the note's open question on a richer filter language for smart lists.
 
@@ -65,14 +65,15 @@ The built-in views stay in `views.ts`. Each is expressed as a query (Next is `#n
 
 ## Saved filters
 
-- `filters` gains nullable `sort`, `group` and `display` columns (null means the default). `display` is JSON for output format: compact or detailed rows, which fields show (due, list, labels, notes preview), and whether completed tasks show by default.
-- `query` is a search-language string, validated on create and update. Saving moves any top-level `sort:` and `group:` into the columns, so the stored query is filter only.
-- `GET /api/filters/{id}/tasks` runs through the same engine. Production has no saved filters, so no data migration is needed.
+- `filters` gains nullable `sort` and `group_by` columns (null means the default), a `display` JSON column and a nullable `folder_id`. For now `display` holds only `showCompleted`; compact or detailed rows and which fields show are a later card.
+- `query` is a search-language string, checked on create and update (a query that wouldn't run is a 422). Saving moves any top-level `sort:` and `group:` into the columns, unless the request gives those itself, so the stored query is filter only.
+- `GET /api/filters/{id}/tasks` runs through the same engine and returns `{ tasks, sort, group }`, with `context`, `status`, `limit` and `offset`. Production had no saved filters, so no data migration was needed.
+- **Smart views in folders** (2026-11-16): a smart view sits in any folder, or none, and is placed like a list (`POST /api/filters/{id}/move` with `folderId` and `afterId`/`beforeId`). In the sidebar it shows in its folder after the lists, so it follows the folder's context; those in no folder sit under a Smart views heading. A folder with a smart view in it isn't empty, so it can't be deleted.
 
 ## MCP
 
 - `search_tasks` takes `query` in the language. Its description gives the vocabulary and three or four examples. Check by hand that Claude writes valid queries from it.
-- `run_filter` is unchanged. `create_filter` and `update_filter` take `query`, `sort`, `group` and `display`.
+- `run_filter` takes `context` and returns `{ tasks, sort, group }`. `create_filter` and `update_filter` take `query`, `sort`, `group` and `showCompleted` (`create_filter` also `folderId`), and `move_filter` places one in a folder. There is no MCP delete, as for everything else.
 - Task results keep their shape. List and folder names are their own backlog card.
 
 ## Web app
@@ -81,8 +82,9 @@ The built-in views stay in `views.ts`. Each is expressed as a query (Next is `#n
   - Errors show under the field.
   - A **?** opens a cheat sheet.
   - Sort and Group menus sit beside Show completed and update the address.
-  - **Save as filter** asks for a name.
-- **A saved filter's screen:** the same screen with the query, sort, group and display filled in. Changes save back to the filter.
+  - **Save as smart view** asks for a name.
+- **A smart view's screen** (`/filter/:id`): the Search screen with the view's query, sort, grouping and Show completed filled in. Edits show at once; Save writes them back and Revert drops them. The title renames it, and its ⋯ menu (and the sidebar row's) deletes it. The field doesn't take the keyboard when the view opens, so the task shortcuts work.
+- **Save as smart view** on the Search screen asks for a name, saves the search with the menus' sort and grouping and Show completed, and opens the new view.
 
 ## Testing
 
@@ -97,7 +99,6 @@ The built-in views stay in `views.ts`. Each is expressed as a query (Next is `#n
 
 ## Not in scope
 
-- Filters in folders, and editing or deleting them from the sidebar (the "Smart views" card).
 - Autocomplete in the search box.
 - Display options beyond those above.
 - A `duration:` field (the duration-tag card).

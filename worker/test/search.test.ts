@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { resolveDate } from "../src/domain/search";
+import { resolveDate, splitQuery } from "../src/domain/search";
 import { addDays, startOfDayIn, todayIn } from "../src/lib/recurrence";
 import { client, makeToken, reset } from "./helpers";
 
@@ -54,6 +54,20 @@ describe("resolveDate", () => {
 
   it("rejects anything else", () => {
     for (const w of ["soon", "-7d", "+7d", "7y", "2026-13-40", "2026-1-1"]) expect(resolveDate(w, "2026-11-16")).toBeNull();
+  });
+});
+
+describe("splitQuery", () => {
+  it("takes top-level sort: and group: out of the text, with an AND beside them", () => {
+    expect(splitQuery("#next AND sort:due")).toEqual({ query: "#next", sort: "due", group: null });
+    expect(splitQuery("group:\"label:wip,next\" #next   due:<=today sort:title-desc")).toEqual({
+      query: "#next due:<=today", sort: "title-desc", group: "label:wip,next",
+    });
+    expect(splitQuery("sort:due AND group:none AND (#a OR #b)")).toEqual({ query: "(#a OR #b)", sort: "due", group: "none" });
+    expect(splitQuery("#a")).toEqual({ query: "#a", sort: null, group: null });
+    expect(splitQuery("sort:due")).toEqual({ query: "", sort: "due", group: null });
+    // Not at the top level, it stays (and running or saving it is an error).
+    expect(splitQuery("(#a OR sort:due)")).toEqual({ query: "(#a OR sort:due)", sort: null, group: null });
   });
 });
 

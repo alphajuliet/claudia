@@ -340,27 +340,46 @@ export type TaskCompletion = z.infer<typeof TaskCompletionSchema>;
 export type Label = z.infer<typeof LabelSchema>;
 export type LabelColour = (typeof LABEL_COLOURS)[number];
 
-// Saved filters (smart lists). `query` is a query string for GET /api/tasks,
-// e.g. "label=next&dueBefore=2026-11-01".
+// Saved filters: the smart views. `query` is in the search language (as GET /api/search's `q`), without sort: or
+// group:, which saving moves into `sort` and `group` (null for the default).
+export const FilterDisplaySchema = z
+  .object({ showCompleted: z.boolean().optional().openapi({ description: "Whether completed tasks show when the view opens" }) })
+  .strict()
+  .openapi("FilterDisplay");
 export const FilterSchema = z
   .object({
     id: IdSchema,
     name: z.string(),
-    query: z.string().openapi({ example: "label=next&status=open" }),
+    query: z.string().openapi({ example: "folder:Work (#wip OR due:<=today)" }),
+    sort: z.string().nullable().openapi({ description: "The sort, e.g. due-desc; null for the default", example: "due" }),
+    group: z.string().nullable().openapi({ description: "The grouping, e.g. label:wip,next; null for the default", example: "label:event,wip,next" }),
+    display: FilterDisplaySchema,
+    folderId: IdSchema.nullable(),
     position: z.string(),
     createdAt: Timestamp,
     updatedAt: Timestamp,
   })
   .openapi("Filter");
+const filterFields = {
+  name: z.string().min(1),
+  query: z.string().openapi({ description: "In the search language. A top-level sort: or group: moves into sort or group, unless they are given too" }),
+  sort: SortParam.nullable().optional().openapi({ description: "The sort (as GET /api/search's sort); null for the default" }),
+  group: GroupParam.nullable().optional().openapi({ description: "The grouping (as GET /api/search's group); null for the default" }),
+  display: FilterDisplaySchema.optional(),
+};
 export const FilterCreateSchema = z
-  .object({ name: z.string().min(1), query: z.string() })
+  .object({ ...filterFields, folderId: IdSchema.nullable().optional() })
   .openapi("FilterCreate");
-export const FilterUpdateSchema = FilterCreateSchema.partial().openapi("FilterUpdate");
-export const FilterMoveSchema = PlacementSchema.openapi("FilterMove");
+export const FilterUpdateSchema = z.object(filterFields).partial().openapi("FilterUpdate");
+export const FilterMoveSchema = z
+  .object({ folderId: IdSchema.nullable().optional(), ...placementShape })
+  .refine(notBoth, NOT_BOTH)
+  .openapi("FilterMove");
 export const FilterRunQuerySchema = z.object({
-  status: z.enum(["open", "completed", "all"]).optional().openapi({ description: "Overrides the saved query's status (e.g. its completed matches)" }),
-  limit: TaskQuerySchema.shape.limit.optional(),
-  offset: TaskQuerySchema.shape.offset.optional(),
+  context: SearchQuerySchema.shape.context,
+  status: SearchQuerySchema.shape.status,
+  limit: SearchQuerySchema.shape.limit,
+  offset: SearchQuerySchema.shape.offset,
 });
 
 // Settings: single-user key/value JSON (e.g. `keymap`, `timeZone`).

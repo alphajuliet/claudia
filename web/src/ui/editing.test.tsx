@@ -1,7 +1,6 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Filter } from "@claudia/shared";
 import { todayIn, zonedToUtc } from "../lib/dates";
 import { addDays, at, errands, garden, inbox, main, projects, renderAt, sentBodies, stubApi, task, today } from "./testApi";
 
@@ -127,15 +126,6 @@ describe("quick add", () => {
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it("adds to the Inbox from a saved filter, with nothing extra", async () => {
-    const errand: Filter = { id: "01JD0000000000000000000001", name: "Errands", query: "label=errand", position: "a0", createdAt: at, updatedAt: at };
-    const fetchMock = stubApi([], { filters: [errand] });
-    renderAt(`/filter/${errand.id}`);
-    await userEvent.type(await quickAdd(), "Buy stamps #errand{Enter}");
-    expect(sentBodies(fetchMock, "POST", "/api/tasks")).toEqual([{ atStart: true, listId: inbox.id, title: "Buy stamps", labels: ["errand"] }]);
-    await waitFor(() => expect(screen.getByRole("status").textContent).toContain("Added to Inbox"));
   });
 
   it("is hidden on views when there's no Inbox list, but not on list screens", async () => {

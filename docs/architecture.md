@@ -63,7 +63,7 @@ An npm workspaces monorepo, TypeScript throughout:
 worker/src/
   index.ts          entry point: OAuthProvider, Hono app, cron handler
   routes/           one file per resource; parse the request, call the domain, shape the response
-  domain/           the rules: tasks.ts (create, update, move, complete, delete, find), views.ts (built-in views), search.ts (the search language)
+  domain/           the rules: tasks.ts (create, update, move, complete, delete, find), views.ts (built-in views), search.ts (the search language), filters.ts (smart views)
   lib/              auth, D1 helpers, events, IDs, fractional positions, labels, recurrence, the router factory
   mcp/              MCP handler, server and tool definitions
   oauth/            consent page, passphrase check, redirect allowlist
@@ -98,7 +98,7 @@ Every capability the web app has exists in the API. The Zod schemas in `shared/`
 - the MCP tool input schemas (`mcp/tools.ts` reuses the shapes, converted to JSON Schema),
 - parsing responses in the web app (`data/queries.ts` parses with the same schemas).
 
-Resources: `folders`, `lists`, `tasks` (including `move`, `complete`, `uncomplete`), `labels`, `filters` (saved queries, run with `/api/filters/{id}/tasks`), `views` (built-in views and their counts), `search` (tasks matching a query in the search language), `counts` (per-list counts for the sidebar), `capture` (one line into the Inbox), `settings`, `tokens`, `me`, `import` and `backup`.
+Resources: `folders`, `lists`, `tasks` (including `move`, `complete`, `uncomplete`), `labels`, `filters` (smart views: saved searches, run with `/api/filters/{id}/tasks`), `views` (built-in views and their counts), `search` (tasks matching a query in the search language), `counts` (per-list counts for the sidebar), `capture` (one line into the Inbox), `settings`, `tokens`, `me`, `import` and `backup`.
 
 ### Routes and domain
 
@@ -108,9 +108,10 @@ Routes parse the request and call plain functions; the rules live in `worker/src
 - **`domain/views.ts`**: the built-in views (Inbox, Today, Next, WIP, Waiting, Someday), defined once so the web app, MCP and the counts agree. A view is open, unsnoozed tasks in the chosen context's lists; Today is due or started by today in the user's time zone, and the others are a label.
 
 - **`domain/search.ts`**: the search language behind `GET /api/search`. liqe parses a Lucene-style query; this module lifts `sort:` and `group:` from its top level, checks every term against the task fields and compiles it to SQL, reusing the conditions in `tasks.ts`. Unless the query says otherwise it shows open, unsnoozed tasks (not headings) in the context's lists. The response carries the sort and grouping in effect; the web app builds the groups (`web/src/lib/search.ts`), since list order is the sidebar's. See `docs/plans/2026-11-16-search-language-design.md`.
+- **`domain/filters.ts`**: smart views (saved filters). Saving checks the query with the search engine and moves a top-level `sort:` or `group:` into the `sort` and `group_by` columns, so the stored query is filter only; running one is a search with those as parameters.
 - **`domain/folders.ts`**: a subfolder's context follows its parent's. Creating, moving or changing the context of a folder sets it on every folder under it too, because the sidebar shows a subfolder only in its own context.
 
-The other resources (lists, labels, filters, and the rest of folders) still keep their logic in the route files. They are simpler and have less shared logic.
+The other resources (lists, labels, the rest of filters and folders) still keep their logic in the route files. They are simpler and have less shared logic.
 
 ### Data model
 
@@ -122,7 +123,7 @@ D1 (SQLite) through Drizzle ORM. The schema is `worker/src/db/schema.ts`; migrat
 | `lists` | Lists, in a folder or none. One list is flagged as the Inbox (`inbox`), so renaming it is safe. Archived lists drop out of views. |
 | `tasks` | Tasks and headings (`kind`), nested with `parent_id`. Dates: `due_date` or `due_at` (never both), `start_date`, `snoozed_until`. Recurrence: `recur_rule` and `recur_from`. Also `priority`, `completed_at`, `metadata` (JSON, such as Godspeed fields). |
 | `labels`, `task_labels` | Labels with a colour, and which tasks carry them. Names are unique ignoring case. |
-| `filters` | Saved filters: a name and a task query string. |
+| `filters` | Smart views: a name, a search-language query, a sort and grouping (null for the defaults), `display` JSON (`showCompleted`), and the folder it sits in (or none), placed like a list. A folder with one in it can't be deleted. |
 | `settings` | Key/value settings, such as `timeZone` and `keymap`. |
 | `tokens` | API tokens: SHA-256 hash, name, scopes, expiry, last use, revocation. |
 | `events` | The append-only change log (below). |
@@ -162,7 +163,7 @@ API tokens look like `cl_…`. Only their SHA-256 hash is stored, and `last_used
 - An **API-token** caller's own token is forwarded as the bearer.
 - An **OAuth** caller is sent with an internal key that is random per isolate and never leaves it (`lib/internal.ts`), plus the grant's scopes. Admin is never granted this way.
 
-Incoming `X-Claudia-*` headers are never forwarded. Read tools (search, get, views, list folders, lists, labels and filters) are always offered. Write tools (create, update, move and complete tasks; create, update and move lists and folders; labels; filters) are offered only with `write`. The resource URL in `index.ts` is hard-coded to production.
+Incoming `X-Claudia-*` headers are never forwarded. Read tools (search, get, views, list folders, lists, labels and filters) are always offered. Write tools (create, update, move and complete tasks; create, update and move lists and folders; labels; create, update and move filters) are offered only with `write`. The resource URL in `index.ts` is hard-coded to production.
 
 ### Scheduled work and backups
 
@@ -184,7 +185,7 @@ Routes (`ui/AppShell.tsx`): `/` (home), `/list/:id`, `/filter/:id`, `/search`, `
 
 One responsive layout covers three devices:
 
-- **Desktop**: a sidebar (folders, lists, views, filters, narrowed by the All/Work/Personal/Home context), the task list, and the task panel beside it.
+- **Desktop**: a sidebar (views, smart views, folders and lists, narrowed by the All/Work/Personal/Home context), the task list, and the task panel beside it.
 - **iPad**: the same panes. The sidebar becomes a drawer below 900px, and from 700px wide the panel sits beside the list at 340px.
 - **Phone**: the list full-screen, with the task as a sheet. Rows swipe right to complete and left for Date and Snooze. Touch screens get a compact layout with 36px rows on a phone and 40px on an iPad.
 
@@ -192,7 +193,7 @@ Lists and folders are managed from the sidebar. Each list, folder and the Lists 
 
 ### Data layer
 
-`data/queries.ts` wraps every API call in TanStack Query hooks, with query keys such as `["tasks", …]`, `["lists"]` and `["counts", …]`. Task changes are optimistic. They update every cached list that holds the task at once, put back only the affected tasks on failure, and refetch once the last change settles. Creates are refetched rather than placed locally, because which views a new task belongs in is the server's decision. The views' contents come from the server (`/api/views/{id}/tasks`); the web app only names and links them (`lib/views.ts`). Search results (`useSearchTasks`) are cached as a task list like the others, with the sort and grouping beside them under `["search-how", …]`, so every cache under `["tasks"]` stays a plain task array.
+`data/queries.ts` wraps every API call in TanStack Query hooks, with query keys such as `["tasks", …]`, `["lists"]` and `["counts", …]`. Task changes are optimistic. They update every cached list that holds the task at once, put back only the affected tasks on failure, and refetch once the last change settles. Creates are refetched rather than placed locally, because which views a new task belongs in is the server's decision. The views' contents come from the server (`/api/views/{id}/tasks`); the web app only names and links them (`lib/views.ts`). Search results (`useSearchTasks`) are cached as a task list like the others, with the sort and grouping beside them under `["search-how", …]`, so every cache under `["tasks"]` stays a plain task array. A smart view's screen (`ui/SearchScreen.tsx`) is the Search screen with the view's query, sort, grouping and Show completed as its starting point; edits show at once and Save writes them back.
 
 ### Keyboard
 
@@ -218,7 +219,6 @@ Completing, snoozing and moving to another list offer Undo in a toast, and the l
 These are tracked on the Workflowy board:
 
 - Lists and views return at most 500 tasks, with no paging in the app.
-- Saved filters use the task query parameters; Godspeed's richer smart-list language (boolean logic, relative dates) isn't built.
 - No events/history endpoint, and deleted tasks can't be restored yet.
 - Recurring tasks with a due time don't advance.
 - The web app parses responses with the shared schemas but has no generated, typed API client.

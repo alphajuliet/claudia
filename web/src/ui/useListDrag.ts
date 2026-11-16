@@ -1,9 +1,11 @@
 import { useRef } from "react";
+import type { FilterDrop } from "../lib/filterMove";
 import type { FolderDrop, FolderMove } from "../lib/folderMove";
 import type { ListDrop, ListMove } from "../lib/listMove";
 import { usePressDrag } from "./usePressDrag";
 
-interface Dragged { kind: "list" | "folder"; id: string; name: string }
+type Kind = "list" | "folder" | "filter";
+interface Dragged { kind: Kind; id: string; name: string }
 
 interface Row {
   el: Element;
@@ -16,7 +18,7 @@ interface Row {
 }
 
 interface Active {
-  kind: "list" | "folder";
+  kind: Kind;
   id: string;
   /** Where the drag began, how deep the list is and the folder it's in. */
   x: number;
@@ -26,6 +28,8 @@ interface Active {
   line: HTMLElement;
   rows: Row[];
   move: ListMove | FolderMove | null;
+  /** For a smart view: the rows it can land by (smart views, folders' names, lists and the Smart views heading). */
+  filterRows: FilterRow[];
   marked: HTMLElement | null;
 }
 
@@ -47,6 +51,34 @@ function measure(container: HTMLElement): Row[] {
     // A closed folder's lists have no height.
     if (rect.height === 0) return [];
     return [{ el, rect, listId: el.getAttribute("data-list-row"), folderId: el.getAttribute("data-folder-row") || null, chain: chainOf(el) }];
+  });
+}
+
+interface FilterRow {
+  el: Element;
+  rect: DOMRect;
+  filterId: string | null;
+  listId: string | null;
+  /** A folder's name: its id; the Smart views heading: null; anything else: undefined. */
+  folderId: string | null | undefined;
+  chain: (string | null)[];
+}
+
+/** The rows a smart view can be dropped by, on screen, in order. */
+function measureFilters(container: HTMLElement): FilterRow[] {
+  return [...container.querySelectorAll("[data-filter-row], [data-filter-heading], [data-list-row], [data-folder-row]")].flatMap((el) => {
+    const rect = el.getBoundingClientRect();
+    if (rect.height === 0) return [];
+    const folder = el.getAttribute("data-folder-row");
+    return [{
+      el,
+      rect,
+      filterId: el.getAttribute("data-filter-row"),
+      listId: el.getAttribute("data-list-row"),
+      // The Lists heading (an empty folder row) takes nothing.
+      folderId: el.hasAttribute("data-filter-heading") ? null : folder ? folder : undefined,
+      chain: chainOf(el),
+    }];
   });
 }
 
@@ -126,19 +158,41 @@ function folderDropAt(d: Active, y: number): Spot<FolderDrop> | null {
 }
 
 /**
- * Dragging the sidebar's lists and folders: spread the returned `onPointerDown` and `ref` on the element that scrolls them. The
+ * The drop at y for a dragged smart view. Beside another smart view: the top half of its row is before it and the
+ * bottom half after. A folder's name, or the Smart views heading, takes it in (last); so does a list, for its folder.
+ */
+function filterDropAt(d: Active, y: number): Spot<FilterDrop> | null {
+  const rows = d.filterRows.filter((r) => r.filterId !== d.id);
+  const row = rows.find((r) => y >= r.rect.top && y < r.rect.bottom);
+  if (!row) return null;
+  if (row.filterId) {
+    const before = y < row.rect.top + row.rect.height / 2;
+    return { drop: { kind: before ? "before" : "after", filterId: row.filterId }, lineY: before ? row.rect.top : row.rect.bottom, depth: row.chain.length - 1, lit: null };
+  }
+  const folderId = row.listId ? (row.chain[0] ?? null) : row.folderId;
+  if (folderId === undefined) return null;
+  const lit = folderId === null
+    ? rows.find((r) => r.folderId === null)?.el ?? null
+    : rows.find((r) => r.folderId === folderId)?.el ?? null;
+  return { drop: { kind: "into", folderId }, lineY: null, depth: 0, lit };
+}
+
+/**
+ * Dragging the sidebar's lists, folders and smart views: spread the returned `onPointerDown` and `ref` on the element that scrolls them. The
  * gesture is `usePressDrag`'s. A line shows where a list lands, indented to its level, and a folder's name lights up
  * when it goes in that folder rather than beside a list. `plan` and `planFolder` turn a drop into a move (null where it
  * wouldn't change anything, which shows nothing), and `onMove` or `onMoveFolder` is called with it on release.
  */
-export function useListDrag({ plan, onMove, planFolder, onMoveFolder }: {
+export function useListDrag({ plan, onMove, planFolder, onMoveFolder, planFilter, onMoveFilter }: {
   plan: (id: string, drop: ListDrop) => ListMove | null;
   onMove: (id: string, move: ListMove) => void;
   planFolder: (id: string, drop: FolderDrop) => FolderMove | null;
   onMoveFolder: (id: string, move: FolderMove) => void;
+  planFilter: (id: string, drop: FilterDrop) => ListMove | null;
+  onMoveFilter: (id: string, move: ListMove) => void;
 }) {
-  const latest = useRef({ plan, onMove, planFolder, onMoveFolder });
-  latest.current = { plan, onMove, planFolder, onMoveFolder };
+  const latest = useRef({ plan, onMove, planFolder, onMoveFolder, planFilter, onMoveFilter });
+  latest.current = { plan, onMove, planFolder, onMoveFolder, planFilter, onMoveFilter };
   const active = useRef<Active | null>(null);
 
   const mark = (d: Active, el: HTMLElement | null) => {
@@ -154,6 +208,9 @@ export function useListDrag({ plan, onMove, planFolder, onMoveFolder }: {
       const list = target.closest("[data-list-row]");
       const listId = list?.getAttribute("data-list-row");
       if (list && listId) return { source: list, item: { kind: "list", id: listId, name: list.querySelector(".nav-name")?.textContent ?? "" } };
+      const view = target.closest("[data-filter-row]");
+      const filterId = view?.getAttribute("data-filter-row");
+      if (view && filterId) return { source: view, item: { kind: "filter", id: filterId, name: view.querySelector(".nav-name")?.textContent ?? "" } };
       // A folder's name (the Lists heading has an empty id and stays put).
       const folder = target.closest("[data-folder-row]");
       const folderId = folder?.getAttribute("data-folder-row");
@@ -168,12 +225,15 @@ export function useListDrag({ plan, onMove, planFolder, onMoveFolder }: {
       line.hidden = true;
       container.append(line);
       const rows = measure(container);
-      const row = rows.find((r) => (kind === "list" ? r.listId === id : r.listId === null && r.folderId === id));
+      const filterRows = kind === "filter" ? measureFilters(container) : [];
+      const row = kind === "filter"
+        ? filterRows.find((r) => r.filterId === id)
+        : rows.find((r) => (kind === "list" ? r.listId === id : r.listId === null && r.folderId === id));
       // A folder fades with everything in it.
       const faded = kind === "folder" ? row?.el.closest("li") : row?.el;
       if (faded) (faded as HTMLElement).dataset.dragging = "";
       const chain = row?.chain ?? [null];
-      active.current = { kind, id, x, depth: chain.length - 1, home: chain[0] ?? null, container, line, rows, move: null, marked: null };
+      active.current = { kind, id, x, depth: chain.length - 1, home: chain[0] ?? null, container, line, rows, filterRows, move: null, marked: null };
     },
     move: (x, y) => {
       const d = active.current;
@@ -181,8 +241,12 @@ export function useListDrag({ plan, onMove, planFolder, onMoveFolder }: {
       const box = d.container.getBoundingClientRect();
       // Outside the sidebar, a drop does nothing.
       const outside = x < box.left || x > box.right;
-      let at: Spot<ListDrop | FolderDrop> | null;
-      if (d.kind === "list") {
+      let at: Spot<ListDrop | FolderDrop | FilterDrop> | null;
+      if (d.kind === "filter") {
+        const spot = outside ? null : filterDropAt(d, y);
+        d.move = spot && latest.current.planFilter(d.id, spot.drop);
+        at = spot;
+      } else if (d.kind === "list") {
         const spot = outside ? null : dropAt(d, x, y);
         d.move = spot && latest.current.plan(d.id, spot.drop);
         at = spot;
@@ -203,11 +267,14 @@ export function useListDrag({ plan, onMove, planFolder, onMoveFolder }: {
     },
     remeasure: () => {
       const d = active.current;
-      if (d) d.rows = measure(d.container);
+      if (!d) return;
+      d.rows = measure(d.container);
+      if (d.kind === "filter") d.filterRows = measureFilters(d.container);
     },
     settle: ({ kind, id }) => {
       const move = active.current?.move;
       if (!move) return null;
+      if (kind === "filter") return () => latest.current.onMoveFilter(id, move as ListMove);
       return kind === "list" ? () => latest.current.onMove(id, move as ListMove) : () => latest.current.onMoveFolder(id, move as FolderMove);
     },
     clear: () => {

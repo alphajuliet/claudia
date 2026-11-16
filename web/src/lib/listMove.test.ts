@@ -8,8 +8,8 @@ const list = (id: string, folderId: string | null, position: string): List =>
 const a = list("a", null, "a0"), b = list("b", null, "a1"), c = list("c", null, "a2");
 const x = list("x", "f", "a0"), y = list("y", "f", "a1");
 const z = list("z", "g", "a0");
-const node = (id: string, lists: List[], folders: FolderNode[] = []) => ({ folder: { id } as FolderNode["folder"], lists, folders });
-const tree: SidebarTree = { lists: [a, b, c], folders: [node("f", [x, y], [node("g", [z])]), node("h", [])] };
+const node = (id: string, lists: List[], folders: FolderNode[] = []) => ({ folder: { id } as FolderNode["folder"], lists, filters: [], folders });
+const tree: SidebarTree = { lists: [a, b, c], filters: [], folders: [node("f", [x, y], [node("g", [z])]), node("h", [])] };
 
 describe("moveForDrop", () => {
   it("places a list before or after another in its group", () => {
@@ -53,7 +53,7 @@ describe("moveForStep", () => {
   });
   it("stops at the ends", () => {
     expect(moveForStep(tree, "a", -1)).toBeNull();
-    expect(moveForStep({ lists: [a], folders: [] }, "a", 1)).toBeNull();
+    expect(moveForStep({ lists: [a], filters: [], folders: [] }, "a", 1)).toBeNull();
   });
 });
 

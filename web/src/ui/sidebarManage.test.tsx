@@ -80,7 +80,7 @@ describe("the folder menu", () => {
     await userEvent.click(menuButton("Acme folder menu"));
     const refused = item(/^Delete/);
     expect(refused.getAttribute("aria-disabled")).toBe("true");
-    expect(refused.textContent).toContain("Move or delete its lists and folders first");
+    expect(refused.textContent).toContain("Move or delete what's in it first");
     await userEvent.click(refused);
     expect(sentBodies(fetchMock, "DELETE", `/api/folders/${work.id}`)).toEqual([]);
     await userEvent.keyboard("{Escape}");

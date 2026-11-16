@@ -18,7 +18,7 @@ describe("tool list", () => {
   it("has the 22 expected tools and no deletes or admin tools", () => {
     expect(TOOLS.map((t) => t.name).sort()).toEqual([
       "complete_task", "create_folder", "create_filter", "create_label", "create_list", "create_task",
-      "get_task", "get_view", "list_filters", "list_folders", "list_labels", "list_lists", "list_views", "move_folder", "move_list",
+      "get_task", "get_view", "list_filters", "list_folders", "list_labels", "list_lists", "list_views", "move_filter", "move_folder", "move_list",
       "move_task", "run_filter", "search_tasks", "uncomplete_task", "update_filter",
       "update_folder", "update_label", "update_list", "update_task",
     ].sort());
@@ -82,8 +82,11 @@ describe("request mapping", () => {
     expect(req("create_folder", { name: "F", context: "home" }).body).toEqual({ name: "F", context: "home" });
     expect(req("create_list", { name: "L", folderId: ID }).body).toEqual({ name: "L", folderId: ID });
     expect(req("create_label", { name: "next" })).toEqual({ method: "POST", path: "/api/labels", body: { name: "next" } });
-    expect(req("create_filter", { name: "Soon", query: "dueBefore=2026-11-01" }).path).toBe("/api/filters");
-    expect(req("update_filter", { id: ID, query: "label=next" })).toEqual({ method: "PATCH", path: `/api/filters/${ID}`, body: { query: "label=next" } });
+    expect(req("create_filter", { name: "Soon", query: "due:<7d", showCompleted: true, folderId: ID })).toEqual({
+      method: "POST", path: "/api/filters", body: { name: "Soon", query: "due:<7d", folderId: ID, display: { showCompleted: true } },
+    });
+    expect(req("update_filter", { id: ID, query: "#next", sort: null })).toEqual({ method: "PATCH", path: `/api/filters/${ID}`, body: { query: "#next", sort: null } });
+    expect(req("move_filter", { id: ID, folderId: null })).toEqual({ method: "POST", path: `/api/filters/${ID}/move`, body: { folderId: null } });
   });
 });
 

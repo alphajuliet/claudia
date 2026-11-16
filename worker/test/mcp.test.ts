@@ -63,9 +63,9 @@ describe("authentication", () => {
 });
 
 describe("tools/list", () => {
-  it("gives a write token all 24 tools, with JSON Schemas and hints", async () => {
+  it("gives a write token all 25 tools, with JSON Schemas and hints", async () => {
     const tools = await listTools(write);
-    expect(tools).toHaveLength(24);
+    expect(tools).toHaveLength(25);
     for (const t of tools) {
       expect(t.inputSchema.type).toBe("object");
       expect(t.annotations.destructiveHint).toBe(false);
@@ -115,8 +115,8 @@ describe("working through the tools", () => {
     expect([...completed].sort()).toEqual(["Buy paint", "Paint"]); // its subtask too
     expect((await call(write, "uncomplete_task", { id: a.id })).data).toMatchObject({ completedAt: null, subtasks: 1 });
 
-    const filter = (await call(write, "create_filter", { name: "Next", query: "label=next" })).data;
-    expect((await call(write, "run_filter", { id: filter.id })).data.map((t: any) => t.title)).toEqual(["Paint"]);
+    const filter = (await call(write, "create_filter", { name: "Next", query: "#next" })).data;
+    expect((await call(write, "run_filter", { id: filter.id })).data.tasks.map((t: any) => t.title)).toEqual(["Paint"]);
     expect((await call(write, "list_filters")).data).toHaveLength(1);
 
     await call(write, "update_list", { id: list.id, archived: true });

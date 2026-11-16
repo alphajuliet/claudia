@@ -12,6 +12,8 @@ import {
   CONTEXTS,
   DEFAULT_GROUP,
   DEFAULT_SORT,
+  formatGroup,
+  formatSort,
   PRIORITIES,
   parseGroup,
   parseSort,
@@ -288,6 +290,8 @@ export interface ParsedSearch {
   ast: ParserAst;
   sort: SearchSort | null;
   group: SearchGroup | null;
+  /** The source ranges of the lifted terms, with an AND beside them, for `splitQuery`. */
+  cuts: [number, number][];
 }
 
 const isAnd = (node: ParserAst) => node.type === "LogicalExpression" && node.operator.operator === "AND";
@@ -308,10 +312,14 @@ export function parseSearch(q: string): ParsedSearch {
   }
   let sort: SearchSort | null = null;
   let group: SearchGroup | null = null;
+  const cuts: [number, number][] = [];
   const lift = (node: ParserAst): ParserAst | null => {
     if (isAnd(node) && node.type === "LogicalExpression") {
       const left = lift(node.left);
       const right = lift(node.right);
+      // A written AND goes with the term taken out beside it.
+      const op = "location" in node.operator ? (node.operator.location as { start: number; end: number }) : null;
+      if (op && (!left || !right)) cuts.push([op.start, op.end]);
       return left && right ? { ...node, left, right } : (left ?? right);
     }
     const name = fieldName(node);
@@ -324,12 +332,24 @@ export function parseSearch(q: string): ParsedSearch {
         group = parseGroup(value);
         if (!group) throw invalid(`group: is list, due, label, none, or "label:wip,next", not "${value}"`, columnOf(node));
       }
+      cuts.push([node.location.start, node.location.end]);
       return null;
     }
     return node;
   };
   const rest = lift(ast);
-  return { ast: rest ?? { type: "EmptyExpression", location: { start: 0, end: 0 } }, sort, group };
+  return { ast: rest ?? { type: "EmptyExpression", location: { start: 0, end: 0 } }, sort, group, cuts };
+}
+
+/**
+ * A query split into its filter and the sort: and group: at its top level, as a saved filter stores them:
+ * `#next AND sort:due` is `#next` sorted by due. Throws a 422 if it doesn't parse.
+ */
+export function splitQuery(q: string): { query: string; sort: string | null; group: string | null } {
+  const { sort, group, cuts } = parseSearch(q);
+  let query = q;
+  for (const [start, end] of [...cuts].sort((a, b) => b[0] - a[0])) query = query.slice(0, start) + " " + query.slice(end);
+  return { query: query.replace(/\s+/g, " ").trim(), sort: sort && formatSort(sort), group: group && formatGroup(group) };
 }
 
 /** Whether any term names `field` (optionally with one of `values`). */
@@ -384,6 +404,11 @@ async function searchScope(db: Db, at = new Date()): Promise<Scope> {
     inboxId: listRows.find((l) => l.inbox)?.id ?? null,
     names: { folders: folderRows, lists: listRows },
   };
+}
+
+/** Checks a query as running it would (its fields, values and dates), throwing the 422 it would give. */
+export async function checkSearch(db: Db, q: string): Promise<void> {
+  await compile(db, parseSearch(q).ast, await searchScope(db));
 }
 
 /** Tasks matching a query, with the sort and grouping in effect (parameters win over `sort:` and `group:` in it). */

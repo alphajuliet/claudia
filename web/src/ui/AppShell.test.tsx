@@ -20,7 +20,9 @@ const list = (id: string, name: string, folderId: string | null, position = "a0"
 const inbox = list("01JA0000000000000000000001", "Inbox", null);
 const projects = list("01JA0000000000000000000002", "Projects", work.id);
 const garden = list("01JA0000000000000000000003", "Garden", personal.id);
-const filter: Filter = { id: "01JD0000000000000000000001", name: "Errands", query: "label=errand", position: "a0", createdAt: at, updatedAt: at };
+const filter: Filter = {
+  id: "01JD0000000000000000000001", name: "Errands", query: "#errand", sort: null, group: null, display: {}, folderId: null, position: "a0", createdAt: at, updatedAt: at,
+};
 
 function stubApi(data: { lists?: List[]; filters?: Filter[] } = {}) {
   const bodies: Record<string, unknown> = {

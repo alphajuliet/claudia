@@ -45,9 +45,9 @@ describe("the OAuth flow", () => {
     expect(body.refresh_token).toBeTruthy();
   });
 
-  it("lets a write grant use all 24 tools, logging changes as actor mcp", async () => {
+  it("lets a write grant use all 25 tools, logging changes as actor mcp", async () => {
     const { body } = await authorise();
-    expect(await tools(body.access_token)).toHaveLength(24);
+    expect(await tools(body.access_token)).toHaveLength(25);
     const list = JSON.parse((await call(body.access_token, "create_list", { name: "L" })).result.content[0].text);
     const task = JSON.parse((await call(body.access_token, "create_task", { listId: list.id, title: "T" })).result.content[0].text);
     const [row] = await db.select().from(events).where(eq(events.entityId, task.id));
@@ -72,7 +72,7 @@ describe("the OAuth flow", () => {
     expect(res.status).toBe(200);
     expect(next.access_token).toBeTruthy();
     expect(next.access_token).not.toBe(body.access_token);
-    expect(await tools(next.access_token)).toHaveLength(24);
+    expect(await tools(next.access_token)).toHaveLength(25);
   });
 
   it("honours a downscoped refresh: a write grant refreshed with tasks:read sees only the 9 read tools", async () => {
@@ -126,6 +126,6 @@ describe("what an OAuth token cannot do", () => {
 describe("Claude Code's API token", () => {
   it("still works on /mcp", async () => {
     const token = await makeToken(["write"]);
-    expect(await tools(token)).toHaveLength(24);
+    expect(await tools(token)).toHaveLength(25);
   });
 });

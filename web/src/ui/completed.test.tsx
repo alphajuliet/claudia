@@ -2,8 +2,7 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { resetShowCompleted } from "./showCompleted";
-import type { Filter } from "@claudia/shared";
-import { at, garden, inbox, main, renderAt, stubApi, task, today } from "./testApi";
+import { at, garden, inbox, main, renderAt, smartView, stubApi, task, today } from "./testApi";
 
 const row = (title: string) => main().getByText(title).closest("li")!;
 const posts = (fetchMock: ReturnType<typeof stubApi>, suffix: string) =>
@@ -98,7 +97,7 @@ describe("show completed", () => {
       task({ title: "Open errand", listId: inbox.id, labels: ["next"], position: "b0" }),
       task({ title: "Done errand", listId: inbox.id, labels: ["next"], completedAt: at, position: "b1" }),
     ];
-    const filter: Filter = { id: "01JD0000000000000000000009", name: "Everything", query: "status=open", position: "a0", createdAt: at, updatedAt: at };
+    const filter = smartView({ id: "01JD0000000000000000000009", name: "Errands", query: "errand" });
     for (const path of ["/inbox", "/next", `/filter/${filter.id}`]) {
       stubApi(tasks, { filters: [filter] });
       const { unmount } = renderAt(path);

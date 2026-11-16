@@ -59,10 +59,14 @@ export function moveForStep(tree: SidebarTree, id: string, delta: 1 | -1): ListM
   return delta > 0 && first ? { folderId: beyond.folderId, beforeId: first } : { folderId: beyond.folderId };
 }
 
-const byPosition = (a: List, b: List) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0);
+type Placed = Pick<List, "id" | "folderId" | "position">;
+const byPosition = (a: Placed, b: Placed) => (a.position < b.position ? -1 : a.position > b.position ? 1 : 0);
 
-/** The position that shows list `id` where `move` puts it, or null when it can't be worked out here. */
-export function listPosition(lists: List[], id: string, move: ListMove): string | null {
+/**
+ * The position that shows list `id` where `move` puts it, or null when it can't be worked out here. Smart views
+ * (saved filters) are placed in their folders the same way, among themselves.
+ */
+export function listPosition(lists: Placed[], id: string, move: ListMove): string | null {
   const siblings = lists.filter((l) => l.id !== id && l.folderId === move.folderId).sort(byPosition);
   const anchor = move.afterId ?? move.beforeId;
   const at = anchor ? siblings.findIndex((l) => l.id === anchor) : siblings.length;

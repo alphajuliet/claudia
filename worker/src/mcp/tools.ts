@@ -69,11 +69,12 @@ export const TOOLS: ToolDef[] = [
   }),
   tool({
     name: "run_filter",
-    description: "Run a saved filter (smart list) and return its matching tasks.",
+    description: "Run a saved filter (smart view) and return its matching tasks, sorted, with the sort and grouping in effect.",
     access: "read",
     input: strict({
       id: id("filter"),
-      status: z.enum(["open", "completed", "all"]).optional().describe("Overrides the filter's own status, e.g. completed for its done tasks"),
+      context: z.enum(["all", ...CONTEXTS]).optional().describe("Narrow to one context's lists, unless the filter's query names context: or folder:"),
+      status: z.enum(["open", "completed", "all"]).optional().describe("Overrides the query's own status, e.g. completed for its done tasks"),
       limit: z.number().int().min(1).max(500).optional(),
       offset: z.number().int().min(0).optional(),
     }),
@@ -124,7 +125,7 @@ export const TOOLS: ToolDef[] = [
   }),
   tool({
     name: "list_filters",
-    description: "List saved filters (smart lists). Each has a query using the same parameters as search_tasks.",
+    description: "List saved filters (smart views): each has a query in the search language (see create_filter), a sort, a grouping (null for the defaults) and the folder it sits in.",
     access: "read",
     input: strict({}),
     request: () => ({ method: "GET", path: "/api/filters" }),
@@ -238,16 +239,46 @@ export const TOOLS: ToolDef[] = [
   tool({
     name: "create_filter",
     description:
-      "Save a smart list. query is a query string using the same parameters as search_tasks, for example \"label=next&dueBefore=2026-11-01\".",
+      "Save a smart view. query is in the search language: words match title or notes; #name or label:name; list:, folder: (with subfolders), context:, " +
+      "priority: (low < normal < high); due:, start:, snoozed:, completed:, created:, updated: with today, tomorrow, yesterday, 7d, 2w, 3m, today-7d " +
+      "or YYYY-MM-DD and :<, :<=, :>, :>=; is: (open, completed, snoozed, available, recurring, heading, subtask); has: (due, start, notes, labels, parent); " +
+      "AND, OR, NOT, -term, parentheses (a space means AND). Open, unsnoozed tasks unless it says otherwise. " +
+      "For example: \"#next is:available\", \"folder:Work (#wip OR due:<=today)\", \"completed:>=today-7d\". " +
+      "sort: due, start, priority, created, updated, title or list, with -desc for reverse (due-desc). group: list, due, label, none, or label:wip,next for a label order.",
     access: "write",
-    input: strict({ name: z.string().min(1), query: z.string() }),
-    request: (a) => ({ method: "POST", path: "/api/filters", body: a }),
+    input: strict({
+      name: z.string().min(1),
+      query: z.string(),
+      sort: z.string().nullable().optional(),
+      group: z.string().nullable().optional(),
+      showCompleted: z.boolean().optional().describe("Show completed tasks when it opens in the app"),
+      folderId: IdSchema.nullable().optional().describe("The folder to keep it in; none by default"),
+    }),
+    request: ({ showCompleted, ...a }) => ({ method: "POST", path: "/api/filters", body: { ...a, ...(showCompleted === undefined ? {} : { display: { showCompleted } }) } }),
   }),
   tool({
     name: "update_filter",
-    description: "Rename a saved filter or change its query.",
+    description: "Rename a saved filter, or change its query, sort, grouping (null for the default) or whether it shows completed tasks. The query is as for create_filter.",
     access: "write",
-    input: strict({ id: id("filter"), name: z.string().min(1).optional(), query: z.string().optional() }),
-    request: (a) => ({ method: "PATCH", path: `/api/filters/${a.id}`, body: noId(a) }),
+    input: strict({
+      id: id("filter"),
+      name: z.string().min(1).optional(),
+      query: z.string().optional(),
+      sort: z.string().nullable().optional(),
+      group: z.string().nullable().optional(),
+      showCompleted: z.boolean().optional(),
+    }),
+    request: ({ showCompleted, ...a }) => ({
+      method: "PATCH",
+      path: `/api/filters/${a.id}`,
+      body: { ...noId(a), ...(showCompleted === undefined ? {} : { display: { showCompleted } }) },
+    }),
+  }),
+  tool({
+    name: "move_filter",
+    description: "Move a saved filter to a folder (folderId, or null for none) and/or reorder it among the filters there.",
+    access: "write",
+    input: withPlacement({ id: id("filter"), folderId: IdSchema.nullable().optional() }),
+    request: (a) => ({ method: "POST", path: `/api/filters/${a.id}/move`, body: noId(a) }),
   }),
 ];

@@ -8,8 +8,8 @@ import { KeyboardProvider, useCommand } from "./keyboard";
 import { LabelsScreen } from "./LabelsScreen";
 import { ListPicker } from "./ListPicker";
 import { Logo, MenuIcon } from "./Logo";
-import { FilterScreen, Home, ListScreen, NotFound, ViewScreen } from "./screens";
-import { SearchScreen } from "./SearchScreen";
+import { Home, ListScreen, NotFound, ViewScreen } from "./screens";
+import { SearchScreen, SmartViewScreen } from "./SearchScreen";
 import { UndoCommands } from "./shakeToUndo";
 import { takeMade, useSelectedTask } from "./selection";
 import { Shortcuts } from "./Shortcuts";
@@ -124,7 +124,7 @@ function Shell() {
             <Switch>
               <Route path="/"><Home /></Route>
               <Route path="/list/:id">{(p) => <ListScreen id={p.id} />}</Route>
-              <Route path="/filter/:id">{(p) => <FilterScreen id={p.id} />}</Route>
+              <Route path="/filter/:id">{(p) => <SmartViewScreen id={p.id} />}</Route>
               <Route path="/search"><SearchScreen /></Route>
               <Route path="/dashboard"><Dashboard /></Route>
               <Route path="/labels"><LabelsScreen /></Route>

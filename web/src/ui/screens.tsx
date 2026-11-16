@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { List, Task } from "@claudia/shared";
 import { Link, Redirect } from "wouter";
-import { useFilters, useFilterTasks, useFolders, useLists, useTasks, useTimeZone, useViewTasks } from "../data/queries";
+import { useFolders, useLists, useTasks, useTimeZone, useViewTasks } from "../data/queries";
 import { todayIn } from "../lib/dates";
 import { listOrder, sidebarTree } from "../lib/sidebar";
 import { groupByDue, groupByList, isSnoozed, treeRows, type Row } from "../lib/tasks";
@@ -60,9 +60,13 @@ export function combine(open: Loaded, done: Loaded, show: boolean, include: (t: 
   };
 }
 
+/** Whether completed tasks show, and setting it: the browser's choice, or a smart view's own. */
+export type CompletedToggle = [boolean, (value: boolean) => void];
+
 /** The Show completed toggle for a screen's header, with Shift+C. */
-function ShowCompletedButton() {
-  const [show, setShow] = useShowCompleted();
+function ShowCompletedButton({ toggle }: { toggle?: CompletedToggle | undefined }) {
+  const remembered = useShowCompleted();
+  const [show, setShow] = toggle ?? remembered;
   useCommand("toggleCompleted", () => setShow(!show));
   return (
     <button type="button" className="quiet small" aria-pressed={show} onClick={() => setShow(!show)}>
@@ -82,12 +86,21 @@ function GroupButton({ grouping, onChange }: { grouping: Grouping; onChange: (g:
   );
 }
 
-/** A screen's title (click to rename, when `onRename` is given), any actions of its own and its Show completed toggle. */
-export function ScreenHeader({ title, onRename, children }: { title: string; onRename?: (name: string) => void; children?: ReactNode }) {
+/**
+ * A screen's title (click to rename, when `onRename` is given), any actions of its own and its Show completed toggle
+ * (`completed` for one other than the browser's).
+ */
+export function ScreenHeader({ title, onRename, renameLabel = "List name", completed, children }: {
+  title: string;
+  onRename?: ((name: string) => void) | undefined;
+  renameLabel?: string;
+  completed?: CompletedToggle | undefined;
+  children?: ReactNode;
+}) {
   return (
     <header className="screen-header">
       {onRename ? (
-        <InlineRename name={title} label="List name" className="screen-title-input" onRename={onRename}>
+        <InlineRename name={title} label={renameLabel} className="screen-title-input" onRename={onRename}>
           {(start) => (
             <h1>
               <button type="button" className="screen-title-button" title="Click to rename" onClick={start}>{title}</button>
@@ -99,7 +112,7 @@ export function ScreenHeader({ title, onRename, children }: { title: string; onR
       )}
       <div className="screen-actions">
         {children}
-        <ShowCompletedButton />
+        <ShowCompletedButton toggle={completed} />
       </div>
     </header>
   );
@@ -245,22 +258,3 @@ export function ListScreen({ id }: { id: string }) {
   );
 }
 
-export function FilterScreen({ id }: { id: string }) {
-  const filters = useFilters();
-  const filter = filters.data?.find((f) => f.id === id);
-  const inbox = findInbox(useLists().data ?? []);
-  const [show] = useShowCompleted();
-  const open = useFilterTasks(id, { keepPrevious: true, keepsCompleted: show });
-  const done = useFilterTasks(show ? id : null, { status: "completed", keepPrevious: true });
-  // A filter's own query may match completed tasks: they show only with the toggle on.
-  const tasks = combine({ ...open, data: open.data?.filter((t) => show || t.completedAt === null) }, done, show);
-  const sections = useGroupedSections(tasks.data);
-  if (filters.isSuccess && !filter) return <NotFound />;
-  return (
-    <>
-      <ScreenHeader title={filter?.name ?? "Filter"} />
-      <QuickAdd target={inbox && { listId: inbox.id, listName: inbox.name }} announce />
-      <TaskList query={tasks} sections={sections} empty="Nothing here." />
-    </>
-  );
-}

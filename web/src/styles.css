@@ -252,15 +252,17 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
   text-overflow: ellipsis;
 }
 .nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* A smart view, set apart from the lists beside it. */
+.nav-smart-icon { width: 0.8em; height: 0.8em; margin-right: 0.35em; vertical-align: -0.05em; color: var(--muted); }
 .nav-count { flex: none; margin-left: 0.5rem; color: var(--muted); font-size: 0.8rem; font-variant-numeric: tabular-nums; }
 .nav-link[aria-current="page"] .nav-count { color: inherit; font-weight: 450; }
 .nav-link:hover { background: var(--row-hover); text-decoration: none; }
 .nav-link[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 550; }
 /* A list taking a dragged task. */
 .sidebar-scroll .drop-line { right: 0.5rem; }
-[data-list-row] .nav-link { touch-action: pan-y pinch-zoom; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
-[data-list-row][data-drag-lift] { border-radius: var(--radius); background: var(--bg-raised); box-shadow: var(--shadow); }
-[data-folder-row][data-drop-target] { border-radius: var(--radius); background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
+[data-list-row] .nav-link, [data-filter-row] .nav-link { touch-action: pan-y pinch-zoom; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+[data-list-row][data-drag-lift], [data-filter-row][data-drag-lift] { border-radius: var(--radius); background: var(--bg-raised); box-shadow: var(--shadow); }
+[data-folder-row][data-drop-target], [data-filter-heading][data-drop-target] { border-radius: var(--radius); background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
 .nav-link[data-drop-target] { background: var(--accent-soft); color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
 
 /* Folders: collapsible, with a small caret. */
@@ -1332,6 +1334,9 @@ button.swatch[aria-pressed="true"] { border-color: var(--accent); }
 .search-menu { display: inline-flex; align-items: baseline; gap: 0.3rem; font-size: 0.85em; }
 .search-menu select { border: 1px solid transparent; background: transparent; border-radius: 4px; padding: 0.1rem 0.2rem; }
 .search-menu select:hover, .search-menu select:focus { border-color: var(--border); }
+/* A smart view's menu, in its header, always shows. */
+.screen-actions button.row-menu-button { opacity: 1; }
+.search-name { margin-top: 0.25rem; }
 @media (max-width: 640px) {
   .search-help td:first-child { white-space: normal; }
   .search-menu > span { display: none; }

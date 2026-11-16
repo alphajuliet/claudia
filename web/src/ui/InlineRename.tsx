@@ -3,7 +3,7 @@ import { useRename } from "../data/queries";
 import { useToast } from "./Toast";
 
 /** Renames a list or folder, reporting a failure in the toast (the old name comes back). */
-export function useRenameReported(kind: "lists" | "folders") {
+export function useRenameReported(kind: "lists" | "folders" | "filters") {
   const rename = useRename(kind);
   const toast = useToast();
   return (id: string, name: string) => {
