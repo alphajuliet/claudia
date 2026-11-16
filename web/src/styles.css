@@ -245,6 +245,35 @@ input:focus-visible { outline-offset: 0; border-color: var(--accent); }
   color: var(--muted);
 }
 
+/* The Smart views heading opens and closes the section, with a caret as a folder has. */
+button.nav-heading-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: var(--row-height);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+button.nav-heading-toggle:hover { color: var(--fg); filter: none; }
+button.nav-heading-toggle::before {
+  content: "";
+  flex: none;
+  width: 0.35rem;
+  height: 0.35rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.12s ease;
+}
+button.nav-heading-toggle[aria-expanded="true"]::before { transform: rotate(45deg); }
+button.nav-heading-toggle .nav-count { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 400; }
+
 .nav-link {
   display: flex;
   align-items: center;

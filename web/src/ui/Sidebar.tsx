@@ -157,6 +157,26 @@ const listCount = (counts: Counts | undefined, id: string) => counts?.lists[id]?
  * A folder: its name (renamed on double-click, dragged like a list) with a menu of New list, New folder, Rename and
  * Delete (only when empty), then its lists, its smart views and its subfolders.
  */
+const SMART_OPEN_KEY = "claudia.smartViewsOpen";
+
+/** Whether the Smart views section is open: open by default, and remembered on this device. */
+function useSmartViewsOpen(): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(SMART_OPEN_KEY) !== "closed";
+    } catch {
+      return true;
+    }
+  });
+  const set = (next: boolean) => {
+    setOpen(next);
+    try {
+      localStorage.setItem(SMART_OPEN_KEY, next ? "open" : "closed");
+    } catch { /* kept in memory only */ }
+  };
+  return [open, set];
+}
+
 function FolderItem({ node, counts, onNavigate }: { node: FolderNode; counts: Counts | undefined; onNavigate: () => void }) {
   const rename = useRenameReported("folders");
   const { creating, create, deleteFolder } = useActions();
@@ -255,6 +275,7 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
   const folders = useFolders().data ?? [];
   const lists = useLists().data ?? [];
   const filters = useFilters().data ?? [];
+  const [smartOpen, setSmartOpen] = useSmartViewsOpen();
   const inboxId = findInbox(lists)?.id;
   // The Inbox list already shows as the Inbox view, so it stays out of the tree.
   const tree = sidebarTree(folders, lists.filter((l) => l.id !== inboxId), context, filters);
@@ -392,12 +413,20 @@ export function Sidebar({ onNavigate, drawerOpen = false, onCloseDrawer }: { onN
           {/* Smart views outside any folder; the heading shows while there are any at all, to drag them out of folders. */}
           {filters.length > 0 && (
             <section aria-labelledby="sidebar-filters">
-              <h2 id="sidebar-filters" className="nav-heading" data-filter-heading="">Smart views</h2>
-              <ul className="nav-list">
-                {tree.filters.map((f) => (
-                  <li key={f.id} data-filter-row={f.id}><FilterLink filter={f} onNavigate={onNavigate} /></li>
-                ))}
-              </ul>
+              <h2 id="sidebar-filters" className="nav-heading" data-filter-heading="">
+                <button type="button" className="nav-heading-toggle" aria-expanded={smartOpen} aria-controls="sidebar-filter-list"
+                  onClick={() => setSmartOpen(!smartOpen)}>
+                  Smart views
+                  {!smartOpen && tree.filters.length > 0 && <span className="nav-count">{tree.filters.length}</span>}
+                </button>
+              </h2>
+              {smartOpen && (
+                <ul className="nav-list" id="sidebar-filter-list">
+                  {tree.filters.map((f) => (
+                    <li key={f.id} data-filter-row={f.id}><FilterLink filter={f} onNavigate={onNavigate} /></li>
+                  ))}
+                </ul>
+              )}
             </section>
           )}
 

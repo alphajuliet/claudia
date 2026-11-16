@@ -24,6 +24,26 @@ describe("smart views in the sidebar", () => {
     expect(sidebar().getByRole("link", { name: "Desk" }).closest("details")).toBe(sidebar().getByText("Acme").closest("details"));
   });
 
+  it("collapse under their heading, showing how many, and stay collapsed on this device", async () => {
+    stubApi([], { filters: [soon, desk] });
+    const { unmount } = renderAt("/next");
+    await waitFor(() => expect(smartNames()).toEqual(["Soon", "Desk"]));
+    const toggle = sidebar().getByRole("button", { name: "Smart views" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    await userEvent.click(toggle);
+    // Only those outside folders fold away; Desk stays in its folder.
+    expect(smartNames()).toEqual(["Desk"]);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.textContent).toBe("Smart views1");
+    unmount();
+
+    renderAt("/next");
+    await waitFor(() => expect(sidebar().getByRole("button", { name: /Smart views/ }).getAttribute("aria-expanded")).toBe("false"));
+    await userEvent.click(sidebar().getByRole("button", { name: /Smart views/ }));
+    expect(smartNames()).toEqual(["Soon", "Desk"]);
+    localStorage.removeItem("claudia.smartViewsOpen");
+  });
+
   it("rename and delete from their menu, and keep their folder from being deleted", async () => {
     const fetchMock = stubApi([], { filters: [soon, desk] });
     const { location } = renderAt(`/filter/${soon.id}`);
