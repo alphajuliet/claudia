@@ -186,7 +186,7 @@ React 19 with Vite, `wouter` for routing, TanStack Query for server state, and h
 
 ### Screens and layout
 
-Routes (`ui/AppShell.tsx`): `/` (home), `/list/:id`, `/filter/:id`, `/search`, `/dashboard`, `/labels`, and `/:view` for the built-in views. The selected task is in the address as `?task=<id>` on whatever screen is showing, so reload and Back keep it (`ui/selection.ts`).
+Routes (`ui/AppShell.tsx`): `/` (home), `/list/:id`, `/filter/:id`, `/search`, `/dashboard`, `/labels`, and `/:view` for the built-in views. The Dashboard (`ui/Dashboard.tsx`, with the sorting in `lib/dashboard.ts`) builds its sections from the WIP and Waiting views and one due-date query; its WIP limit is per context (`wipByContext`, using the same context rule as the server's `listsInContext`), and its status chart (desktop only) adds up `GET /api/counts` by status label, so it needs no query of its own. The selected task is in the address as `?task=<id>` on whatever screen is showing, so reload and Back keep it (`ui/selection.ts`).
 
 One responsive layout covers three devices:
 

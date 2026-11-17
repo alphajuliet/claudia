@@ -9,7 +9,7 @@ Claudia keeps work, home and personal tasks in one place. It is built API-first,
 ## Features
 
 - **Folders, lists and labels**, with work, personal and home contexts. Status labels (`next`, `waitingOn`, `wip`, `recurring`, `onHold`, `someday`) are one to a task.
-- **Built-in views** (Inbox, Today, Next, WIP, Waiting, Someday) and a dashboard.
+- **Built-in views** (Inbox, Today, Next, WIP, Waiting, Someday) and a dashboard: WIP against a limit of three per context, overdue and today, waiting, the next 3 days, and (on desktop) a chart of open tasks by status.
 - **A search language** (Lucene-style: `folder:Work (#wip OR due:<=today) sort:due`), and smart views: saved searches with their sort and grouping, kept in any folder. The built-in views are search queries too.
 - **Recurring tasks.** RRULE-based, repeating from the due date or from completion.
 - **Keyboard shortcuts.** Every action is a command with default keys that follow Godspeed.

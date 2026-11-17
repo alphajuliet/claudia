@@ -6,8 +6,8 @@ import { addDays, garden, inbox, json, main, projects, renderAt, stubApi, task, 
 const section = (name: string) => within(main().getByRole("region", { name }));
 const titles = (name: string) => section(name).queryAllByRole("button", { name: /^[A-Z].*/ }).filter((b) => b.classList.contains("task-title")).map((b) => b.textContent);
 
-async function open(tasks: ReturnType<typeof task>[]) {
-  const fetchMock = stubApi(tasks, { lists: [inbox, garden, projects] });
+async function open(tasks: ReturnType<typeof task>[], opts: Parameters<typeof stubApi>[1] = {}) {
+  const fetchMock = stubApi(tasks, { lists: [inbox, garden, projects], ...opts });
   const view = renderAt("/dashboard");
   await main().findAllByText(/^Nothing|Weed|Dig/);
   await waitFor(() => expect(main().queryByText("Loading…")).toBeNull());
@@ -41,10 +41,46 @@ describe("the dashboard", () => {
     expect(main().getByRole("link", { name: "1 Today" }).getAttribute("href")).toBe("/today");
   });
 
-  it("marks WIP over the limit, and shows all of it", async () => {
-    await open([1, 2, 3, 4].map((n) => task({ title: `Weed ${n}`, listId: garden.id, labels: ["wip"] })));
-    expect(titles("WIP")).toHaveLength(4);
+  it("marks WIP over the limit in each context, and shows all of it", async () => {
+    await open([
+      ...[1, 2, 3, 4].map((n) => task({ title: `Weed ${n}`, listId: garden.id, labels: ["wip"] })),
+      task({ title: "Draft", listId: projects.id, labels: ["wip"] }),
+    ]);
+    expect(titles("WIP")).toHaveLength(5);
+    const aside = section("WIP").getByText(/^Work/).parentElement!;
+    expect(aside.textContent).toBe("Work 1/3Personal 4/3Home 0/3");
     expect(section("WIP").getByText("4/3").classList.contains("wip-over")).toBe(true);
+    expect(section("WIP").getByText("1/3").classList.contains("wip-over")).toBe(false);
+    await userEvent.click(screen.getByRole("button", { name: "Work" }));
+    await waitFor(() => expect(titles("WIP")).toEqual(["Draft"]));
+    expect(section("WIP").getByText("1/3")).toBeTruthy();
+    expect(section("WIP").queryByText(/^Personal/)).toBeNull();
+  });
+
+  it("puts Waiting before Next 3 days", async () => {
+    await open([task({ title: "Dig", listId: garden.id, dueDate: addDays(today, 2) })]);
+    const headings = main().getAllByRole("region").map((r) => r.getAttribute("aria-label") ?? r.querySelector("h2")?.textContent);
+    expect(headings.indexOf("Waiting")).toBeLessThan(headings.indexOf("Next 3 days"));
+  });
+
+  it("charts open tasks by status, each bar opening its search", async () => {
+    await open([
+      task({ title: "Weed", listId: garden.id, labels: ["next"] }),
+      task({ title: "Dig", listId: garden.id, labels: ["next"] }),
+      task({ title: "Draft", listId: projects.id, labels: ["wip"] }),
+      task({ title: "Plain", listId: garden.id }),
+    ], { labels: [{ name: "next", color: null, status: true }, { name: "wip", color: null, status: true }, "errand"] });
+    const chart = within(await main().findByRole("region", { name: "By status" }));
+    expect(chart.getAllByRole("link").map((l) => [l.textContent, l.getAttribute("href")])).toEqual([
+      ["next2", "/search?q=%23next"], ["wip1", "/search?q=%23wip"], ["No status1", "/search?q=-has%3Astatus"],
+    ]);
+    await userEvent.click(screen.getByRole("button", { name: "Work" }));
+    await waitFor(() => expect(chart.getAllByRole("link").map((l) => l.textContent)).toEqual(["next0", "wip1", "No status0"]));
+  });
+
+  it("has no chart without status labels", async () => {
+    await open([task({ title: "Weed", listId: garden.id })]);
+    expect(main().queryByRole("region", { name: "By status" })).toBeNull();
   });
 
   it("caps long sections, with a link to the view", async () => {

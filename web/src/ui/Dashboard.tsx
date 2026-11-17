@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from "react";
 import type { Task } from "@claudia/shared";
 import { Link } from "wouter";
-import { useFolders, useLists, useTasks, useTimeZone, useViews, useViewTasks } from "../data/queries";
-import { ageOf, dashboard, NEXT_DAYS, SECTION_LIMIT, WIP_LIMIT } from "../lib/dashboard";
+import { useCounts, useFolders, useLabels, useLists, useTasks, useTimeZone, useViews, useViewTasks } from "../data/queries";
+import { ageOf, dashboard, listsInContext, NEXT_DAYS, SECTION_LIMIT, statusCounts, wipByContext, WIP_LIMIT, type StatusCount } from "../lib/dashboard";
 import { addDays, todayIn } from "../lib/dates";
 import { findInbox } from "../lib/views";
 import { isSnoozed } from "../lib/tasks";
-import { useContextFilter } from "./contextFilter";
+import { CONTEXT_CHOICES, useContextFilter } from "./contextFilter";
 import { QuickAdd } from "./QuickAdd";
 import { useTaskFilter } from "./screens";
 import { TaskList, type Section } from "./TaskList";
@@ -40,6 +40,30 @@ interface SectionState { ready: boolean; isPending: boolean; error: Error | null
 
 const rowsOf = (tasks: Task[]) => tasks.map((task) => ({ task, depth: 0 }));
 
+/** A count against the WIP limit, marked when over it. */
+const against = (n: number) => <span className={n > WIP_LIMIT ? "wip-over" : undefined}>{n}/{WIP_LIMIT}</span>;
+
+/** Open tasks by status, as bars, each a link to the search that shows them. Desktop only (the CSS hides it). */
+function StatusChart({ rows }: { rows: StatusCount[] }) {
+  const most = Math.max(1, ...rows.map((r) => r.count));
+  return (
+    <section className="status-chart" aria-labelledby="status-chart-title">
+      <h2 id="status-chart-title">By status</h2>
+      <ul>
+        {rows.map((r) => (
+          <li key={r.label ?? ""}>
+            <Link href={`/search?q=${encodeURIComponent(r.label ? `#${r.label}` : "-has:status")}`} className={r.label ? undefined : "muted"}>
+              <span className="status-chart-name">{r.label ?? "No status"}</span>
+              <span className="status-chart-track" aria-hidden="true">{r.count > 0 && <span className="status-chart-bar" style={{ width: `${(r.count / most) * 100}%` }} />}</span>
+              <span className="status-chart-count">{r.count}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 /** The daily start: what's in progress, due, coming up and waiting, as working rows. */
 export function Dashboard() {
   const timeZone = useTimeZone();
@@ -50,6 +74,8 @@ export function Dashboard() {
   const inbox = findInbox(lists);
   const { context } = useContextFilter();
   const inboxCount = useViews(context).data?.find((v) => v.id === "inbox")?.count;
+  const countsData = useCounts().data;
+  const labelsData = useLabels().data;
   const wipQuery = useViewTasks("wip", context, { keepPrevious: true });
   const waitingQuery = useViewTasks("waiting", context, { keepPrevious: true });
   const dueQuery = useTasks(new URLSearchParams({ status: "open", limit: "500", dueBefore: addDays(today, NEXT_DAYS) }).toString(), { keepPrevious: true });
@@ -82,12 +108,24 @@ export function Dashboard() {
   const extra = (tasks: Task[]) => Math.max(0, tasks.length - SECTION_LIMIT);
   const moreLink = (tasks: Task[], href: string) => extra(tasks) > 0 && <Link href={href}>{extra(tasks)} more</Link>;
 
+  // The limit is per context: with All chosen, each context's WIP against it.
+  const wipAside = !wipState.ready ? null : context !== "all" ? against(wip.length) : (
+    <span className="wip-contexts">
+      {wipByContext(wip, lists, foldersQuery.data ?? []).map(({ context: c, count }) => (
+        <span key={c}>{CONTEXT_CHOICES.find((choice) => choice.id === c)?.name} {against(count)}</span>
+      ))}
+    </span>
+  );
+  const statusRows = countsData && labelsData && listsQuery.data && foldersQuery.data && labelsData.some((l) => l.status)
+    ? statusCounts(countsData, labelsData, listsInContext(lists, foldersQuery.data, context))
+    : null;
+
   const sections: Section[] = [
     {
       key: "wip",
       title: "WIP",
       rows: rowsOf(wip),
-      aside: wipState.ready && <span className={wip.length > WIP_LIMIT ? "wip-over" : undefined}>{wip.length}/{WIP_LIMIT}</span>,
+      aside: wipAside,
       placeholder: placeholder(wipState, "Nothing in progress"),
     },
     {
@@ -98,6 +136,13 @@ export function Dashboard() {
       placeholder: placeholder(dueState, "Nothing overdue"),
     },
     {
+      key: "waiting",
+      title: "Waiting",
+      rows: rowsOf(waiting.slice(0, SECTION_LIMIT)),
+      aside: moreLink(waiting, "/waiting"),
+      placeholder: placeholder(waitingState, "Nothing waiting"),
+    },
+    {
       key: "next",
       title: "Next 3 days",
       rows: rowsOf(nextOpen ? nextDays : nextDays.slice(0, SECTION_LIMIT)),
@@ -105,13 +150,6 @@ export function Dashboard() {
         <button type="button" className="quiet small" onClick={() => setNextOpen(true)}>{extra(nextDays)} more</button>
       ),
       placeholder: placeholder(dueState, "Nothing in the next 3 days"),
-    },
-    {
-      key: "waiting",
-      title: "Waiting",
-      rows: rowsOf(waiting.slice(0, SECTION_LIMIT)),
-      aside: moreLink(waiting, "/waiting"),
-      placeholder: placeholder(waitingState, "Nothing waiting"),
     },
   ];
 
@@ -133,6 +171,7 @@ export function Dashboard() {
       </nav>
       <QuickAdd target={inbox && { listId: inbox.id, listName: inbox.name }} announce />
       <TaskList query={READY} sections={sections} empty="" split={2} rowNote={rowNote} />
+      {statusRows && <StatusChart rows={statusRows} />}
     </>
   );
 }
