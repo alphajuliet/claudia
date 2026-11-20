@@ -25,7 +25,7 @@ Bare words and quoted phrases (`report`, `"weekly report"`) match the title or n
 | `priority:` | `low`, `normal`, `high` | Ordered, so `priority:>=normal` works |
 | `due:`, `start:`, `snoozed:`, `completed:`, `created:`, `updated:` | a date | `:` means on that day; also `:<`, `:<=`, `:>`, `:>=` and ranges |
 | `is:` | `open`, `completed`, `snoozed`, `available`, `recurring`, `heading`, `subtask`, `inbox` | `available`: open, not snoozed, and not starting after today. `inbox`: in the list flagged as the Inbox |
-| `has:` | `due`, `start`, `notes`, `labels`, `status`, `parent` | `-has:due`: no due date. `status`: carries a status label |
+| `has:` | `due`, `start`, `notes`, `labels`, `status`, `parent`, `subtask` | `-has:due`: no due date. `status`: carries a status label. `subtask`: has an open subtask (added 2026-11-21) |
 
 **Dates:** `today`, `tomorrow`, `yesterday`, `7d`, `2w` or `3m` (from today), `today-7d` (past; an unquoted `-7d` is a liqe syntax error), or `2026-11-20`. They resolve in the user's time zone when the query runs, so a saved filter stays relative. Due conditions match a due date, or a due time by its day, as `dueBy` does now.
 

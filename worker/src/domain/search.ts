@@ -124,7 +124,7 @@ type DateField = keyof typeof DATE_FIELDS;
 
 const FIELDS = ["label", "list", "folder", "context", "priority", "is", "has", ...Object.keys(DATE_FIELDS), "sort", "group"];
 const IS_VALUES = ["open", "completed", "snoozed", "available", "recurring", "heading", "subtask", "inbox"] as const;
-const HAS_VALUES = ["due", "start", "notes", "labels", "status", "parent"] as const;
+const HAS_VALUES = ["due", "start", "notes", "labels", "status", "parent", "subtask"] as const;
 const PRIORITY_RANK = { low: 0, normal: 1, high: 2 } as const;
 
 /** The live folders and lists, for matching names. */
@@ -227,6 +227,9 @@ function hasCondition(tag: TagToken): SQL {
     case "status":
       return sql`EXISTS (SELECT 1 FROM ${taskLabels} tl JOIN ${labels} l ON l.id = tl.label_id WHERE tl.task_id = ${tasks.id} AND l.status_position IS NOT NULL AND l.deleted_at IS NULL)`;
     case "parent": return isNotNull(tasks.parentId);
+    // At least one open subtask: completed ones are hidden in lists, so a task with only those reads as done.
+    case "subtask":
+      return sql`EXISTS (SELECT 1 FROM ${tasks} sub WHERE sub.parent_id = ${tasks.id} AND sub.completed_at IS NULL AND sub.deleted_at IS NULL)`;
     default: throw invalid(`has: is one of ${HAS_VALUES.join(", ")}, not "${value}"`, columnOf(tag));
   }
 }

@@ -47,7 +47,7 @@ const EXAMPLES: [string, string][] = [
   ["due:today  due:<=today  due:<7d", "Due today, by today, within a week"],
   ['start:<=today  completed:>=today-7d  due:["today" TO "2w"]', "Dates: today, tomorrow, yesterday, 7d, 2w, 3m, today-7d, 2026-12-25"],
   ["is:available  is:snoozed  is:completed", "Also open, recurring, heading, subtask, inbox"],
-  ["has:due  -has:start", "Also notes, labels, status, parent"],
+  ["has:due  -has:start", "Also notes, labels, status, parent, subtask"],
   ["#next AND (due:<=today OR #wip)", "AND, OR, NOT, -term and brackets; a space means AND"],
   ["sort:due-desc  group:label", 'Sort (due, start, created, updated, title, priority) and group (list, due, label, status, none, "label:wip,next")'],
 ];

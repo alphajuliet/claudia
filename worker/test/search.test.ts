@@ -170,6 +170,20 @@ describe("search", () => {
     expect(await titles("has:notes")).toEqual(["Parent"]);
     expect(await titles("has:labels")).toEqual(["Child"]);
     expect(await titles("has:start start:>today")).toEqual(["Parent"]);
+    expect(await titles("has:subtask")).toEqual(["Parent"]);
+  });
+
+  it("has:subtask counts only open, undeleted subtasks", async () => {
+    const done = await add(errands.id, "All done");
+    const finished = await add(errands.id, "Finished child", { parentId: done.id });
+    await api("POST", `/api/tasks/${finished.id}/complete`);
+    const gone = await add(errands.id, "Emptied");
+    const removed = await add(errands.id, "Removed child", { parentId: gone.id });
+    await api("DELETE", `/api/tasks/${removed.id}`);
+    const busy = await add(errands.id, "Busy");
+    await add(errands.id, "Open child", { parentId: busy.id });
+    expect(await titles("has:subtask")).toEqual(["Busy"]);
+    expect(await titles("-has:subtask -is:subtask")).toEqual(["All done", "Emptied"]);
   });
 
   it("shows open, unsnoozed tasks and no headings, unless the query asks", async () => {

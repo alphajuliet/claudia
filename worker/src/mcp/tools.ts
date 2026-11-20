@@ -50,7 +50,7 @@ const CONVENTIONS =
 const LANGUAGE =
   "The search language: words match title or notes; #name or label:name; list:, folder: (with subfolders), context:, " +
   "priority: (low < normal < high); due:, start:, snoozed:, completed:, created:, updated: with today, tomorrow, yesterday, 7d, 2w, 3m, today-7d " +
-  "or YYYY-MM-DD and :<, :<=, :>, :>=; is: (open, completed, snoozed, available, recurring, heading, subtask, inbox); has: (due, start, notes, labels, status, parent); " +
+  "or YYYY-MM-DD and :<, :<=, :>, :>=; is: (open, completed, snoozed, available, recurring, heading, subtask, inbox); has: (due, start, notes, labels, status, parent, subtask); " +
   "AND, OR, NOT, -term, parentheses (a space means AND). Names ignore case and a leading emoji, and take * as a wildcard; quote names with spaces (list:\"Home admin\"). " +
   "Open, unsnoozed tasks (not headings) unless it says otherwise. " +
   "For example: \"#next is:available\", \"folder:Work (#wip OR due:<=today)\", \"completed:>=today-7d\", \"list:Garden -has:due\". " +
