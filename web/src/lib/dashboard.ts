@@ -9,6 +9,9 @@ export const SECTION_LIMIT = 5;
 /** Days after today in the Next 3 days section. */
 export const NEXT_DAYS = 3;
 
+/** The Waiting section's search: tasks waiting on someone, and those blocked. Wider than the Waiting view. */
+export const WAITING_QUERY = "#waitingOn OR #blocked";
+
 const DAY_MS = 86_400_000;
 
 export interface DashboardInput { wip: Task[]; due: Task[]; waiting: Task[]; today: string; timeZone: string }

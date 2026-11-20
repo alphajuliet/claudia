@@ -290,16 +290,23 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
         && (!q.get("q") || `${t.title}\n${t.notes ?? ""}`.toLowerCase().includes(q.get("q")!.toLowerCase())));
       return json(out);
     }
-    // Search, roughly: words match title or notes, #name a label, sort: and group: are lifted, and any other
+    // Search, roughly: words match title or notes, #name a label, OR splits, sort: and group: are lifted, and any other
     // field: is a 422 with its column, as the server says it.
     if (pathname === "/api/search") {
       if (changed) await opts.holdRefetch;
       const q = new URLSearchParams(search);
       let sort = { by: "list", desc: false } as { by: string; desc: boolean };
       let group = { by: "list" } as { by: string; labels?: string[] };
-      const tests: ((t: Task) => boolean)[] = [];
+      // Each side of a top-level OR is a set of terms that must all match.
+      const alternatives: ((t: Task) => boolean)[][] = [[]];
+      let tests = alternatives[0]!;
       let column = 1;
       for (const term of (q.get("q") ?? "").split(" ")) {
+        if (term === "OR") {
+          alternatives.push((tests = []));
+          column += 3;
+          continue;
+        }
         const field = /^(\w+):(.*)$/.exec(term);
         if (field?.[1] === "sort") sort = { by: field[2]!.replace(/-desc$/, ""), desc: field[2]!.endsWith("-desc") };
         else if (field?.[1] === "group") group = field[2]!.startsWith("label:") ? { by: "label", labels: field[2]!.slice(6).split(",") } : { by: field[2]! };
@@ -317,7 +324,7 @@ export function stubApi(tasks: Task[], opts: StubOptions = {}) {
         t.kind === "task"
         && (status !== "open" || t.completedAt === null)
         && (status !== "completed" || t.completedAt !== null)
-        && tests.every((test) => test(t)));
+        && alternatives.some((all) => all.every((test) => test(t))));
       return json({ tasks: out, sort, group });
     }
     // Views, as worker/src/domain/views.ts decides them (due times aside).

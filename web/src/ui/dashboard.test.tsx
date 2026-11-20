@@ -21,13 +21,15 @@ describe("the dashboard", () => {
       task({ title: "Weed", listId: garden.id, dueDate: today }),
       task({ title: "Dig", listId: garden.id, dueDate: addDays(today, 3) }),
       task({ title: "Sam's reply", listId: projects.id, labels: ["waitingOn"], createdAt: new Date(Date.now() - 12 * 86_400_000).toISOString() }),
+      task({ title: "Council permit", listId: garden.id, labels: ["blocked"], createdAt: new Date(Date.now() - 2 * 86_400_000).toISOString() }),
       task({ title: "Far off", listId: garden.id, dueDate: addDays(today, 4) }),
     ]);
     expect(main().getByRole("heading", { level: 1 }).textContent).toMatch(/^[A-Z][a-z]+day \d{1,2} [A-Z][a-z]+$/);
     expect(titles("WIP")).toEqual(["Draft plan"]);
     expect(titles("Overdue and today")).toEqual(["Weed"]);
     expect(titles("Next 3 days")).toEqual(["Dig"]);
-    expect(titles("Waiting")).toEqual(["Sam's reply"]);
+    // Blocked tasks wait too, oldest first.
+    expect(titles("Waiting")).toEqual(["Sam's reply", "Council permit"]);
     expect(section("WIP").getByText("Projects")).toBeTruthy();
     expect(section("Waiting").getByText("12d · Projects")).toBeTruthy();
     expect(main().queryByText("Far off")).toBeNull();
@@ -55,6 +57,12 @@ describe("the dashboard", () => {
     await waitFor(() => expect(titles("WIP")).toEqual(["Draft"]));
     expect(section("WIP").getByText("1/3")).toBeTruthy();
     expect(section("WIP").queryByText(/^Personal/)).toBeNull();
+  });
+
+  it("links Waiting's extra tasks to the search for waiting and blocked tasks", async () => {
+    await open([1, 2, 3, 4, 5, 6].map((n) => task({ title: `Weed ${n}`, listId: garden.id, labels: [n % 2 ? "waitingOn" : "blocked"] })));
+    expect(titles("Waiting")).toHaveLength(5);
+    expect(section("Waiting").getByRole("link", { name: "1 more" }).getAttribute("href")).toBe(`/search?q=${encodeURIComponent("#waitingOn OR #blocked")}`);
   });
 
   it("puts Waiting before Next 3 days", async () => {
@@ -116,7 +124,7 @@ describe("the dashboard", () => {
     const fetchMock = stubApi([task({ title: "Weed", listId: garden.id, labels: ["wip"] })], { lists: [inbox, garden, projects] });
     const real = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation((path: string, init?: RequestInit) =>
-      String(path).startsWith("/api/views/waiting/tasks") ? Promise.resolve(json({ error: { code: "boom", message: "Boom" } }, 500)) : real(path, init));
+      String(path).startsWith("/api/search?") ? Promise.resolve(json({ error: { code: "invalid_query", message: "Boom" } }, 422)) : real(path, init));
     renderAt("/dashboard");
     expect(await section("Waiting").findByRole("alert")).toBeTruthy();
     expect(await section("WIP").findByText("Weed")).toBeTruthy();

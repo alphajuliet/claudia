@@ -1,8 +1,8 @@
 import { useState, type ReactNode } from "react";
 import type { Task } from "@claudia/shared";
 import { Link } from "wouter";
-import { useCounts, useFolders, useLabels, useLists, useTasks, useTimeZone, useViews, useViewTasks } from "../data/queries";
-import { ageOf, dashboard, listsInContext, NEXT_DAYS, SECTION_LIMIT, statusCounts, wipByContext, WIP_LIMIT, type StatusCount } from "../lib/dashboard";
+import { useCounts, useFolders, useLabels, useLists, useSearchTasks, useTasks, useTimeZone, useViews, useViewTasks } from "../data/queries";
+import { ageOf, dashboard, listsInContext, NEXT_DAYS, SECTION_LIMIT, statusCounts, WAITING_QUERY, wipByContext, WIP_LIMIT, type StatusCount } from "../lib/dashboard";
 import { addDays, todayIn } from "../lib/dates";
 import { findInbox } from "../lib/views";
 import { isSnoozed } from "../lib/tasks";
@@ -77,7 +77,7 @@ export function Dashboard() {
   const countsData = useCounts().data;
   const labelsData = useLabels().data;
   const wipQuery = useViewTasks("wip", context, { keepPrevious: true });
-  const waitingQuery = useViewTasks("waiting", context, { keepPrevious: true });
+  const waitingQuery = useSearchTasks(new URLSearchParams({ q: WAITING_QUERY, context, status: "open" }), { keepPrevious: true });
   const dueQuery = useTasks(new URLSearchParams({ status: "open", limit: "500", dueBefore: addDays(today, NEXT_DAYS) }).toString(), { keepPrevious: true });
   const shown = useTaskFilter();
   const [nextOpen, setNextOpen] = useState(false);
@@ -98,7 +98,7 @@ export function Dashboard() {
   const shownCount = (state: SectionState, n: number) => (state.ready ? n : "–");
 
   const { wip, dueNow, nextDays, waiting, counts } = dashboard({
-    // WIP and Waiting come narrowed by the server; the due list is a plain query, narrowed here.
+    // WIP and Waiting come narrowed by the server (Waiting is a search, for blocked tasks too); the due list is a plain query, narrowed here.
     wip: (wipQuery.data ?? []).filter((t) => !isSnoozed(t)),
     due: (dueQuery.data ?? []).filter(shown),
     waiting: (waitingQuery.data ?? []).filter((t) => !isSnoozed(t)),
@@ -139,7 +139,7 @@ export function Dashboard() {
       key: "waiting",
       title: "Waiting",
       rows: rowsOf(waiting.slice(0, SECTION_LIMIT)),
-      aside: moreLink(waiting, "/waiting"),
+      aside: moreLink(waiting, `/search?q=${encodeURIComponent(WAITING_QUERY)}`),
       placeholder: placeholder(waitingState, "Nothing waiting"),
     },
     {
